@@ -1,6 +1,6 @@
 import re
 from typing import Any, Dict, List
-
+from backend.models.finding import Finding
 from backend.analysts.base_analyst import AnalysisResult, BaseAnalyst
 
 
@@ -19,7 +19,7 @@ class BrandAnalyst(BaseAnalyst):
 
         text = evidence["text"]
         brands = self.knowledge.get("brands", [])
-        findings: List[Dict[str, Any]] = []
+        findings: List[Finding] = []
 
         for brand in brands:
             pattern = r"\b" + re.escape(brand) + r"\b"
@@ -27,19 +27,28 @@ class BrandAnalyst(BaseAnalyst):
 
             if matches:
                 first_position = matches[0].start()
-                findings.append({
-                    "brand": brand,
-                    "mentions": len(matches),
-                    "first_position": first_position,
-                    "sentiment": "unknown",
-                    "confidence": 0.95,
-                    "reason": "Exact brand name match"
-                })
+                findings.append(
+                Finding(
+                    finding_type="brand",
+                    value=brand,
+                    confidence=0.95,
+                    reason="Exact brand name match",
+                    evidence_id=evidence.get("evidence_id", "unknown"),
+                    analyst_name=self.analyst_name,
+                    metadata={
+                        "mentions": len(matches),
+                        "first_position": first_position,
+                        "sentiment": "unknown"
+                    }
+                )
+            )
 
-        findings.sort(key=lambda item: item["first_position"])
+        findings.sort(
+            key=lambda item: item.metadata["first_position"]
+        )
 
         for index, finding in enumerate(findings, start=1):
-            finding["rank"] = index
+            finding.rank = index
 
         confidence = 0.95 if findings else 0.0
 
