@@ -1,0 +1,13 @@
+name,description,primary_goal,concerns,priority
+First-Time Homeowner,Needs simple guidance for emergency backup power.,Confidence in buying the right size safely.,"Confusion, safety, transfer switch, cost",5
+Experienced Homeowner,Has owned generators before and compares features.,Upgrade to better reliability or fuel flexibility.,"Noise, runtime, maintenance, reliability",4
+Storm Prepper,Prepares ahead of hurricane or winter storm season.,Reliable backup power before outages occur.,"Availability, fuel storage, safety, long runtime",5
+RV Owner,Needs campground-friendly power.,Quiet portable power for RV appliances.,"Noise, weight, RV-ready outlets, inverter power",5
+Camper,Uses power outdoors away from home.,Portable quiet power for small devices.,"Weight, noise, runtime, fuel usage",4
+Contractor,Needs durable power on jobsites.,Run tools reliably all day.,"Durability, wattage, 240V, serviceability",4
+Food Truck Owner,Needs mobile commercial power.,Run cooking and refrigeration equipment.,"Runtime, noise, reliability, fuel cost",4
+Small Business Owner,Needs backup during outages.,Avoid downtime and lost sales.,"Sizing, transfer switch, fuel, safety",4
+Senior Homeowner,Needs easy and safe emergency power.,Simple operation and safety.,"Electric start, CO safety, portability, complexity",4
+Budget Shopper,Wants best value and acceptable reliability.,Maximize features per dollar.,"Price, warranty, unknown brands, reviews",5
+Tech-Savvy Buyer,Compares specs and power quality.,Find technically superior product.,"THD, inverter, fuel efficiency, emissions",3
+Off-Grid Cabin Owner,Needs remote backup and occasional use.,Reliable remote power.,"Runtime, fuel storage, weather, maintenance",3

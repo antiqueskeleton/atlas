@@ -1,0 +1,23 @@
+name,category
+Dual Fuel,Fuel
+Tri Fuel,Fuel
+Gasoline,Fuel
+Propane,Fuel
+Natural Gas,Fuel
+Inverter,Technology
+Open Frame,Design
+Electric Start,Convenience
+Remote Start,Convenience
+CO Shutoff,Safety
+Low THD,Power Quality
+Parallel Capable,Power Expansion
+Quiet Operation,Noise
+Long Runtime,Runtime
+Large Fuel Tank,Runtime
+RV Ready,Use Case
+Transfer Switch Ready,Home Backup
+Wheel Kit,Mobility
+Compact Design,Mobility
+Lightweight,Mobility
+High Wattage,Power Output
+Fuel Efficient,Efficiency

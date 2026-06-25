@@ -1,0 +1,6 @@
+vendor,model_name,enabled
+OpenAI,ChatGPT Manual Test,1
+Google,Gemini Manual Test,1
+Anthropic,Claude Manual Test,1
+Perplexity,Perplexity Manual Test,1
+Microsoft,Copilot Manual Test,1

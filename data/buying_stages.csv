@@ -1,0 +1,7 @@
+name,description,sort_order
+Problem,Customer realizes they need backup or portable power.,1
+Research,Customer learns options and requirements.,2
+Comparison,Customer compares brands/products.,3
+Purchase,Customer is close to choosing where/what to buy.,4
+Ownership,Customer owns product and needs use/maintenance help.,5
+Replacement,Customer is considering upgrade/replacement.,6
