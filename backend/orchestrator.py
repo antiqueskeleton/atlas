@@ -1,5 +1,6 @@
 from datetime import datetime
 from backend.analysts.brand_analyst import BrandAnalyst
+from backend.models.evidence import Evidence
 
 
 def load_knowledge():
@@ -24,25 +25,25 @@ def load_knowledge():
 
 def load_sample_evidence():
     return [
-        {
-            "evidence_id": "ev-001",
-            "source": "manual_test",
-            "prompt": "Best portable generator for home backup",
-            "text": """
+        Evidence(
+            evidence_id="ev-001",
+            source="manual_test",
+            prompt="Best portable generator for home backup",
+            text="""
             Champion and Westinghouse are often recommended for home backup.
             Firman is a strong value option, especially for dual fuel buyers.
             Honda is usually considered premium, quiet, and reliable.
             """
-        },
-        {
-            "evidence_id": "ev-002",
-            "source": "manual_test",
-            "prompt": "Best quiet generator for camping",
-            "text": """
+        ),
+        Evidence(
+            evidence_id="ev-002",
+            source="manual_test",
+            prompt="Best quiet generator for camping",
+            text="""
             Honda and Yamaha are frequently recommended for quiet camping use.
             Firman may be considered for value, but Honda usually leads in quiet inverter discussions.
             """
-        }
+        )
     ]
 
 
@@ -63,7 +64,7 @@ def run():
     all_results = []
 
     for evidence in evidence_items:
-        print(f"\nAnalyzing evidence: {evidence['evidence_id']}")
+        print(f"\nAnalyzing evidence: {evidence.evidence_id}")
 
         for analyst in analysts:
             result = analyst.analyze(evidence)

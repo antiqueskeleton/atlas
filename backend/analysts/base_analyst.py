@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any, Dict, List
+from backend.models.evidence import Evidence
 
 
 @dataclass
@@ -27,8 +28,8 @@ class BaseAnalyst(ABC):
     def analyze(self, evidence: Dict[str, Any]) -> AnalysisResult:
         pass
 
-    def validate_evidence(self, evidence: Dict[str, Any]) -> bool:
-        return "text" in evidence and bool(evidence["text"])
+    def validate_evidence(self, evidence: Evidence) -> bool:
+        return bool(evidence.text)
 
     def confidence_from_matches(self, matches: int, possible: int) -> float:
         if possible <= 0:
