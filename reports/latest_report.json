@@ -1,0 +1,134 @@
+{
+  "generated_at": "2026-06-25T11:48:26",
+  "total_responses": 5,
+  "firman_visibility": 100.0,
+  "brands": [
+    {
+      "name": "Firman",
+      "mentioned_responses": 5,
+      "sentiment_score": 0.9,
+      "avg_rank": 4.2,
+      "visibility": 100.0
+    },
+    {
+      "name": "Champion",
+      "mentioned_responses": 5,
+      "sentiment_score": 0.9,
+      "avg_rank": 4.2,
+      "visibility": 100.0
+    },
+    {
+      "name": "Westinghouse",
+      "mentioned_responses": 5,
+      "sentiment_score": 0.9,
+      "avg_rank": 4.2,
+      "visibility": 100.0
+    },
+    {
+      "name": "Honda",
+      "mentioned_responses": 3,
+      "sentiment_score": 0.8333333333333334,
+      "avg_rank": 3.6666666666666665,
+      "visibility": 60.0
+    },
+    {
+      "name": "Generac",
+      "mentioned_responses": 2,
+      "sentiment_score": 0.75,
+      "avg_rank": 5.0,
+      "visibility": 40.0
+    },
+    {
+      "name": "DuroMax",
+      "mentioned_responses": 1,
+      "sentiment_score": 1.0,
+      "avg_rank": 5.0,
+      "visibility": 20.0
+    },
+    {
+      "name": "Yamaha",
+      "mentioned_responses": 1,
+      "sentiment_score": 1.0,
+      "avg_rank": 5.0,
+      "visibility": 20.0
+    },
+    {
+      "name": "EcoFlow",
+      "mentioned_responses": 1,
+      "sentiment_score": 0.5,
+      "avg_rank": 5.0,
+      "visibility": 20.0
+    },
+    {
+      "name": "Jackery",
+      "mentioned_responses": 1,
+      "sentiment_score": 0.5,
+      "avg_rank": 5.0,
+      "visibility": 20.0
+    },
+    {
+      "name": "Bluetti",
+      "mentioned_responses": 1,
+      "sentiment_score": 0.5,
+      "avg_rank": 5.0,
+      "visibility": 20.0
+    },
+    {
+      "name": "Goal Zero",
+      "mentioned_responses": 1,
+      "sentiment_score": 0.5,
+      "avg_rank": 5.0,
+      "visibility": 20.0
+    },
+    {
+      "name": "Anker",
+      "mentioned_responses": 1,
+      "sentiment_score": 0.5,
+      "avg_rank": 5.0,
+      "visibility": 20.0
+    }
+  ],
+  "features": [
+    {
+      "name": "Dual Fuel",
+      "mentions": 4
+    },
+    {
+      "name": "High Wattage",
+      "mentions": 2
+    },
+    {
+      "name": "CO Shutoff",
+      "mentions": 1
+    },
+    {
+      "name": "Inverter",
+      "mentions": 1
+    },
+    {
+      "name": "Long Runtime",
+      "mentions": 1
+    },
+    {
+      "name": "Quiet Operation",
+      "mentions": 1
+    },
+    {
+      "name": "RV Ready",
+      "mentions": 1
+    },
+    {
+      "name": "Remote Start",
+      "mentions": 1
+    },
+    {
+      "name": "Transfer Switch Ready",
+      "mentions": 1
+    },
+    {
+      "name": "Tri Fuel",
+      "mentions": 1
+    }
+  ],
+  "missing_firman": []
+}

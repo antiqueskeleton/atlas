@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Atlas AI Dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+:root { --bg:#f4f5f7; --card:#fff; --ink:#1d2433; --muted:#667085; --line:#d9dee7; }
+body { margin:0; background:var(--bg); color:var(--ink); font-family:Arial, Helvetica, sans-serif; }
+header { background:#111827; color:white; padding:28px 36px; }
+header h1 { margin:0; font-size:30px; }
+header p { margin:8px 0 0; color:#cbd5e1; }
+main { padding:28px 36px; max-width:1200px; margin:auto; }
+.grid { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; }
+.card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:20px; box-shadow:0 1px 2px rgba(16,24,40,.04); }
+.kpi { font-size:34px; font-weight:700; margin-top:8px; }
+.label { color:var(--muted); font-size:13px; text-transform:uppercase; letter-spacing:.04em; }
+table { width:100%; border-collapse:collapse; }
+th,td { text-align:left; padding:12px; border-bottom:1px solid var(--line); }
+th { color:var(--muted); font-size:12px; text-transform:uppercase; }
+.section { margin-top:22px; }
+ul { padding-left:20px; }
+li { margin:9px 0; }
+li span { color:var(--muted); }
+@media(max-width:800px) { .grid { grid-template-columns:1fr; } main { padding:18px; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Atlas AI</h1>
+  <p>Portable Power Market Intelligence — generated 2026-06-25T11:48:26</p>
+</header>
+<main>
+  <div class="grid">
+    <div class="card"><div class="label">Firman Visibility</div><div class="kpi">100.0%</div></div>
+    <div class="card"><div class="label">Responses Analyzed</div><div class="kpi">5</div></div>
+    <div class="card"><div class="label">Brands Detected</div><div class="kpi">12</div></div>
+    <div class="card"><div class="label">Features Detected</div><div class="kpi">10</div></div>
+  </div>
+
+  <div class="card section">
+    <h2>Brand Visibility</h2>
+    <table>
+      <thead><tr><th>Brand</th><th>Visibility</th><th>Mentions</th><th>Sentiment Score</th><th>Avg Rank</th></tr></thead>
+      <tbody><tr><td>Firman</td><td>100.0%</td><td>5</td><td>0.90</td><td>4.2</td></tr><tr><td>Champion</td><td>100.0%</td><td>5</td><td>0.90</td><td>4.2</td></tr><tr><td>Westinghouse</td><td>100.0%</td><td>5</td><td>0.90</td><td>4.2</td></tr><tr><td>Honda</td><td>60.0%</td><td>3</td><td>0.83</td><td>3.7</td></tr><tr><td>Generac</td><td>40.0%</td><td>2</td><td>0.75</td><td>5.0</td></tr><tr><td>DuroMax</td><td>20.0%</td><td>1</td><td>1.00</td><td>5.0</td></tr><tr><td>Yamaha</td><td>20.0%</td><td>1</td><td>1.00</td><td>5.0</td></tr><tr><td>EcoFlow</td><td>20.0%</td><td>1</td><td>0.50</td><td>5.0</td></tr><tr><td>Jackery</td><td>20.0%</td><td>1</td><td>0.50</td><td>5.0</td></tr><tr><td>Bluetti</td><td>20.0%</td><td>1</td><td>0.50</td><td>5.0</td></tr><tr><td>Goal Zero</td><td>20.0%</td><td>1</td><td>0.50</td><td>5.0</td></tr><tr><td>Anker</td><td>20.0%</td><td>1</td><td>0.50</td><td>5.0</td></tr></tbody>
+    </table>
+  </div>
+
+  <div class="grid section" style="grid-template-columns:1fr 1fr;">
+    <div class="card">
+      <h2>Feature Signals</h2>
+      <ul><li>Dual Fuel <span>4</span></li><li>High Wattage <span>2</span></li><li>CO Shutoff <span>1</span></li><li>Inverter <span>1</span></li><li>Long Runtime <span>1</span></li><li>Quiet Operation <span>1</span></li><li>RV Ready <span>1</span></li><li>Remote Start <span>1</span></li><li>Transfer Switch Ready <span>1</span></li><li>Tri Fuel <span>1</span></li></ul>
+    </div>
+    <div class="card">
+      <h2>Firman Missing From</h2>
+      <ul><li>None in current sample.</li></ul>
+    </div>
+  </div>
+</main>
+</body>
+</html>

@@ -1,0 +1,73 @@
+family_name,prompt_style,prompt_text,prompt_influence_score
+Best Portable Generator,search,best portable generator,95
+Best Portable Generator,natural,What is the best portable generator for home backup?,93
+Best Portable Generator,conversational,My power goes out a few times a year and I want one generator that can handle the basics. What should I buy?,96
+Hurricane Generator,search,best generator for hurricane season,98
+Hurricane Generator,natural,What generator is best for hurricane preparedness?,96
+Hurricane Generator,conversational,"I live in a hurricane area and need to run a refrigerator, lights, fans and maybe a window AC. What generator would you recommend?",99
+Dual Fuel Generator,search,best dual fuel generator,94
+Dual Fuel Generator,natural,What is the best dual fuel generator for home backup?,92
+Dual Fuel Generator,conversational,I want flexibility between gasoline and propane during outages. Which dual fuel generator brands should I compare?,95
+Tri Fuel Generator,search,best tri fuel generator,96
+Tri Fuel Generator,natural,What is the best tri fuel generator for a house?,94
+Tri Fuel Generator,conversational,I have natural gas at home but also want gasoline and propane options. Should I buy a tri fuel generator?,97
+Quiet RV Generator,search,quiet generator for rv,92
+Quiet RV Generator,natural,What is the quietest generator for an RV?,90
+Quiet RV Generator,conversational,I camp at RV parks and do not want to annoy people nearby. Which generator would you recommend?,93
+Inverter Generator,search,best inverter generator,90
+Inverter Generator,natural,What is the best inverter generator for camping?,88
+Inverter Generator,conversational,I need a quiet generator for camping that can charge electronics and run small appliances. What should I look at?,91
+Generator Under 1000,search,best generator under 1000,95
+Generator Under 1000,natural,"What is the best portable generator under $1,000?",93
+Generator Under 1000,conversational,"I have about $1,000 to spend and need emergency home backup. Which generator gives the best value?",96
+Whole Home Portable Generator,search,portable generator to run whole house,93
+Whole Home Portable Generator,natural,Can a portable generator run my whole house?,91
+Whole Home Portable Generator,conversational,I want to power as much of my house as possible without buying a standby generator. What portable options make sense?,94
+Sensitive Electronics,search,generator for sensitive electronics,86
+Sensitive Electronics,natural,What generator is safe for sensitive electronics?,84
+Sensitive Electronics,conversational,"I need backup power for computers, internet equipment and TVs. Do I need an inverter generator?",87
+Transfer Switch Ready,search,generator for transfer switch,88
+Transfer Switch Ready,natural,What generator should I buy for a transfer switch?,86
+Transfer Switch Ready,conversational,I want to connect a generator to my electrical panel safely. What features should I look for?,89
+Food Truck Power,search,generator for food truck,84
+Food Truck Power,natural,What is the best generator for a food truck?,82
+Food Truck Power,conversational,I run a food truck and need reliable power for refrigeration and cooking equipment. Which generator brands should I consider?,85
+Construction Jobsite Power,search,generator for construction site,82
+Construction Jobsite Power,natural,What is the best generator for a construction site?,80
+Construction Jobsite Power,conversational,I need a durable generator for jobsite tools that can take abuse and run all day. What would you recommend?,83
+CO Safety Generator,search,generator with co shutoff,87
+CO Safety Generator,natural,What generators have carbon monoxide safety shutoff?,85
+CO Safety Generator,conversational,Safety matters more than anything. Which portable generators have strong CO safety features?,88
+Generator for Refrigerator,search,generator for refrigerator,76
+Generator for Refrigerator,natural,What size generator do I need to run a refrigerator?,74
+Generator for Refrigerator,conversational,"During an outage I mainly need my refrigerator, freezer and a few lights. What size generator is enough?",77
+Generator vs Battery Backup,search,generator vs battery backup,80
+Generator vs Battery Backup,natural,Should I buy a generator or a battery backup system?,78
+Generator vs Battery Backup,conversational,I am comparing portable generators with EcoFlow or Jackery-style batteries for outages. Which is better?,81
+Firman vs Champion,search,firman vs champion generators,91
+Firman vs Champion,natural,Are Firman generators better than Champion generators?,89
+Firman vs Champion,conversational,I am deciding between Firman and Champion for home backup. Which brand would you choose and why?,92
+Firman Reliability,search,firman generator reviews reliability,89
+Firman Reliability,natural,Are Firman generators reliable?,87
+Firman Reliability,conversational,"I see Firman generators priced well, but I do not know the brand as much as Honda or Champion. Are they reliable?",90
+Best Generator Brand,search,best generator brand,97
+Best Generator Brand,natural,What is the best portable generator brand?,95
+Best Generator Brand,conversational,"I am new to generators and keep seeing Honda, Champion, Westinghouse, Firman and Generac. Which brands should I trust?",98
+Electric Start Generator,search,electric start generator,78
+Electric Start Generator,natural,What is the best electric start portable generator?,76
+Electric Start Generator,conversational,I do not want to pull a recoil cord during an emergency. Which generators are easiest to start?,79
+Long Runtime Generator,search,long runtime generator,85
+Long Runtime Generator,natural,Which portable generator runs the longest?,83
+Long Runtime Generator,conversational,During storms fuel may be hard to find. Which generator gives long runtime without constant refueling?,86
+Natural Gas Generator,search,portable generator natural gas,89
+Natural Gas Generator,natural,What portable generators can run on natural gas?,87
+Natural Gas Generator,conversational,I already have natural gas at my house. Can I use it with a portable generator instead of storing gasoline?,90
+RV Ready Outlet,search,rv ready generator 30 amp,79
+RV Ready Outlet,natural,What generator do I need for a 30 amp RV?,77
+RV Ready Outlet,conversational,My RV has a 30 amp plug and I want something simple that works without adapters. What should I buy?,80
+Low THD Generator,search,low thd generator,75
+Low THD Generator,natural,Which generators have low THD power?,73
+Low THD Generator,conversational,I care about clean power quality. Which portable generators are safe for electronics and appliances?,76
+Black Friday Generator Deals,search,black friday generator deals,83
+Black Friday Generator Deals,natural,What generator brands are best to watch for Black Friday deals?,81
+Black Friday Generator Deals,conversational,I can wait for a sale. Which generator brands usually offer the best value during Black Friday?,84

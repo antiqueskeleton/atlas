@@ -1,0 +1,51 @@
+prompt_text,topic,scenario,priority
+Best portable generator,Portable Generators,Emergency,5
+Best portable generator for home backup,Home Backup,Home Backup,5
+Best generator for hurricane season,Hurricane Preparedness,Hurricane,5
+Best generator for power outages,Emergency Preparedness,Emergency,5
+Best dual fuel generator,Dual Fuel,Home Backup,5
+Best tri fuel generator,Tri Fuel,Home Backup,5
+Best inverter generator,Inverter Generators,Camping,5
+Best quiet generator for camping,Quiet Generators,Camping,4
+Best generator for RV,RV Power,RV,4
+Best generator for food truck,Portable Generators,Food Truck,4
+Best generator for construction site,Jobsite Power,Construction,4
+Best generator under $500,Budget Generators,Emergency,3
+Best generator under $1000,Budget Generators,Home Backup,4
+Best generator under $1500,Budget Generators,Home Backup,4
+Best generator for whole home backup,Whole Home Backup,Home Backup,5
+Best portable generator for refrigerator,Home Backup,Emergency,4
+Best portable generator for sump pump,Home Backup,Emergency,4
+Best generator for emergency preparedness,Emergency Preparedness,Emergency,5
+Best generator for tailgating,Portable Generators,Tailgating,3
+Best generator for off grid cabin,Portable Generators,Off Grid,4
+Firman vs Champion generators,Portable Generators,Home Backup,5
+Firman vs Westinghouse generators,Portable Generators,Home Backup,4
+Firman vs Honda generators,Portable Generators,Home Backup,4
+Firman vs Generac generators,Home Backup,Home Backup,4
+Champion vs Westinghouse generators,Portable Generators,Home Backup,4
+Honda vs Champion generators,Portable Generators,Home Backup,4
+DuroMax vs Firman generators,Portable Generators,Home Backup,3
+Predator vs Firman generators,Budget Generators,Emergency,3
+Are Firman generators reliable?,Portable Generators,Home Backup,5
+Are Champion generators reliable?,Portable Generators,Home Backup,4
+Are Westinghouse generators reliable?,Portable Generators,Home Backup,4
+Are Honda generators worth the money?,Portable Generators,Camping,4
+What generator brands should I avoid?,Portable Generators,Emergency,4
+What is the best generator brand?,Portable Generators,Emergency,5
+What is the best value generator brand?,Budget Generators,Emergency,5
+What generator is best for hurricanes?,Hurricane Preparedness,Hurricane,5
+What generator is best for RV camping?,RV Power,RV,4
+What generator is best for sensitive electronics?,Inverter Generators,Home Backup,5
+What generator is best for a transfer switch?,Home Backup,Home Backup,5
+What generator is best for running a house?,Whole Home Backup,Home Backup,5
+Best CO-safe generator,CO Safety,Emergency,5
+Best generator with CO shutoff,CO Safety,Emergency,5
+Best generator for elderly homeowners,Emergency Preparedness,Home Backup,4
+Best generator for storm season,Hurricane Preparedness,Hurricane,5
+Best portable power for blackout,Emergency Preparedness,Emergency,5
+Generator vs battery backup,Battery Backup,Home Backup,4
+Portable generator vs solar generator,Solar Generators,Off Grid,4
+Dual fuel vs tri fuel generator,Tri Fuel,Home Backup,5
+Inverter vs open frame generator,Inverter Generators,Camping,4
+What size generator do I need for my house?,Home Backup,Home Backup,5
