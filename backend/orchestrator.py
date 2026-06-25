@@ -3,6 +3,7 @@ from datetime import datetime
 from backend.models.evidence import Evidence
 from backend.services.knowledge_service import KnowledgeService
 from backend.registry.analyst_registry import AnalystRegistry
+from backend.models.run_summary import RunSummary
 
 
 def load_sample_evidence():
@@ -67,12 +68,24 @@ def run():
     finished = datetime.now()
     duration = finished - started
 
+    summary = RunSummary(
+        evidence_count=len(evidence_items),
+        analyst_count=len(analysts),
+        results=all_results
+    ).build()
+
     print("\nRun Summary")
     print("-----------")
-    print(f"Evidence analyzed: {len(evidence_items)}")
-    print(f"Analysts run: {len(analysts)}")
-    print(f"Results produced: {len(all_results)}")
-    print(f"Finished: {finished}")
+    print(f"Evidence analyzed: {summary.evidence_count}")
+    print(f"Analysts run: {summary.analyst_count}")
+    print(f"Results produced: {len(summary.results)}")
+
+    print("\nFindings by type")
+    print("----------------")
+    for finding_type, count in summary.finding_counts_by_type.items():
+        print(f"{finding_type}: {count}")
+
+    print(f"\nFinished: {finished}")
     print(f"Duration: {duration}")
 
 
