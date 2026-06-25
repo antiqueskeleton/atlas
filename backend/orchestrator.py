@@ -1,10 +1,11 @@
 from datetime import datetime
 
 from backend.models.evidence import Evidence
+from backend.models.run_summary import RunSummary
 from backend.services.knowledge_service import KnowledgeService
 from backend.registry.analyst_registry import AnalystRegistry
-from backend.models.run_summary import RunSummary
 from backend.engines.insight_engine import InsightEngine
+from backend.reporting.executive_report import ExecutiveReport
 
 
 def load_sample_evidence():
@@ -15,8 +16,12 @@ def load_sample_evidence():
             prompt="Best portable generator for home backup",
             text="""
             Champion and Westinghouse are often recommended for home backup.
-            Firman is a strong value option, especially for dual fuel buyers.
-            Honda is usually considered premium, quiet, and reliable.
+
+            Firman is a strong Dual Fuel generator with Electric Start and excellent RV Ready capability.
+
+            Honda is known for Quiet Operation and long-term reliability.
+
+            Champion is also recognized for Electric Start and RV Ready models.
             """
         ),
         Evidence(
@@ -24,8 +29,11 @@ def load_sample_evidence():
             source="manual_test",
             prompt="Best quiet generator for camping",
             text="""
-            Honda and Yamaha are frequently recommended for quiet camping use.
-            Firman may be considered for value, but Honda usually leads in quiet inverter discussions.
+            Honda and Yamaha are frequently recommended for Quiet Operation while camping.
+
+            Firman offers excellent Dual Fuel options and Electric Start on many models.
+
+            Champion also offers RV Ready inverter generators.
             """
         )
     ]
@@ -46,7 +54,6 @@ def run():
     }
 
     evidence_items = load_sample_evidence()
-
     analysts = AnalystRegistry.get_analysts(knowledge)
 
     all_results = []
@@ -85,6 +92,17 @@ def run():
     print("----------------")
     for finding_type, count in summary.finding_counts_by_type.items():
         print(f"{finding_type}: {count}")
+
+    insight_engine = InsightEngine()
+    insights = insight_engine.generate(all_results)
+
+    print("\nInsights")
+    print("--------")
+    for insight in insights:
+        print(f"{insight.title}: {insight.description}")
+
+    report = ExecutiveReport()
+    report.build(summary, insights)
 
     print(f"\nFinished: {finished}")
     print(f"Duration: {duration}")
