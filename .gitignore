@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.pyc
+
+# Database
+database/*.db
+
+# Reports
+reports/*.json
+
+# VS Code
+.vscode/
+
+# Operating System
+.DS_Store
+Thumbs.db
