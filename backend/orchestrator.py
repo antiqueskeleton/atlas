@@ -1,26 +1,8 @@
 from datetime import datetime
+
 from backend.analysts.brand_analyst import BrandAnalyst
 from backend.models.evidence import Evidence
-
-
-def load_knowledge():
-    return {
-        "brands": [
-            "Firman",
-            "Champion",
-            "Honda",
-            "Westinghouse",
-            "Generac",
-            "Predator",
-            "DuroMax",
-            "Yamaha",
-            "EcoFlow",
-            "Jackery",
-            "Bluetti",
-            "Goal Zero",
-            "Anker"
-        ]
-    }
+from backend.services.knowledge_service import KnowledgeService
 
 
 def load_sample_evidence():
@@ -54,7 +36,13 @@ def run():
     print("------------------")
     print(f"Started: {started}")
 
-    knowledge = load_knowledge()
+    knowledge_service = KnowledgeService()
+
+    knowledge = {
+        "brands": knowledge_service.get_brands(),
+        "features": knowledge_service.get_features(),
+    }
+
     evidence_items = load_sample_evidence()
 
     analysts = [
@@ -72,11 +60,11 @@ def run():
 
             print(f"  {result.analyst_name}: {result.notes}")
 
-        for finding in result.findings:
-            print(
-                f"    - {finding.value} "
-                f"(rank {finding.rank}, confidence {finding.confidence})"
-            )
+            for finding in result.findings:
+                print(
+                    f"    - {finding.value} "
+                    f"(rank {finding.rank}, confidence {finding.confidence})"
+                )
 
     finished = datetime.now()
     duration = finished - started
