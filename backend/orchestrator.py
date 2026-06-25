@@ -1,8 +1,8 @@
 from datetime import datetime
 
-from backend.analysts.brand_analyst import BrandAnalyst
 from backend.models.evidence import Evidence
 from backend.services.knowledge_service import KnowledgeService
+from backend.registry.analyst_registry import AnalystRegistry
 
 
 def load_sample_evidence():
@@ -45,9 +45,7 @@ def run():
 
     evidence_items = load_sample_evidence()
 
-    analysts = [
-        BrandAnalyst(knowledge=knowledge)
-    ]
+    analysts = AnalystRegistry.get_analysts(knowledge)
 
     all_results = []
 

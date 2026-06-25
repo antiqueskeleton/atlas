@@ -1,0 +1,1 @@
+from backend.registry.analyst_registry import AnalystRegistry
