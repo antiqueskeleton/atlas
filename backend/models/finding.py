@@ -15,3 +15,4 @@ class Finding:
     evidence_id: str
     analyst_name: str
     metadata: Dict[str, Any]
+    rank: int | None = None

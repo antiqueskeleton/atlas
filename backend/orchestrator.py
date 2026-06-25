@@ -71,11 +71,11 @@ def run():
 
             print(f"  {result.analyst_name}: {result.notes}")
 
-            for finding in result.findings:
-                print(
-                    f"    - {finding['brand']} "
-                    f"(rank {finding['rank']}, confidence {finding['confidence']})"
-                )
+        for finding in result.findings:
+            print(
+                f"    - {finding.value} "
+                f"(rank {finding.rank}, confidence {finding.confidence})"
+            )
 
     finished = datetime.now()
     duration = finished - started
