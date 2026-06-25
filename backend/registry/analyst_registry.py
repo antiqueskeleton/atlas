@@ -1,4 +1,5 @@
 from backend.analysts.brand_analyst import BrandAnalyst
+from backend.analysts.feature_analyst import FeatureAnalyst
 
 
 class AnalystRegistry:
@@ -11,5 +12,6 @@ class AnalystRegistry:
     @staticmethod
     def get_analysts(knowledge):
         return [
-            BrandAnalyst(knowledge=knowledge)
+            BrandAnalyst(knowledge=knowledge),
+            FeatureAnalyst(knowledge=knowledge),
         ]
