@@ -4,6 +4,7 @@ from backend.models.evidence import Evidence
 from backend.services.knowledge_service import KnowledgeService
 from backend.registry.analyst_registry import AnalystRegistry
 from backend.models.run_summary import RunSummary
+from backend.engines.insight_engine import InsightEngine
 
 
 def load_sample_evidence():
