@@ -74,9 +74,11 @@ class InvestigationPage(QWidget):
 
         self.relationships.set_relationships(relationships)
 
+        recommendation = investigation["recommendation"]
+
         self.recommendations.set_recommendation(
-            "Improve messaging around features where competitors have stronger AI associations.",
-            "Confidence: Medium"
+            recommendation["text"],
+            f"Confidence: {recommendation['confidence']}"
         )
 
         self.evidence.set_text(
