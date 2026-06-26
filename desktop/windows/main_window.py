@@ -96,4 +96,9 @@ class AtlasMainWindow(QMainWindow):
         )
 
         if file_path:
-            self.statusBar().showMessage(f"Imported response file: {file_path}")
+            home_page = self.pages.widget(0)
+
+            if hasattr(home_page, "run_analysis"):
+                home_page.run_analysis(file_path)
+
+            self.statusBar().showMessage(f"Imported and analyzed: {file_path}")

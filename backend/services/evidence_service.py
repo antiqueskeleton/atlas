@@ -17,7 +17,10 @@ class EvidenceService:
             "sample_data/responses/sample_responses.json"
         )
 
-        path = self.project_root / response_file
+        path = Path(response_file)
+
+        if not path.is_absolute():
+            path = self.project_root / path
 
         with path.open("r", encoding="utf-8") as file:
             records = json.load(file)
