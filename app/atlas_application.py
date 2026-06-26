@@ -3,6 +3,7 @@ from pathlib import Path
 
 from backend.services.knowledge_service import KnowledgeService
 from backend.services.evidence_service import EvidenceService
+from backend.services.dataset_manager import DatasetManager
 from backend.registry.analyst_registry import AnalystRegistry
 from backend.engines.insight_engine import InsightEngine
 from backend.engines.relationship_engine import RelationshipEngine
@@ -12,7 +13,7 @@ from backend.models.dataset import Dataset
 
 class AtlasApplication:
     def __init__(self):
-        self.current_dataset = None
+        self.dataset_manager = DatasetManager()
         self.current_results = []
         self.current_summary = None
         self.current_insights = []
@@ -34,23 +35,41 @@ class AtlasApplication:
         if response_file:
             dataset_name = Path(response_file).stem.replace("_", " ").title()
 
-        self.current_dataset = Dataset(
+        dataset = Dataset(
             name=dataset_name,
             source="JSON Import" if response_file else "Default Sample",
             imported_at=datetime.now(),
             evidence=evidence,
         )
 
+        self.dataset_manager.add_dataset(dataset)
+        self.dataset_manager.set_active(dataset.name)
+
+        return self.analyze_active_dataset(knowledge)
+
+    def analyze_active_dataset(self, knowledge=None):
+        knowledge_service = KnowledgeService()
+
+        knowledge = knowledge or {
+            "brands": knowledge_service.get_brands(),
+            "features": knowledge_service.get_features(),
+        }
+
+        active_dataset = self.dataset_manager.get_active()
+
+        if active_dataset is None:
+            return None
+
         analysts = AnalystRegistry.get_analysts(knowledge)
 
         self.current_results = []
 
-        for item in self.current_dataset.evidence:
+        for item in active_dataset.evidence:
             for analyst in analysts:
                 self.current_results.append(analyst.analyze(item))
 
         self.current_summary = RunSummary(
-            evidence_count=self.current_dataset.response_count,
+            evidence_count=active_dataset.response_count,
             analyst_count=len(analysts),
             results=self.current_results
         ).build()
@@ -62,13 +81,17 @@ class AtlasApplication:
         self.current_relationships = relationship_engine.generate(self.current_results)
 
         return {
-            "dataset": self.current_dataset,
+            "dataset": active_dataset,
             "summary": self.current_summary,
             "insights": self.current_insights,
             "relationships": self.current_relationships,
             "results": self.current_results,
-            "evidence": self.current_dataset.evidence,
+            "evidence": active_dataset.evidence,
+            "datasets": self.dataset_manager.list_datasets(),
         }
 
     def has_analysis(self):
         return self.current_summary is not None
+
+    def list_datasets(self):
+        return self.dataset_manager.list_datasets()
