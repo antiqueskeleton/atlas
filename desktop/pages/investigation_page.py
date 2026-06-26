@@ -7,6 +7,7 @@ from desktop.widgets.recommendation_card import RecommendationCard
 from desktop.widgets.relationship_explorer import RelationshipExplorer
 from desktop.widgets.intent_panel import IntentPanel
 from desktop.widgets.ai_reasoning_panel import AIReasoningPanel
+from desktop.widgets.provider_card import ProviderCard
 
 
 class InvestigationPage(QWidget):
@@ -32,6 +33,7 @@ class InvestigationPage(QWidget):
 
         self.summary = ResultPanel("Executive Summary")
         self.ai_reasoning = AIReasoningPanel()
+        self.provider_card = ProviderCard()
         self.intent = IntentPanel()
         self.relationships = RelationshipExplorer()
         self.recommendations = RecommendationCard()
@@ -46,6 +48,7 @@ class InvestigationPage(QWidget):
         left.addWidget(self.recommendations)
 
         right = QVBoxLayout()
+        right.addWidget(self.provider_card)
         right.addWidget(self.relationships)
         right.addWidget(self.evidence)
 
@@ -66,6 +69,7 @@ class InvestigationPage(QWidget):
         question = self.search.text()
 
         investigation = self.engine.investigate(question)
+        self.provider_card.set_provider(investigation["provider"])
         self.intent.set_request(investigation["request"])
 
         analysis = investigation["analysis"]
@@ -79,7 +83,7 @@ class InvestigationPage(QWidget):
 
         self.summary.set_text(investigation["summary"])
         self.ai_reasoning.set_reasoning(investigation["ai_reasoning"])
-        
+
         self.relationships.set_relationships(relationships)
 
         recommendation = investigation["recommendation"]
