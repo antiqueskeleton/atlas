@@ -2,6 +2,7 @@ from PySide6.QtWidgets import QLabel, QPushButton, QGridLayout, QVBoxLayout, QWi
 
 from app.atlas_application import AtlasApplication
 from desktop.widgets.stat_card import StatCard
+from desktop.widgets.dataset_card import DatasetCard
 from desktop.widgets.activity_feed import ActivityFeed
 
 
@@ -19,7 +20,7 @@ class HomePage(QWidget):
         subtitle = QLabel("Here's what Atlas knows about your market today.")
         subtitle.setStyleSheet("font-size: 15px; color: #6B7280;")
 
-        self.dataset_card = StatCard("Active Dataset", "-", "No dataset loaded")
+        self.dataset_card = DatasetCard()
         self.visibility_card = StatCard("AI Visibility Score", "71", "Sample score")
         self.responses_card = StatCard("Responses Loaded", "-", "Ready to analyze")
         self.brands_card = StatCard("Brands Found", "-", "")
@@ -65,8 +66,7 @@ class HomePage(QWidget):
         dataset = result["dataset"]
         summary = result["summary"]
 
-        self.dataset_card.set_value(dataset.name)
-        self.dataset_card.set_subtitle(f"{dataset.source} • {dataset.status}")
+        self.dataset_card.set_dataset(dataset)
 
         self.responses_card.set_value(summary.evidence_count)
         self.brands_card.set_value(summary.finding_counts_by_type.get("brand", 0))
