@@ -7,25 +7,40 @@ class QuestionInterpreter:
 
         request = InvestigationRequest(question=question)
 
-        if "why" in normalized:
+        if any(word in normalized for word in ["why", "lose", "losing", "win", "winning"]):
             request.intent = "explain"
 
-        if "compare" in normalized or "vs" in normalized:
+        if any(word in normalized for word in ["compare", "vs", "versus", "against"]):
             request.intent = "compare"
 
-        if "firman" in normalized:
-            request.target_brand = "Firman"
+        brands = ["Firman", "Champion", "Honda", "Westinghouse", "Generac", "Predator", "DuroMax", "Yamaha"]
 
-        if "champion" in normalized:
-            request.competitor = "Champion"
+        mentioned_brands = [
+            brand for brand in brands
+            if brand.lower() in normalized
+        ]
 
-        if "honda" in normalized:
-            request.competitor = "Honda"
+        if mentioned_brands:
+            request.target_brand = mentioned_brands[0]
 
-        if "quiet" in normalized:
-            request.target_feature = "Quiet Operation"
+        if len(mentioned_brands) > 1:
+            request.competitor = mentioned_brands[1]
 
-        if "dual fuel" in normalized:
-            request.target_feature = "Dual Fuel"
+        feature_map = {
+            "quiet": "Quiet Operation",
+            "noise": "Quiet Operation",
+            "dual fuel": "Dual Fuel",
+            "tri fuel": "Tri Fuel",
+            "rv": "RV Ready",
+            "camping": "RV Ready",
+            "electric start": "Electric Start",
+            "home backup": "Home Backup",
+            "whole home": "Home Backup",
+        }
+
+        for keyword, feature in feature_map.items():
+            if keyword in normalized:
+                request.target_feature = feature
+                break
 
         return request
