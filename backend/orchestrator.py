@@ -6,6 +6,7 @@ from backend.services.knowledge_service import KnowledgeService
 from backend.registry.analyst_registry import AnalystRegistry
 from backend.engines.insight_engine import InsightEngine
 from backend.reporting.executive_report import ExecutiveReport
+from backend.engines.relationship_engine import RelationshipEngine
 
 
 def load_sample_evidence():
@@ -103,6 +104,17 @@ def run():
 
     report = ExecutiveReport()
     report.build(summary, insights)
+
+    relationship_engine = RelationshipEngine()
+    relationships = relationship_engine.generate(all_results)
+
+    print("\nRelationships")
+    print("-------------")
+    for relationship in relationships:
+        print(
+            f"{relationship.source} → {relationship.target} "
+            f"(confidence {relationship.confidence})"
+        )
 
     print(f"\nFinished: {finished}")
     print(f"Duration: {duration}")
