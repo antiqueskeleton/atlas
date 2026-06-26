@@ -1,0 +1,86 @@
+from PySide6.QtWidgets import (
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QListWidget,
+    QMainWindow,
+    QStatusBar,
+    QTabWidget,
+    QVBoxLayout,
+    QWidget,
+)
+
+from desktop.pages.home_page import HomePage
+from desktop.pages.investigation_page import InvestigationPage
+from desktop.pages.trends_page import TrendsPage
+from desktop.pages.knowledge_page import KnowledgePage
+
+
+class AtlasMainWindow(QMainWindow):
+    def __init__(self):
+        super().__init__()
+
+        self.setWindowTitle("Atlas AI Intelligence Platform")
+        self.resize(1300, 850)
+
+        self.build_menu()
+        self.build_layout()
+
+        self.setStatusBar(QStatusBar())
+        self.statusBar().showMessage("Ready.")
+
+    def build_menu(self):
+        menu = self.menuBar()
+
+        file_menu = menu.addMenu("File")
+        file_menu.addAction("New Project")
+        file_menu.addAction("Open Project")
+        file_menu.addAction("Save Project")
+        file_menu.addSeparator()
+        file_menu.addAction("Exit", self.close)
+
+        investigation_menu = menu.addMenu("Investigation")
+        investigation_menu.addAction("New Investigation")
+        investigation_menu.addAction("Run Analysis")
+
+        tools_menu = menu.addMenu("Tools")
+        tools_menu.addAction("Import Responses")
+        tools_menu.addAction("Manage Knowledge")
+
+        help_menu = menu.addMenu("Help")
+        help_menu.addAction("About Atlas")
+
+    def build_layout(self):
+        main_widget = QWidget()
+        main_layout = QHBoxLayout()
+
+        self.nav = QListWidget()
+        self.nav.addItems([
+            "🏠 Home",
+            "🔍 Investigate",
+            "📈 Trends",
+            "🧠 Knowledge",
+        ])
+        self.nav.setFixedWidth(220)
+        self.nav.setCurrentRow(0)
+
+        self.pages = QTabWidget()
+        self.pages.tabBar().hide()
+
+        self.pages.addTab(HomePage(), "Home")
+        self.pages.addTab(InvestigationPage(), "Investigate")
+        self.pages.addTab(TrendsPage(), "Trends")
+        self.pages.addTab(KnowledgePage(), "Knowledge")
+
+        self.nav.currentRowChanged.connect(self.pages.setCurrentIndex)
+
+        divider = QFrame()
+        divider.setFrameShape(QFrame.VLine)
+        divider.setFrameShadow(QFrame.Sunken)
+
+        main_layout.addWidget(self.nav)
+        main_layout.addWidget(divider)
+        main_layout.addWidget(self.pages)
+
+        main_widget.setLayout(main_layout)
+        self.setCentralWidget(main_widget)
