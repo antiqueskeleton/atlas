@@ -6,8 +6,11 @@ from backend.models.evidence import Evidence
 
 
 class EvidenceService:
+    def __init__(self):
+        self.project_root = Path(__file__).resolve().parents[2]
+
     def load_responses(self, file_path: str = "sample_data/responses/sample_responses.json") -> List[Evidence]:
-        path = Path(file_path)
+        path = self.project_root / file_path
 
         with path.open("r", encoding="utf-8") as file:
             records = json.load(file)
