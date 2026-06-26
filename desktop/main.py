@@ -2,55 +2,98 @@ import sys
 
 from PySide6.QtWidgets import (
     QApplication,
-    QMainWindow,
     QLabel,
-    QWidget,
-    QVBoxLayout,
+    QMainWindow,
+    QPushButton,
     QStatusBar,
     QTabWidget,
+    QVBoxLayout,
+    QWidget,
 )
+
+from app.atlas_application import AtlasApplication
+
+
+class ExecutivePage(QWidget):
+    def __init__(self):
+        super().__init__()
+
+        self.app = AtlasApplication()
+
+        layout = QVBoxLayout()
+
+        self.responses = QLabel("Responses Loaded: -")
+        self.brands = QLabel("Brands Found: -")
+        self.features = QLabel("Features Found: -")
+        self.relationships = QLabel("Relationships: -")
+
+        self.button = QPushButton("Analyze Dataset")
+        self.button.clicked.connect(self.run_analysis)
+
+        layout.addWidget(QLabel("<h1>Atlas Executive Dashboard</h1>"))
+        layout.addWidget(self.responses)
+        layout.addWidget(self.brands)
+        layout.addWidget(self.features)
+        layout.addWidget(self.relationships)
+        layout.addSpacing(20)
+        layout.addWidget(self.button)
+        layout.addStretch()
+
+        self.setLayout(layout)
+
+    def run_analysis(self):
+
+        result = self.app.analyze()
+
+        summary = result["summary"]
+
+        self.responses.setText(
+            f"Responses Loaded: {summary.evidence_count}"
+        )
+
+        self.brands.setText(
+            f"Brands Found: {summary.finding_counts_by_type.get('brand',0)}"
+        )
+
+        self.features.setText(
+            f"Features Found: {summary.finding_counts_by_type.get('feature',0)}"
+        )
+
+        self.relationships.setText(
+            f"Relationships: {len(result['relationships'])}"
+        )
 
 
 class AtlasMainWindow(QMainWindow):
+
     def __init__(self):
         super().__init__()
 
         self.setWindowTitle("Atlas AI Intelligence Platform")
-        self.resize(1100, 700)
+        self.resize(1200, 800)
 
         tabs = QTabWidget()
-        tabs.addTab(self.build_welcome_tab(), "Executive")
-        tabs.addTab(QWidget(), "Investigations")
-        tabs.addTab(QWidget(), "Trends")
-        tabs.addTab(QWidget(), "Knowledge")
-        tabs.addTab(QWidget(), "Settings")
+
+        tabs.addTab(ExecutivePage(), "🏠 Executive")
+        tabs.addTab(QWidget(), "🔍 Investigations")
+        tabs.addTab(QWidget(), "📈 Trends")
+        tabs.addTab(QWidget(), "🧠 Knowledge")
+        tabs.addTab(QWidget(), "📂 Projects")
 
         self.setCentralWidget(tabs)
+
         self.setStatusBar(QStatusBar())
         self.statusBar().showMessage("Ready.")
 
-    def build_welcome_tab(self):
-        widget = QWidget()
-        layout = QVBoxLayout()
-
-        title = QLabel("Atlas AI Intelligence Platform")
-        title.setStyleSheet("font-size: 28px; font-weight: bold;")
-
-        subtitle = QLabel("Transform market evidence into business intelligence.")
-        subtitle.setStyleSheet("font-size: 16px;")
-
-        layout.addWidget(title)
-        layout.addWidget(subtitle)
-        layout.addStretch()
-
-        widget.setLayout(layout)
-        return widget
-
 
 def main():
+
     app = QApplication(sys.argv)
+
     window = AtlasMainWindow()
+
     window.show()
+
     sys.exit(app.exec())
 
 
