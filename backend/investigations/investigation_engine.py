@@ -13,7 +13,7 @@ class InvestigationEngine:
         self.summary_generator = ExecutiveSummaryGenerator()
         self.recommendation_generator = RecommendationGenerator()
         self.evidence_ranker = EvidenceRanker()
-        self.provider_manager = provider_manager or ProviderManager()
+        self.provider_manager = provider_manager or atlas_app.provider_manager
 
     def investigate(self, question: str):
         request = self.interpreter.interpret(question)

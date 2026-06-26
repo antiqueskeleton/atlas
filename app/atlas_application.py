@@ -9,11 +9,13 @@ from backend.engines.insight_engine import InsightEngine
 from backend.engines.relationship_engine import RelationshipEngine
 from backend.models.run_summary import RunSummary
 from backend.models.dataset import Dataset
+from backend.ai.provider_manager import ProviderManager
 
 
 class AtlasApplication:
     def __init__(self):
         self.dataset_manager = DatasetManager()
+        self.provider_manager = ProviderManager()
         self.current_results = []
         self.current_summary = None
         self.current_insights = []
