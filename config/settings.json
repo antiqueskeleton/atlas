@@ -1,0 +1,5 @@
+{
+  "project_name": "Atlas",
+  "default_response_file": "sample_data/responses/sample_responses.json",
+  "environment": "development"
+}
