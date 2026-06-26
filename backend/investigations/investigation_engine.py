@@ -2,18 +2,18 @@ from backend.investigations.question_interpreter import QuestionInterpreter
 from backend.investigations.executive_summary_generator import ExecutiveSummaryGenerator
 from backend.investigations.recommendation_generator import RecommendationGenerator
 from backend.investigations.evidence_ranker import EvidenceRanker
-from backend.ai.mock_provider import MockAIProvider
+from backend.ai.provider_manager import ProviderManager
 
 
 class InvestigationEngine:
 
-    def __init__(self, atlas_app, ai_provider=None):
+    def __init__(self, atlas_app, provider_manager=None):
         self.app = atlas_app
         self.interpreter = QuestionInterpreter()
         self.summary_generator = ExecutiveSummaryGenerator()
         self.recommendation_generator = RecommendationGenerator()
         self.evidence_ranker = EvidenceRanker()
-        self.ai_provider = ai_provider or MockAIProvider()
+        self.provider_manager = provider_manager or ProviderManager()
 
     def investigate(self, question: str):
         request = self.interpreter.interpret(question)
@@ -23,7 +23,9 @@ class InvestigationEngine:
         recommendation = self.recommendation_generator.generate(request, analysis)
         ranked_evidence = self.evidence_ranker.rank(request, analysis)
 
-        ai_reasoning = self.ai_provider.ask(
+        provider = self.provider_manager.get_active_provider()
+
+        ai_reasoning = provider.ask(
             prompt=question,
             context=summary
         )
@@ -35,4 +37,5 @@ class InvestigationEngine:
             "recommendation": recommendation,
             "ranked_evidence": ranked_evidence,
             "ai_reasoning": ai_reasoning,
+            "provider": provider.provider_name,
         }
