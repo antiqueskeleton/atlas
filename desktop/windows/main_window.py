@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.atlas_application import AtlasApplication
 from desktop.pages.home_page import HomePage
 from desktop.pages.investigation_page import InvestigationPage
 from desktop.pages.trends_page import TrendsPage
@@ -18,6 +19,8 @@ from desktop.pages.knowledge_page import KnowledgePage
 class AtlasMainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
+
+        self.app = AtlasApplication()
 
         self.setWindowTitle("Atlas AI Intelligence Platform")
         self.resize(1300, 850)
@@ -69,8 +72,11 @@ class AtlasMainWindow(QMainWindow):
         self.pages = QTabWidget()
         self.pages.tabBar().hide()
 
-        self.pages.addTab(HomePage(), "Home")
-        self.pages.addTab(InvestigationPage(), "Investigate")
+        self.home_page = HomePage(self.app)
+        self.investigation_page = InvestigationPage(self.app)
+
+        self.pages.addTab(self.home_page, "Home")
+        self.pages.addTab(self.investigation_page, "Investigate")
         self.pages.addTab(TrendsPage(), "Trends")
         self.pages.addTab(KnowledgePage(), "Knowledge")
 
@@ -96,9 +102,5 @@ class AtlasMainWindow(QMainWindow):
         )
 
         if file_path:
-            home_page = self.pages.widget(0)
-
-            if hasattr(home_page, "run_analysis"):
-                home_page.run_analysis(file_path)
-
+            self.home_page.run_analysis(file_path)
             self.statusBar().showMessage(f"Imported and analyzed: {file_path}")
