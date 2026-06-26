@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
 from app.atlas_application import AtlasApplication
 from desktop.widgets.result_panel import ResultPanel
 from desktop.widgets.search_bar import SearchBar
+from desktop.widgets.recommendation_card import RecommendationCard
 
 
 class InvestigationPage(QWidget):
@@ -32,7 +33,7 @@ class InvestigationPage(QWidget):
 
         self.insights = ResultPanel("Insights")
         self.relationships = ResultPanel("Relationships")
-        self.recommendations = ResultPanel("Recommendations")
+        self.recommendations = RecommendationCard()
         self.evidence = ResultPanel("Evidence Summary")
 
         content = QHBoxLayout()
@@ -79,8 +80,9 @@ class InvestigationPage(QWidget):
             )
         )
 
-        self.recommendations.set_text(
-            "Review feature gaps around Quiet Operation, RV Ready, and Dual Fuel positioning."
+        self.recommendations.set_recommendation(
+            "Review feature gaps around Quiet Operation, RV Ready, and Dual Fuel positioning.",
+            "Confidence: Medium"
         )
 
         self.evidence.set_text(
