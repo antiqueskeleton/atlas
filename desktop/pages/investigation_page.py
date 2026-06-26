@@ -1,14 +1,12 @@
 from PySide6.QtWidgets import (
     QLabel,
-    QLineEdit,
-    QPushButton,
     QVBoxLayout,
-    QHBoxLayout,
     QWidget,
 )
 
 from app.atlas_application import AtlasApplication
 from desktop.widgets.result_panel import ResultPanel
+from desktop.widgets.search_bar import SearchBar
 
 
 class InvestigationPage(QWidget):
@@ -30,18 +28,11 @@ class InvestigationPage(QWidget):
             "font-size:15px;color:#6B7280;"
         )
 
-        self.question = QLineEdit()
-
-        self.question.setPlaceholderText(
-            "Example: Why isn't Firman recommended for home backup?"
+        self.search = SearchBar(
+            placeholder="Example: Why isn't Firman recommended for home backup?",
+            button_text="Run Investigation"
         )
-
-        run_button = QPushButton("Run Investigation")
-        run_button.clicked.connect(self.run)
-
-        question_layout = QHBoxLayout()
-        question_layout.addWidget(self.question)
-        question_layout.addWidget(run_button)
+        self.search.connect(self.run)
 
         self.insights = ResultPanel("Insights")
 
@@ -50,7 +41,7 @@ class InvestigationPage(QWidget):
         layout.addWidget(title)
         layout.addWidget(subtitle)
         layout.addSpacing(15)
-        layout.addLayout(question_layout)
+        layout.addWidget(self.search)
         layout.addSpacing(20)
         layout.addWidget(self.insights)
         layout.addWidget(self.relationships)
