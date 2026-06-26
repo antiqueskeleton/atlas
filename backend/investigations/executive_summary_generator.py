@@ -13,9 +13,15 @@ class ExecutiveSummaryGenerator:
         target = request.target_brand or "the selected brand"
 
         if request.intent == "explain":
+            feature_context = (
+                f" The question appears focused on {request.target_feature}."
+                if request.target_feature
+                else ""
+            )
+
             return (
                 f"Atlas reviewed {summary.evidence_count} responses. "
-                f"{target} was evaluated against the current dataset. "
+                f"{target} was evaluated against the current dataset.{feature_context} "
                 f"{insight_text} "
                 f"The main opportunity is to improve the connection between {target} "
                 f"and the features AI systems already associate with stronger competitors."
