@@ -5,6 +5,7 @@ from desktop.widgets.result_panel import ResultPanel
 from desktop.widgets.search_bar import SearchBar
 from desktop.widgets.recommendation_card import RecommendationCard
 from desktop.widgets.relationship_explorer import RelationshipExplorer
+from desktop.widgets.intent_panel import IntentPanel
 
 
 class InvestigationPage(QWidget):
