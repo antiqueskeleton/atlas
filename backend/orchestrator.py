@@ -7,37 +7,8 @@ from backend.registry.analyst_registry import AnalystRegistry
 from backend.engines.insight_engine import InsightEngine
 from backend.reporting.executive_report import ExecutiveReport
 from backend.engines.relationship_engine import RelationshipEngine
-
-
-def load_sample_evidence():
-    return [
-        Evidence(
-            evidence_id="ev-001",
-            source="manual_test",
-            prompt="Best portable generator for home backup",
-            text="""
-            Champion and Westinghouse are often recommended for home backup.
-
-            Firman is a strong Dual Fuel generator with Electric Start and excellent RV Ready capability.
-
-            Honda is known for Quiet Operation and long-term reliability.
-
-            Champion is also recognized for Electric Start and RV Ready models.
-            """
-        ),
-        Evidence(
-            evidence_id="ev-002",
-            source="manual_test",
-            prompt="Best quiet generator for camping",
-            text="""
-            Honda and Yamaha are frequently recommended for Quiet Operation while camping.
-
-            Firman offers excellent Dual Fuel options and Electric Start on many models.
-
-            Champion also offers RV Ready inverter generators.
-            """
-        )
-    ]
+from backend.models.relationship_summary import RelationshipSummary
+from backend.services.evidence_service import EvidenceService
 
 
 def run():
@@ -54,7 +25,9 @@ def run():
         "features": knowledge_service.get_features(),
     }
 
-    evidence_items = load_sample_evidence()
+    evidence_service = EvidenceService()
+
+    evidence_items = evidence_service.load_responses()
     analysts = AnalystRegistry.get_analysts(knowledge)
 
     all_results = []
@@ -107,6 +80,7 @@ def run():
 
     relationship_engine = RelationshipEngine()
     relationships = relationship_engine.generate(all_results)
+    relationship_summary = RelationshipSummary(relationships).build()
 
     print("\nRelationships")
     print("-------------")
@@ -118,6 +92,11 @@ def run():
 
     print(f"\nFinished: {finished}")
     print(f"Duration: {duration}")
+
+    print("\nTop Brand ↔ Feature Relationships")
+    print("---------------------------------")
+    for relationship, count in relationship_summary.top_relationships.items():
+        print(f"{relationship}: {count}")
 
 
 if __name__ == "__main__":
