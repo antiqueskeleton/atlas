@@ -7,7 +7,14 @@ from backend.models.run_summary import RunSummary
 
 
 class AtlasApplication:
-    def analyze(self):
+    def __init__(self):
+        self.current_evidence = []
+        self.current_results = []
+        self.current_summary = None
+        self.current_insights = []
+        self.current_relationships = []
+
+    def analyze(self, response_file=None):
         knowledge_service = KnowledgeService()
         evidence_service = EvidenceService()
 
@@ -16,30 +23,35 @@ class AtlasApplication:
             "features": knowledge_service.get_features(),
         }
 
-        evidence_items = evidence_service.load_responses()
+        self.current_evidence = evidence_service.load_responses(response_file)
+
         analysts = AnalystRegistry.get_analysts(knowledge)
 
-        all_results = []
+        self.current_results = []
 
-        for evidence in evidence_items:
+        for evidence in self.current_evidence:
             for analyst in analysts:
-                all_results.append(analyst.analyze(evidence))
+                self.current_results.append(analyst.analyze(evidence))
 
-        summary = RunSummary(
-            evidence_count=len(evidence_items),
+        self.current_summary = RunSummary(
+            evidence_count=len(self.current_evidence),
             analyst_count=len(analysts),
-            results=all_results
+            results=self.current_results
         ).build()
 
         insight_engine = InsightEngine()
-        insights = insight_engine.generate(all_results)
+        self.current_insights = insight_engine.generate(self.current_results)
 
         relationship_engine = RelationshipEngine()
-        relationships = relationship_engine.generate(all_results)
+        self.current_relationships = relationship_engine.generate(self.current_results)
 
         return {
-            "summary": summary,
-            "insights": insights,
-            "relationships": relationships,
-            "results": all_results,
+            "summary": self.current_summary,
+            "insights": self.current_insights,
+            "relationships": self.current_relationships,
+            "results": self.current_results,
+            "evidence": self.current_evidence,
         }
+
+    def has_analysis(self):
+        return self.current_summary is not None
