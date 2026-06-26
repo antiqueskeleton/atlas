@@ -14,6 +14,7 @@ from desktop.pages.home_page import HomePage
 from desktop.pages.investigation_page import InvestigationPage
 from desktop.pages.trends_page import TrendsPage
 from desktop.pages.knowledge_page import KnowledgePage
+from desktop.pages.settings_page import SettingsPage
 
 
 class AtlasMainWindow(QMainWindow):
@@ -65,6 +66,7 @@ class AtlasMainWindow(QMainWindow):
             "🔍 Investigate",
             "📈 Trends",
             "🧠 Knowledge",
+            "⚙ Settings",
         ])
         self.nav.setFixedWidth(220)
         self.nav.setCurrentRow(0)
@@ -79,6 +81,7 @@ class AtlasMainWindow(QMainWindow):
         self.pages.addTab(self.investigation_page, "Investigate")
         self.pages.addTab(TrendsPage(), "Trends")
         self.pages.addTab(KnowledgePage(), "Knowledge")
+        self.pages.addTab(SettingsPage(self.app), "Settings")
 
         self.nav.currentRowChanged.connect(self.pages.setCurrentIndex)
 
