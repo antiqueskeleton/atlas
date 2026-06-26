@@ -20,6 +20,7 @@ class SettingsPage(QWidget):
 
         self.provider_select = QComboBox()
         self.provider_select.addItem("Mock AI Provider", "mock")
+        self.provider_select.currentIndexChanged.connect(self.change_provider)
 
         layout.addWidget(title)
         layout.addWidget(subtitle)
@@ -29,3 +30,7 @@ class SettingsPage(QWidget):
         layout.addStretch()
 
         self.setLayout(layout)
+
+    def change_provider(self):
+        provider_key = self.provider_select.currentData()
+        self.app.provider_manager.set_active_provider(provider_key)
