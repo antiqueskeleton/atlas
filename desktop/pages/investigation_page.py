@@ -9,6 +9,7 @@ from app.atlas_application import AtlasApplication
 from desktop.widgets.result_panel import ResultPanel
 from desktop.widgets.search_bar import SearchBar
 from desktop.widgets.recommendation_card import RecommendationCard
+from desktop.widgets.relationship_explorer import RelationshipExplorer
 
 
 class InvestigationPage(QWidget):
@@ -73,12 +74,7 @@ class InvestigationPage(QWidget):
             )
         )
 
-        self.relationships.set_text(
-            "\n".join(
-                f"{r.source} → {r.target}"
-                for r in relationships[:15]
-            )
-        )
+        self.relationships.set_relationships(relationships)
 
         self.recommendations.set_recommendation(
             "Review feature gaps around Quiet Operation, RV Ready, and Dual Fuel positioning.",

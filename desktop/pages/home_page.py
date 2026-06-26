@@ -2,6 +2,7 @@ from PySide6.QtWidgets import QLabel, QPushButton, QGridLayout, QVBoxLayout, QWi
 
 from app.atlas_application import AtlasApplication
 from desktop.widgets.stat_card import StatCard
+from desktop.widgets.activity_feed import ActivityFeed
 
 
 class HomePage(QWidget):
@@ -23,6 +24,12 @@ class HomePage(QWidget):
         self.brands_card = StatCard("Brands Found", "-", "")
         self.features_card = StatCard("Features Found", "-", "")
         self.relationships_card = StatCard("Relationships", "-", "")
+        self.activity_feed = ActivityFeed("Recent Activity")
+        self.activity_feed.set_items([
+            "Atlas workspace opened",
+            "Evidence service ready",
+            "Analyst registry loaded",
+        ])
 
         grid = QGridLayout()
         grid.addWidget(self.visibility_card, 0, 0)
@@ -38,8 +45,13 @@ class HomePage(QWidget):
         layout.addWidget(subtitle)
         layout.addSpacing(20)
         layout.addLayout(grid)
+
+        layout.addSpacing(20)
+        layout.addWidget(self.activity_feed)
+
         layout.addSpacing(20)
         layout.addWidget(button)
+
         layout.addStretch()
 
         self.setLayout(layout)
