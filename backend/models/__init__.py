@@ -6,3 +6,4 @@ from backend.models.relationship import Relationship
 from backend.models.relationship_summary import RelationshipSummary
 from backend.models.investigation import Investigation
 from backend.models.dataset import Dataset
+from backend.models.investigation_request import InvestigationRequest
