@@ -5,7 +5,6 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.atlas_application import AtlasApplication
 from desktop.widgets.result_panel import ResultPanel
 from desktop.widgets.search_bar import SearchBar
 from desktop.widgets.recommendation_card import RecommendationCard
@@ -13,10 +12,10 @@ from desktop.widgets.relationship_explorer import RelationshipExplorer
 
 
 class InvestigationPage(QWidget):
-    def __init__(self):
+    def __init__(self, app):
         super().__init__()
 
-        self.app = AtlasApplication()
+        self.app = app
 
         layout = QVBoxLayout()
 

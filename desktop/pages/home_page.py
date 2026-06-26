@@ -1,6 +1,5 @@
 from PySide6.QtWidgets import QLabel, QPushButton, QGridLayout, QVBoxLayout, QHBoxLayout, QWidget
 
-from app.atlas_application import AtlasApplication
 from desktop.widgets.stat_card import StatCard
 from desktop.widgets.activity_feed import ActivityFeed
 from desktop.widgets.dataset_card import DatasetCard
@@ -8,10 +7,10 @@ from desktop.widgets.dataset_list import DatasetList
 
 
 class HomePage(QWidget):
-    def __init__(self):
+    def __init__(self, app):
         super().__init__()
 
-        self.app = AtlasApplication()
+        self.app = app
 
         root_layout = QHBoxLayout()
 
@@ -25,6 +24,8 @@ class HomePage(QWidget):
         subtitle.setStyleSheet("font-size: 15px; color: #6B7280;")
 
         self.dataset_list = DatasetList()
+        self.dataset_list.connect_selection_changed(self.select_dataset)
+
         self.current_dataset = DatasetCard()
 
         import_hint = QLabel("Import a response dataset to begin analysis.")
@@ -84,7 +85,14 @@ class HomePage(QWidget):
 
     def run_analysis(self, response_file=None):
         result = self.app.analyze(response_file)
+        self.update_dashboard(result)
 
+    def select_dataset(self, dataset):
+        self.app.dataset_manager.set_active(dataset.name)
+        result = self.app.analyze_active_dataset()
+        self.update_dashboard(result)
+
+    def update_dashboard(self, result):
         dataset = result["dataset"]
         summary = result["summary"]
 
