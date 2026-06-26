@@ -1,12 +1,11 @@
 from PySide6.QtWidgets import (
     QFrame,
+    QFileDialog,
     QHBoxLayout,
-    QLabel,
     QListWidget,
     QMainWindow,
     QStatusBar,
     QTabWidget,
-    QVBoxLayout,
     QWidget,
 )
 
@@ -44,7 +43,10 @@ class AtlasMainWindow(QMainWindow):
         investigation_menu.addAction("Run Analysis")
 
         tools_menu = menu.addMenu("Tools")
-        tools_menu.addAction("Import Responses")
+
+        import_action = tools_menu.addAction("Import Responses")
+        import_action.triggered.connect(self.import_responses)
+
         tools_menu.addAction("Manage Knowledge")
 
         help_menu = menu.addMenu("Help")
@@ -84,3 +86,14 @@ class AtlasMainWindow(QMainWindow):
 
         main_widget.setLayout(main_layout)
         self.setCentralWidget(main_widget)
+
+    def import_responses(self):
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Import AI Responses",
+            "",
+            "JSON Files (*.json);;All Files (*)"
+        )
+
+        if file_path:
+            self.statusBar().showMessage(f"Imported response file: {file_path}")
