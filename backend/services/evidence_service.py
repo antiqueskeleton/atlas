@@ -3,14 +3,21 @@ from pathlib import Path
 from typing import List
 
 from backend.models.evidence import Evidence
+from backend.services.config_service import ConfigService
 
 
 class EvidenceService:
     def __init__(self):
         self.project_root = Path(__file__).resolve().parents[2]
+        self.config = ConfigService()
 
-    def load_responses(self, file_path: str = "sample_data/responses/sample_responses.json") -> List[Evidence]:
-        path = self.project_root / file_path
+    def load_responses(self, file_path: str | None = None) -> List[Evidence]:
+        response_file = file_path or self.config.get(
+            "default_response_file",
+            "sample_data/responses/sample_responses.json"
+        )
+
+        path = self.project_root / response_file
 
         with path.open("r", encoding="utf-8") as file:
             records = json.load(file)
