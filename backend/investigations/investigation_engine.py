@@ -1,6 +1,7 @@
 from backend.investigations.question_interpreter import QuestionInterpreter
 from backend.investigations.executive_summary_generator import ExecutiveSummaryGenerator
 from backend.investigations.recommendation_generator import RecommendationGenerator
+from backend.investigations.evidence_ranker import EvidenceRanker
 
 
 class InvestigationEngine:
@@ -10,6 +11,7 @@ class InvestigationEngine:
         self.interpreter = QuestionInterpreter()
         self.summary_generator = ExecutiveSummaryGenerator()
         self.recommendation_generator = RecommendationGenerator()
+        self.evidence_ranker = EvidenceRanker()
 
     def investigate(self, question: str):
         request = self.interpreter.interpret(question)
@@ -17,10 +19,12 @@ class InvestigationEngine:
 
         summary = self.summary_generator.generate(request, analysis)
         recommendation = self.recommendation_generator.generate(request, analysis)
+        ranked_evidence = self.evidence_ranker.rank(request, analysis)
 
         return {
             "request": request,
             "analysis": analysis,
             "summary": summary,
             "recommendation": recommendation,
+            "ranked_evidence": ranked_evidence,
         }

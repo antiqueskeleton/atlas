@@ -81,9 +81,19 @@ class InvestigationPage(QWidget):
             f"Confidence: {recommendation['confidence']}"
         )
 
-        self.evidence.set_text(
-            f"Responses analyzed: {summary.evidence_count}\n"
-            f"Brands found: {summary.finding_counts_by_type.get('brand', 0)}\n"
-            f"Features found: {summary.finding_counts_by_type.get('feature', 0)}\n"
-            f"Relationships found: {len(relationships)}"
+        ranked_evidence = investigation["ranked_evidence"]
+
+        evidence_text = "\n\n".join(
+            f"{item.source.upper()} | {item.prompt}\n{item.text[:220]}..."
+            for item in ranked_evidence
         )
+
+        if not evidence_text:
+            evidence_text = (
+                f"Responses analyzed: {summary.evidence_count}\n"
+                f"Brands found: {summary.finding_counts_by_type.get('brand', 0)}\n"
+                f"Features found: {summary.finding_counts_by_type.get('feature', 0)}\n"
+                f"Relationships found: {len(relationships)}"
+            )
+
+        self.evidence.set_text(evidence_text)
