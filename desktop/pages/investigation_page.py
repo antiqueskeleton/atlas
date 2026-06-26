@@ -1,10 +1,6 @@
-from PySide6.QtWidgets import (
-    QLabel,
-    QVBoxLayout,
-    QHBoxLayout,
-    QWidget,
-)
+from PySide6.QtWidgets import QLabel, QVBoxLayout, QHBoxLayout, QWidget
 
+from backend.investigations.investigation_engine import InvestigationEngine
 from desktop.widgets.result_panel import ResultPanel
 from desktop.widgets.search_bar import SearchBar
 from desktop.widgets.recommendation_card import RecommendationCard
@@ -16,6 +12,7 @@ class InvestigationPage(QWidget):
         super().__init__()
 
         self.app = app
+        self.engine = InvestigationEngine(self.app)
 
         layout = QVBoxLayout()
 
@@ -26,20 +23,20 @@ class InvestigationPage(QWidget):
         subtitle.setStyleSheet("font-size:15px;color:#6B7280;")
 
         self.search = SearchBar(
-            placeholder="Example: Why isn't Firman recommended for home backup?",
+            placeholder="Example: Why didn't Firman win against Champion?",
             button_text="Investigate"
         )
         self.search.connect(self.run)
 
-        self.insights = ResultPanel("Insights")
-        self.relationships = ResultPanel("Relationships")
+        self.summary = ResultPanel("Executive Summary")
+        self.relationships = RelationshipExplorer()
         self.recommendations = RecommendationCard()
         self.evidence = ResultPanel("Evidence Summary")
 
         content = QHBoxLayout()
 
         left = QVBoxLayout()
-        left.addWidget(self.insights)
+        left.addWidget(self.summary)
         left.addWidget(self.recommendations)
 
         right = QVBoxLayout()
@@ -60,23 +57,25 @@ class InvestigationPage(QWidget):
         self.setLayout(layout)
 
     def run(self):
-        result = self.app.analyze()
+        question = self.search.text()
 
-        insights = result["insights"]
-        relationships = result["relationships"]
-        summary = result["summary"]
+        investigation = self.engine.investigate(question)
 
-        self.insights.set_text(
-            "\n".join(
-                insight.description
-                for insight in insights
-            )
-        )
+        analysis = investigation["analysis"]
+
+        if analysis is None:
+            self.summary.set_text("No active dataset is available. Import a dataset first.")
+            return
+
+        summary = analysis["summary"]
+        relationships = analysis["relationships"]
+
+        self.summary.set_text(investigation["summary"])
 
         self.relationships.set_relationships(relationships)
 
         self.recommendations.set_recommendation(
-            "Review feature gaps around Quiet Operation, RV Ready, and Dual Fuel positioning.",
+            "Improve messaging around features where competitors have stronger AI associations.",
             "Confidence: Medium"
         )
 
