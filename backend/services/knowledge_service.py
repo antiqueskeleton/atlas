@@ -43,4 +43,5 @@ class KnowledgeService:
             "Quiet Operation",
             "Long Runtime",
             "RV Ready",
+            "Home Backup"
         ]
