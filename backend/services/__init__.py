@@ -1,1 +1,2 @@
 from backend.services.knowledge_service import KnowledgeService
+from backend.services.evidence_service import EvidenceService

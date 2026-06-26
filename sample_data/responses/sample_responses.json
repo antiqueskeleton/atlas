@@ -1,0 +1,14 @@
+[
+  {
+    "evidence_id": "ev-001",
+    "source": "manual_test",
+    "prompt": "Best portable generator for home backup",
+    "text": "Champion and Westinghouse are often recommended for home backup. Firman is a strong Dual Fuel generator with Electric Start and excellent RV Ready capability. Honda is known for Quiet Operation and long-term reliability. Champion is also recognized for Electric Start and RV Ready models."
+  },
+  {
+    "evidence_id": "ev-002",
+    "source": "manual_test",
+    "prompt": "Best quiet generator for camping",
+    "text": "Honda and Yamaha are frequently recommended for Quiet Operation while camping. Firman offers excellent Dual Fuel options and Electric Start on many models. Champion also offers RV Ready inverter generators."
+  }
+]
