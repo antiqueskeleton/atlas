@@ -1,0 +1,38 @@
+[
+    {
+        "evidence_id": "resp-001",
+        "source": "chatgpt",
+        "prompt": "What is the best portable generator for home backup?",
+        "text": "Champion is frequently recommended for home backup because of its reliability and dual fuel models. Firman is often mentioned as a strong value option. Honda remains the premium recommendation due to quiet operation."
+    },
+    {
+        "evidence_id": "resp-002",
+        "source": "claude",
+        "prompt": "Best generator for RV camping",
+        "text": "Honda and Yamaha dominate quiet inverter generator recommendations. Firman receives positive comments for value and RV-ready models."
+    },
+    {
+        "evidence_id": "resp-003",
+        "source": "gemini",
+        "prompt": "Dual fuel portable generators",
+        "text": "Champion is consistently associated with dual fuel technology. Firman also offers several dual fuel generators that compete well on price."
+    },
+    {
+        "evidence_id": "resp-004",
+        "source": "perplexity",
+        "prompt": "Best generator brand",
+        "text": "Honda is viewed as the premium brand. Champion offers excellent value. Firman is improving in visibility due to competitive pricing."
+    },
+    {
+        "evidence_id": "resp-005",
+        "source": "chatgpt",
+        "prompt": "Quiet generators for neighborhoods",
+        "text": "Honda leads discussions around quiet operation. Firman is mentioned less frequently for low noise despite offering inverter products."
+    },
+    {
+        "evidence_id": "resp-006",
+        "source": "claude",
+        "prompt": "Whole home backup generator recommendations",
+        "text": "Champion and Westinghouse are commonly recommended. Firman is usually positioned as an economical alternative with solid performance."
+    }
+]

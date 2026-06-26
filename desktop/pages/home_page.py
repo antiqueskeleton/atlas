@@ -56,8 +56,8 @@ class HomePage(QWidget):
 
         self.setLayout(layout)
 
-    def run_analysis(self):
-        result = self.app.analyze()
+    def run_analysis(self, response_file=None):
+        result = self.app.analyze(response_file)
         summary = result["summary"]
 
         self.responses_card.set_value(summary.evidence_count)
