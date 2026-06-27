@@ -5,6 +5,9 @@ from backend.models.ai_reasoning import AIReasoning
 class OpenAIProvider(AIProvider):
     provider_name = "OpenAI"
 
+    def __init__(self):
+        self.api_key = None
+        
     def ask(self, prompt: str, context: str | None = None) -> AIReasoning:
         return AIReasoning(
             executive_summary=(
@@ -22,3 +25,5 @@ class OpenAIProvider(AIProvider):
             ],
             provider=self.provider_name,
         )
+    def set_api_key(self, api_key):
+        self.api_key = api_key

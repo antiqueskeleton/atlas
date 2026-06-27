@@ -1,4 +1,4 @@
-from PySide6.QtWidgets import QLabel, QComboBox, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QLabel, QComboBox, QPushButton, QVBoxLayout, QWidget, QLineEdit
 
 
 class SettingsPage(QWidget):
@@ -21,8 +21,18 @@ class SettingsPage(QWidget):
         self.provider_select = QComboBox()
         self.load_providers()
 
+        api_key_label = QLabel("API Key")
+        api_key_label.setStyleSheet("font-size:16px;font-weight:bold;")
+
+        self.api_key_input = QLineEdit()
+        self.api_key_input.setPlaceholderText("Enter API key for selected provider")
+        self.api_key_input.setEchoMode(QLineEdit.Password)
+
         self.status = QLabel("Provider status: Ready")
         self.status.setStyleSheet("font-size:13px;color:#6B7280;")
+
+        save_button = QPushButton("Save Provider Settings")
+        save_button.clicked.connect(self.save_provider_settings)
 
         test_button = QPushButton("Test Provider")
         test_button.clicked.connect(self.test_provider)
@@ -34,6 +44,10 @@ class SettingsPage(QWidget):
         layout.addSpacing(20)
         layout.addWidget(provider_label)
         layout.addWidget(self.provider_select)
+        layout.addSpacing(15)
+        layout.addWidget(api_key_label)
+        layout.addWidget(self.api_key_input)
+        layout.addWidget(save_button)
         layout.addWidget(test_button)
         layout.addWidget(self.status)
         layout.addStretch()
@@ -54,6 +68,14 @@ class SettingsPage(QWidget):
             self.app.provider_manager.set_active_provider(provider_key)
             provider = self.app.provider_manager.get_active_provider()
             self.status.setText(f"Provider status: {provider.provider_name} selected")
+
+    def save_provider_settings(self):
+        provider_key = self.provider_select.currentData()
+        api_key = self.api_key_input.text().strip()
+
+        self.app.provider_manager.set_provider_api_key(provider_key, api_key)
+
+        self.status.setText("Provider status: Settings saved for current session")
 
     def test_provider(self):
         provider = self.app.provider_manager.get_active_provider()
