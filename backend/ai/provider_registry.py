@@ -1,10 +1,12 @@
 from backend.ai.mock_provider import MockAIProvider
+from backend.ai.openai_provider import OpenAIProvider
 
 
 class ProviderRegistry:
     def __init__(self):
         self.providers = {
             "mock": MockAIProvider,
+            "openai": OpenAIProvider,
         }
 
     def create_provider(self, provider_key):
