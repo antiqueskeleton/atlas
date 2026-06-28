@@ -3,3 +3,4 @@ from backend.investigations.question_interpreter import QuestionInterpreter
 from backend.investigations.executive_summary_generator import ExecutiveSummaryGenerator
 from backend.investigations.recommendation_generator import RecommendationGenerator
 from backend.investigations.evidence_ranker import EvidenceRanker
+from backend.investigations.investigation_plan import InvestigationPlan
