@@ -107,5 +107,21 @@ class VisibilityRepository:
                 FROM visibility_runs
                 ORDER BY started_at DESC
             """)
+            
+    def list_responses(self, limit=100):
+        with self.connect() as conn:
+            cursor = conn.execute("""
+                SELECT
+                    id,
+                    run_id,
+                    provider,
+                    model,
+                    prompt,
+                    response,
+                    collected_at
+                FROM visibility_responses
+                ORDER BY collected_at DESC
+                LIMIT ?
+            """, (limit,))
 
             return cursor.fetchall()
