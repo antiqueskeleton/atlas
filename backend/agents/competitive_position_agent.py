@@ -1,5 +1,6 @@
 from backend.investigations.task_result import TaskResult
 from backend.agents.base_agent import BaseAgent
+from backend.agents.base_agent import BaseAgent
 
 
 class CompetitivePositionAgent(BaseAgent):
