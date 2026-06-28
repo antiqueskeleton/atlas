@@ -32,3 +32,6 @@ class VisibilityService:
     def analytics_summary(self):
         responses = self.repository.list_responses()
         return self.analytics.summarize_responses(responses)
+    
+    def get_responses_for_run(self, run_id):
+        return self.repository.get_responses_for_run(run_id)
