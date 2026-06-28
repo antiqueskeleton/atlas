@@ -7,23 +7,40 @@ class OpenAIProvider(AIProvider):
 
     def __init__(self):
         self.api_key = None
-        
+
+    def set_api_key(self, api_key):
+        self.api_key = api_key
+
     def ask(self, prompt: str, context: str | None = None) -> AIReasoning:
+        if not self.api_key:
+            return AIReasoning(
+                executive_summary=(
+                    "OpenAI provider is selected, but no API key is configured."
+                ),
+                confidence="Low",
+                risks=[
+                    "Atlas cannot make a live OpenAI request without an API key."
+                ],
+                follow_up_questions=[
+                    "Would you like to add an OpenAI API key in Settings?"
+                ],
+                provider=self.provider_name,
+            )
+
         return AIReasoning(
             executive_summary=(
-                "OpenAI provider is installed but not yet connected. "
-                "API key support and live requests will be added next."
+                "OpenAI provider has an API key configured, but live API requests "
+                "are not enabled yet."
             ),
-            confidence="Low",
+            confidence="Medium",
+            opportunities=[
+                "Atlas is ready for the next step: enabling live OpenAI requests."
+            ],
             risks=[
-                "No live OpenAI API request was made.",
-                "API key configuration is not implemented yet.",
+                "This is still a simulated OpenAI response."
             ],
             follow_up_questions=[
-                "Would you like to configure an OpenAI API key?",
-                "Would you like to test the live OpenAI connection?",
+                "Should Atlas make a live OpenAI API request next?"
             ],
             provider=self.provider_name,
         )
-    def set_api_key(self, api_key):
-        self.api_key = api_key
