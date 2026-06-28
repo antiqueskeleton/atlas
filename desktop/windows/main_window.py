@@ -25,6 +25,7 @@ class AtlasMainWindow(QMainWindow):
 
         self.setWindowTitle("Atlas AI Intelligence Platform")
         self.resize(1300, 850)
+        self.setMinimumSize(1100, 700)
 
         self.build_menu()
         self.build_layout()

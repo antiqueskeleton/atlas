@@ -3,6 +3,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QTextEdit,
     QVBoxLayout,
+    QSizePolicy,
 )
 
 
@@ -11,6 +12,11 @@ class ScrollableCard(QFrame):
         super().__init__()
 
         self.setObjectName("StatCard")
+        self.setMinimumHeight(220)
+        self.setSizePolicy(
+            QSizePolicy.Expanding,
+            QSizePolicy.Expanding
+        )
 
         layout = QVBoxLayout()
 
@@ -19,7 +25,11 @@ class ScrollableCard(QFrame):
 
         self.text = QTextEdit()
         self.text.setReadOnly(True)
-        self.text.setMinimumHeight(170)
+        self.text.setMinimumHeight(150)
+        self.text.setSizePolicy(
+            QSizePolicy.Expanding,
+            QSizePolicy.Expanding
+        )
 
         layout.addWidget(title_label)
         layout.addWidget(self.text)
