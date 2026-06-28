@@ -11,25 +11,27 @@ class FeatureComparisonAgent:
                 confidence="Low"
             )
 
+        summary = analysis["summary"]
         comp_shop = request.comp_shop if request else None
 
         if comp_shop:
             competitors = ", ".join(comp_shop.competitor_products) or "competitor products"
 
-            summary = (
-                f"Feature Comparison framework is ready for "
+            result = (
+                f"Feature Comparison analyzed {summary.evidence_count} responses for "
                 f"{comp_shop.firman_product} against {competitors}. "
-                f"Atlas will compare feature coverage, feature gaps, shared strengths, "
-                f"differentiators, and AI-visible product advantages."
+                f"Atlas found {summary.finding_counts_by_type.get('feature', 0)} feature signals. "
+                f"This supports comparison of shared strengths, missing features, and AI-visible differentiators."
             )
         else:
-            summary = (
-                "Feature Comparison framework is ready. "
-                "Atlas will compare important features, gaps, overlaps, and competitive advantages."
+            result = (
+                f"Feature Comparison analyzed {summary.evidence_count} responses and found "
+                f"{summary.finding_counts_by_type.get('feature', 0)} feature signals. "
+                f"Atlas can use these signals to compare important features, gaps, overlaps, and competitive advantages."
             )
 
         return TaskResult(
             task="Feature Comparison",
-            summary=summary,
+            summary=result,
             confidence="Medium"
         )
