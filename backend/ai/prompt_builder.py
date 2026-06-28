@@ -1,3 +1,5 @@
+from backend.ai.response_schema import RESPONSE_SCHEMA
+
 class PromptBuilder:
     def build(self, request, analysis):
         summary = analysis["summary"]
@@ -42,13 +44,7 @@ Supporting Evidence:
 Relationship Signals:
 {relationship_text}
 
-Return your answer using these exact section headings:
-
-Executive Summary:
-Opportunities:
-Risks:
-Follow-Up Questions:
-Confidence:
+{RESPONSE_SCHEMA}
 """
 
         return prompt.strip()
