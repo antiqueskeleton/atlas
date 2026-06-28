@@ -16,6 +16,7 @@ from desktop.widgets.ai_reasoning_panel import AIReasoningPanel
 from desktop.widgets.provider_card import ProviderCard
 from desktop.widgets.scrollable_card import ScrollableCard
 from desktop.widgets.prompt_panel import PromptPanel
+from desktop.widgets.evidence_viewer import EvidenceViewer
 
 
 class InvestigationPage(QWidget):
@@ -47,6 +48,7 @@ class InvestigationPage(QWidget):
         self.provider_card = ProviderCard()
         self.relationships = RelationshipExplorer()
         self.evidence = ScrollableCard("Evidence Summary")
+        self.evidence_viewer = EvidenceViewer()
         self.prompt_panel = PromptPanel()
 
         content_widget = QWidget()
@@ -66,6 +68,7 @@ class InvestigationPage(QWidget):
         right.addWidget(self.provider_card)
         right.addWidget(self.relationships)
         right.addWidget(self.evidence)
+        right.addWidget(self.evidence_viewer)
         right.addWidget(self.prompt_panel)
         right.addStretch()
 
@@ -122,6 +125,11 @@ class InvestigationPage(QWidget):
         )
 
         ranked_evidence = investigation["ranked_evidence"]
+
+        if ranked_evidence:
+            self.evidence_viewer.set_evidence(ranked_evidence[0])
+        else:
+            self.evidence_viewer.clear()
 
         evidence_text = "\n\n".join(
             f"{item.source.upper()} | {item.prompt}\n{item.text[:300]}..."
