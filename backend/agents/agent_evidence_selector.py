@@ -1,61 +1,34 @@
 class AgentEvidenceSelector:
 
-    def select(self, task_name, analysis):
+    def select(self, task_name, analysis, limit=6):
         evidence = analysis.get("evidence", [])
 
-        if task_name == "Competitive Positioning":
-            keywords = [
-                "recommend",
-                "brand",
-                "competitor",
-                "visibility",
-                "leader",
-                "market"
-            ]
+        keyword_map = {
+            "Competitive Positioning": [
+                "recommend", "brand", "competitor", "visibility", "leader", "market"
+            ],
+            "Feature Comparison": [
+                "feature", "dual fuel", "electric start", "rv ready", "quiet", "inverter"
+            ],
+            "Customer Sentiment": [
+                "love", "hate", "recommend", "complaint", "review", "customer"
+            ],
+            "Strategic Opportunities": [
+                "opportunity", "missing", "improve", "gap", "better"
+            ],
+        }
 
-        elif task_name == "Feature Comparison":
-            keywords = [
-                "feature",
-                "dual fuel",
-                "electric start",
-                "rv ready",
-                "quiet",
-                "inverter"
-            ]
+        keywords = keyword_map.get(task_name)
 
-        elif task_name == "Customer Sentiment":
-            keywords = [
-                "love",
-                "hate",
-                "recommend",
-                "complaint",
-                "review",
-                "customer"
-            ]
-
-        elif task_name == "Strategic Opportunities":
-            keywords = [
-                "opportunity",
-                "missing",
-                "improve",
-                "gap",
-                "better"
-            ]
-
-        else:
-            return evidence
+        if not keywords:
+            return evidence[:limit]
 
         selected = []
 
         for item in evidence:
-
-            text = (
-                item.prompt.lower()
-                + " "
-                + item.response.lower()
-            )
+            text = f"{item.prompt} {item.text}".lower()
 
             if any(word in text for word in keywords):
                 selected.append(item)
 
-        return selected
+        return selected[:limit]
