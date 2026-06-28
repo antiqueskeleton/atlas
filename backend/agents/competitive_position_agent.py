@@ -19,6 +19,7 @@ class CompetitivePositionAgent(BaseAgent):
 
         if request is not None and provider_manager is not None:
             reasoning = AgentAIService(provider_manager).ask(
+                self.task_name,
                 request,
                 analysis
             )
