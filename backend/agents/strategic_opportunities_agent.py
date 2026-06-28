@@ -11,26 +11,31 @@ class StrategicOpportunitiesAgent:
                 confidence="Low"
             )
 
+        summary = analysis["summary"]
         comp_shop = request.comp_shop if request else None
 
         if comp_shop:
             competitors = ", ".join(comp_shop.competitor_products) or "competitor products"
 
-            summary = (
-                f"Strategic Opportunities framework is ready for "
+            result = (
+                f"Strategic Opportunities analyzed {summary.evidence_count} responses for "
                 f"{comp_shop.firman_product} against {competitors}. "
-                f"Atlas will identify positioning opportunities, messaging gaps, "
+                f"Atlas found {summary.finding_counts_by_type.get('brand', 0)} brand signals "
+                f"and {summary.finding_counts_by_type.get('feature', 0)} feature signals. "
+                f"This supports identification of positioning opportunities, messaging gaps, "
                 f"product advantages, and customer-facing recommendations."
             )
         else:
-            summary = (
-                "Strategic Opportunities framework is ready. "
-                "Atlas will identify competitive openings, messaging opportunities, "
-                "feature gaps, and business recommendations."
+            result = (
+                f"Strategic Opportunities analyzed {summary.evidence_count} responses. "
+                f"Atlas found {summary.finding_counts_by_type.get('brand', 0)} brand signals "
+                f"and {summary.finding_counts_by_type.get('feature', 0)} feature signals. "
+                f"This supports identification of competitive openings, messaging opportunities, "
+                f"feature gaps, and business recommendations."
             )
 
         return TaskResult(
             task="Strategic Opportunities",
-            summary=summary,
+            summary=result,
             confidence="Medium"
         )
