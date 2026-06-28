@@ -3,7 +3,7 @@ from backend.investigations.task_result import TaskResult
 
 class FeatureComparisonAgent:
 
-    def run(self, analysis, request=None):
+    def run(self, analysis, request=None, provider_manager=None):
         if analysis is None:
             return TaskResult(
                 task="Feature Comparison",
