@@ -10,3 +10,4 @@ from backend.models.investigation_request import InvestigationRequest
 from backend.models.ai_reasoning import AIReasoning
 from backend.ai.prompt_result import PromptResult
 from backend.models.evidence_citation import EvidenceCitation
+from backend.models.comp_shop_request import CompShopRequest
