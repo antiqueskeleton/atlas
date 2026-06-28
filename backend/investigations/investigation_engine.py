@@ -27,7 +27,10 @@ class InvestigationEngine:
 
         request = self.interpreter.interpret(question)
         plan = self.planner.build(question)
-        task_results = self.executor.execute(plan)
+        task_results = self.executor.execute(
+            plan,
+            analysis
+        )
 
         analysis = self.app.analyze_active_dataset()
 
