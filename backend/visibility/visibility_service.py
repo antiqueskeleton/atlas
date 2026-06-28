@@ -1,6 +1,7 @@
 from backend.visibility.prompt_library import PromptLibrary
 from backend.visibility.visibility_repository import VisibilityRepository
 from backend.visibility.visibility_runner import VisibilityRunner
+from backend.visibility.visibility_analytics import VisibilityAnalytics
 
 
 class VisibilityService:
@@ -8,6 +9,7 @@ class VisibilityService:
         self.provider_manager = provider_manager
         self.prompt_library = PromptLibrary()
         self.runner = VisibilityRunner(provider_manager)
+        self.analytics = VisibilityAnalytics()
         self.repository = VisibilityRepository()
 
     def run(self, prompt_set="default", provider_name=None):
@@ -26,3 +28,7 @@ class VisibilityService:
 
     def list_runs(self):
         return self.repository.list_runs()
+    
+    def analytics_summary(self):
+        responses = self.repository.list_responses()
+        return self.analytics.summarize_responses(responses)
