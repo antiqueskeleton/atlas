@@ -8,8 +8,6 @@ class InvestigationPlanner:
 
         plan = InvestigationPlan(question=question)
 
-        plan.tasks.append("Competitive Positioning")
-
         if any(term in normalized for term in [
             "comp shop",
             "compare product",
@@ -19,9 +17,16 @@ class InvestigationPlanner:
             "vs",
             "versus",
         ]):
-            plan.tasks.append("Comp Shop")
+            plan.tasks.extend([
+                "Comp Shop",
+                "Feature Comparison",
+                "Customer Fit",
+                "Strategic Opportunities",
+            ])
+            return plan
 
         plan.tasks.extend([
+            "Competitive Positioning",
             "Feature Comparison",
             "Customer Sentiment",
             "Strategic Opportunities",
