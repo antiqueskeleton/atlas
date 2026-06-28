@@ -15,6 +15,7 @@ from desktop.widgets.intent_panel import IntentPanel
 from desktop.widgets.ai_reasoning_panel import AIReasoningPanel
 from desktop.widgets.provider_card import ProviderCard
 from desktop.widgets.scrollable_card import ScrollableCard
+from desktop.widgets.prompt_panel import PromptPanel
 
 
 class InvestigationPage(QWidget):
@@ -46,6 +47,7 @@ class InvestigationPage(QWidget):
         self.provider_card = ProviderCard()
         self.relationships = RelationshipExplorer()
         self.evidence = ScrollableCard("Evidence Summary")
+        self.prompt_panel = PromptPanel()
 
         content_widget = QWidget()
         content_layout = QHBoxLayout()
@@ -64,6 +66,7 @@ class InvestigationPage(QWidget):
         right.addWidget(self.provider_card)
         right.addWidget(self.relationships)
         right.addWidget(self.evidence)
+        right.addWidget(self.prompt_panel)
         right.addStretch()
 
         left_container = QWidget()
@@ -109,6 +112,7 @@ class InvestigationPage(QWidget):
 
         self.summary.set_text(investigation["summary"])
         self.ai_reasoning.set_reasoning(investigation["ai_reasoning"])
+        self.prompt_panel.set_prompt(self.engine.ai_service.last_prompt)
         self.relationships.set_relationships(relationships)
 
         recommendation = investigation["recommendation"]
