@@ -4,3 +4,6 @@ from backend.investigations.executive_summary_generator import ExecutiveSummaryG
 from backend.investigations.recommendation_generator import RecommendationGenerator
 from backend.investigations.evidence_ranker import EvidenceRanker
 from backend.investigations.investigation_plan import InvestigationPlan
+from backend.investigations.investigation_planner import InvestigationPlanner
+from backend.investigations.investigation_plan import InvestigationPlan
+from backend.investigations.investigation_planner import InvestigationPlanner
