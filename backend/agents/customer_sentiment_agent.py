@@ -11,14 +11,18 @@ class CustomerSentimentAgent:
                 confidence="Low"
             )
 
-        summary = (
-            "Customer Sentiment framework is ready. "
-            "Atlas will evaluate how customers, AI responses, or source materials describe "
-            "brand perception, product strengths, weaknesses, complaints, and preference signals."
+        summary = analysis["summary"]
+
+        result = (
+            f"Customer Sentiment analyzed {summary.evidence_count} responses. "
+            f"Atlas found {summary.finding_counts_by_type.get('brand', 0)} brand signals "
+            f"and {summary.finding_counts_by_type.get('feature', 0)} feature signals. "
+            f"This can help identify positive perception, negative perception, recurring complaints, "
+            f"and preference signals across the dataset."
         )
 
         return TaskResult(
             task="Customer Sentiment",
-            summary=summary,
+            summary=result,
             confidence="Medium"
         )
