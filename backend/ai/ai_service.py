@@ -27,7 +27,20 @@ class AIService:
                 provider=provider.provider_name,
             )
 
-        prompt = self.prompt_builder.build(request, analysis)
+        from backend.investigations.evidence_ranker import EvidenceRanker
+
+        ranked_evidence = EvidenceRanker().rank(
+            request,
+            analysis,
+            limit=8
+        )
+
+        prompt = self.prompt_builder.build(
+            request,
+            analysis,
+            ranked_evidence=ranked_evidence
+        )
+
         self.last_prompt = prompt
 
         return provider.ask(
