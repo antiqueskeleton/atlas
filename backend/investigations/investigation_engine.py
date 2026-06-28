@@ -13,7 +13,9 @@ class InvestigationEngine:
 
         self.interpreter = QuestionInterpreter()
         self.planner = InvestigationPlanner()
-        self.executor = InvestigationExecutor()
+        self.executor = InvestigationExecutor(
+            atlas_app.provider_manager
+        )
         self.summary_generator = ExecutiveSummaryGenerator()
         self.recommendation_generator = RecommendationGenerator()
         self.evidence_ranker = EvidenceRanker()

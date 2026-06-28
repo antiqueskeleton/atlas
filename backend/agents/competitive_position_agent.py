@@ -9,7 +9,7 @@ class CompetitivePositionAgent(BaseAgent):
     def task_name(self):
         return "Competitive Positioning"
 
-    def run(self, analysis, request=None):
+    def run(self, analysis, request=None, provider_manager=None):
         if analysis is None:
             return TaskResult(
                 task=self.task_name,

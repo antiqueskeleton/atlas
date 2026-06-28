@@ -4,8 +4,9 @@ from backend.investigations.task_result import TaskResult
 
 class InvestigationExecutor:
 
-    def __init__(self):
+    def __init__(self, provider_manager=None):
         self.agents = AgentRegistry.build()
+        self.provider_manager = provider_manager
 
     def execute(self, plan, analysis, request=None):
         results = []
@@ -14,7 +15,13 @@ class InvestigationExecutor:
             agent = self.agents.get(task)
 
             if agent:
-                results.append(agent.run(analysis, request))
+                results.append(
+                    agent.run(
+                        analysis,
+                        request,
+                        self.provider_manager
+                    )
+                )
             else:
                 results.append(
                     TaskResult(
