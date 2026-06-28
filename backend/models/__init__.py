@@ -8,3 +8,4 @@ from backend.models.investigation import Investigation
 from backend.models.dataset import Dataset
 from backend.models.investigation_request import InvestigationRequest
 from backend.models.ai_reasoning import AIReasoning
+from backend.ai.prompt_result import PromptResult
