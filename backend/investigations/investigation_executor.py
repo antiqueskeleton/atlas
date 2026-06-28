@@ -11,13 +11,10 @@ class InvestigationExecutor:
         results = []
 
         for task in plan.tasks:
-
             agent = self.agents.get(task)
 
             if agent:
-                results.append(
-                    agent.run(analysis)
-                )
+                results.append(agent.run(analysis))
             else:
                 results.append(
                     TaskResult(
