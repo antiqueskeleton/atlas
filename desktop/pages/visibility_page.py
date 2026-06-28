@@ -1,0 +1,82 @@
+from PySide6.QtWidgets import QLabel, QPushButton, QComboBox, QTextEdit, QVBoxLayout, QWidget
+
+from backend.visibility.visibility_service import VisibilityService
+
+
+class VisibilityPage(QWidget):
+    def __init__(self, app):
+        super().__init__()
+
+        self.app = app
+        self.service = VisibilityService(self.app.provider_manager)
+
+        layout = QVBoxLayout()
+
+        title = QLabel("Atlas Visibility")
+        title.setStyleSheet("font-size:30px;font-weight:bold;")
+
+        subtitle = QLabel("Run prompt sets against AI providers and store visibility responses.")
+        subtitle.setStyleSheet("font-size:15px;color:#6B7280;")
+
+        self.prompt_set = QComboBox()
+        self.prompt_set.addItems(["default", "home backup", "rv"])
+
+        self.provider = QComboBox()
+        for provider_key in self.app.provider_manager.list_providers():
+            self.provider.addItem(provider_key)
+
+        run_button = QPushButton("Run Visibility Collection")
+        run_button.clicked.connect(self.run_visibility)
+
+        self.output = QTextEdit()
+        self.output.setReadOnly(True)
+
+        layout.addWidget(title)
+        layout.addWidget(subtitle)
+        layout.addWidget(QLabel("Prompt Set"))
+        layout.addWidget(self.prompt_set)
+        layout.addWidget(QLabel("Provider"))
+        layout.addWidget(self.provider)
+        layout.addWidget(run_button)
+        layout.addWidget(QLabel("Recent Runs"))
+        layout.addWidget(self.output)
+
+        self.setLayout(layout)
+
+        self.refresh_runs()
+
+    def run_visibility(self):
+        prompt_set = self.prompt_set.currentText()
+        provider_name = self.provider.currentText()
+
+        result = self.service.run(
+            prompt_set=prompt_set,
+            provider_name=provider_name
+        )
+
+        run = result["run"]
+
+        self.output.setPlainText(
+            f"Visibility run completed.\n\n"
+            f"Run ID: {run.run_id}\n"
+            f"Provider: {run.provider}\n"
+            f"Model: {run.model}\n"
+            f"Prompt Set: {run.prompt_set}\n"
+            f"Responses: {run.response_count}\n"
+            f"Duration: {run.duration_seconds:.2f} seconds\n\n"
+        )
+
+        self.refresh_runs()
+
+    def refresh_runs(self):
+        runs = self.service.list_runs()
+
+        text = ""
+
+        for run in runs[:10]:
+            text += (
+                f"{run[4]} | {run[1]} | {run[3]} | "
+                f"{run[6]} | {run[7]} responses\n"
+            )
+
+        self.output.append(text or "No visibility runs yet.")
