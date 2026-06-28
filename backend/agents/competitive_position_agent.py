@@ -1,7 +1,11 @@
 from backend.investigations.task_result import TaskResult
+from backend.agents.base_agent import BaseAgent
 
 
-class CompetitivePositionAgent:
+class CompetitivePositionAgent(BaseAgent):
+    @property
+    def task_name(self):
+        return "Competitive Positioning"
 
     def run(self, analysis, request=None):
         if analysis is None:
