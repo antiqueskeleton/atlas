@@ -1,2 +1,2 @@
-PySide6
-openai
+PySide6==6.9.1
+openai==2.44.0
