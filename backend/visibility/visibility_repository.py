@@ -108,6 +108,8 @@ class VisibilityRepository:
                 ORDER BY started_at DESC
             """)
             
+            return cursor.fetchall()
+        
     def list_responses(self, limit=100):
         with self.connect() as conn:
             cursor = conn.execute("""
