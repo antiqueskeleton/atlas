@@ -123,4 +123,14 @@ class VisibilityPage(QWidget):
         else:
             text += "No feature mentions found yet.\n"
 
+            text += "\nBrand Mentions by Provider:\n"
+
+        if summary["provider_brand_counts"]:
+            for provider, brands in summary["provider_brand_counts"].items():
+                text += f"\n{provider}:\n"
+                for brand, count in brands.items():
+                    text += f"• {brand}: {count}\n"
+        else:
+            text += "No provider brand mentions found yet.\n"
+
         return text
