@@ -5,6 +5,7 @@ from backend.investigations.executive_summary_generator import ExecutiveSummaryG
 from backend.investigations.recommendation_generator import RecommendationGenerator
 from backend.investigations.evidence_ranker import EvidenceRanker
 from backend.ai.ai_service import AIService
+from backend.investigations.agent_result_synthesizer import AgentResultSynthesizer
 
 
 class InvestigationEngine:
@@ -16,6 +17,7 @@ class InvestigationEngine:
         self.executor = InvestigationExecutor(
             atlas_app.provider_manager
         )
+        self.agent_synthesizer = AgentResultSynthesizer()
         self.summary_generator = ExecutiveSummaryGenerator()
         self.recommendation_generator = RecommendationGenerator()
         self.evidence_ranker = EvidenceRanker()
@@ -35,6 +37,8 @@ class InvestigationEngine:
             analysis,
             request
         )
+
+        agent_summary = self.agent_synthesizer.synthesize(task_results)
 
         summary = self.summary_generator.generate(
             request,
@@ -65,5 +69,6 @@ class InvestigationEngine:
             "recommendation": recommendation,
             "ranked_evidence": ranked_evidence,
             "ai_reasoning": ai_reasoning,
+            "agent_summary": agent_summary,
             "provider": ai_reasoning.provider,
         }

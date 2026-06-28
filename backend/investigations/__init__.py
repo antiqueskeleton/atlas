@@ -9,3 +9,4 @@ from backend.investigations.investigation_plan import InvestigationPlan
 from backend.investigations.investigation_planner import InvestigationPlanner
 from backend.investigations.investigation_executor import InvestigationExecutor
 from backend.investigations.task_result import TaskResult
+from backend.investigations.agent_result_synthesizer import AgentResultSynthesizer
