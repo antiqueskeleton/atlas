@@ -46,8 +46,14 @@ class ExecutiveConsensusEngine:
             "Validate agent findings against customer data, product specifications, and market evidence.",
         ]
 
+        confidence_score = min(
+            100,
+            (len(high_confidence) * 25) + (len(completed) * 10)
+        )
+
         return ExecutiveConsensus(
             overall_read=overall_read,
+            confidence_score=confidence_score,
             areas_of_agreement=areas_of_agreement,
             key_risks=key_risks,
             recommended_actions=recommended_actions,
