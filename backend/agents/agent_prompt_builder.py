@@ -64,7 +64,7 @@ Responses: {summary.evidence_count}
 Brand Signals: {summary.finding_counts_by_type.get("brand", 0)}
 Feature Signals: {summary.finding_counts_by_type.get("feature", 0)}
 
-Relevant Evidence:
+Relevant Supporting Evidence (highest ranked first):
 {evidence_text}
 
 {RESPONSE_SCHEMA}
