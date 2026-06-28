@@ -69,7 +69,7 @@ class VisibilityPage(QWidget):
         self.refresh_runs()
 
     def refresh_runs(self):
-        runs = self.service.list_runs()
+        runs = self.service.list_runs() or []
 
         text = ""
 
@@ -79,4 +79,30 @@ class VisibilityPage(QWidget):
                 f"{run[6]} | {run[7]} responses\n"
             )
 
-        self.output.append(text or "No visibility runs yet.")
+        runs_text = text or "No visibility runs yet."
+        analytics_text = self.refresh_analytics()
+
+        self.output.setPlainText(
+            runs_text + "\n\n" + analytics_text
+        )
+    
+    def refresh_analytics(self):
+        summary = self.service.analytics_summary()
+
+        text = "Visibility Analytics\n\n"
+
+        text += "Brand Mentions:\n"
+        if summary["brand_counts"]:
+            for brand, count in summary["brand_counts"].items():
+                text += f"• {brand}: {count}\n"
+        else:
+            text += "No brand mentions found yet.\n"
+
+        text += "\nFeature Mentions:\n"
+        if summary["feature_counts"]:
+            for feature, count in summary["feature_counts"].items():
+                text += f"• {feature}: {count}\n"
+        else:
+            text += "No feature mentions found yet.\n"
+
+        return text
