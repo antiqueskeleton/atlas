@@ -1,1 +1,2 @@
 from backend.agents.competitive_position_agent import CompetitivePositionAgent
+from backend.agents.comp_shop_agent import CompShopAgent
