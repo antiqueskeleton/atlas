@@ -27,7 +27,9 @@ class CompetitivePositionAgent(BaseAgent):
             return TaskResult(
                 task=self.task_name,
                 summary=reasoning.executive_summary,
-                confidence=reasoning.confidence
+                confidence=reasoning.confidence,
+                provider=reasoning.provider,
+                raw_response=reasoning.raw_response
             )
 
         summary = analysis["summary"]
