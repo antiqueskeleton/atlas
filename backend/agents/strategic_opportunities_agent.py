@@ -1,41 +1,45 @@
+from backend.agents.base_agent import BaseAgent
+from backend.agents.agent_ai_service import AgentAIService
 from backend.investigations.task_result import TaskResult
 
 
-class StrategicOpportunitiesAgent:
+class StrategicOpportunitiesAgent(BaseAgent):
+
+    @property
+    def task_name(self):
+        return "Strategic Opportunities"
 
     def run(self, analysis, request=None, provider_manager=None):
         if analysis is None:
             return TaskResult(
-                task="Strategic Opportunities",
+                task=self.task_name,
                 summary="No active dataset is available to identify strategic opportunities.",
                 confidence="Low"
             )
 
+        if request is not None and provider_manager is not None:
+            reasoning = AgentAIService(provider_manager).ask(
+                self.task_name,
+                request,
+                analysis
+            )
+
+            return TaskResult(
+                task=self.task_name,
+                summary=reasoning.executive_summary,
+                confidence=reasoning.confidence,
+                provider=reasoning.provider,
+                raw_response=reasoning.raw_response
+            )
+
         summary = analysis["summary"]
-        comp_shop = request.comp_shop if request else None
-
-        if comp_shop:
-            competitors = ", ".join(comp_shop.competitor_products) or "competitor products"
-
-            result = (
-                f"Strategic Opportunities analyzed {summary.evidence_count} responses for "
-                f"{comp_shop.firman_product} against {competitors}. "
-                f"Atlas found {summary.finding_counts_by_type.get('brand', 0)} brand signals "
-                f"and {summary.finding_counts_by_type.get('feature', 0)} feature signals. "
-                f"This supports identification of positioning opportunities, messaging gaps, "
-                f"product advantages, and customer-facing recommendations."
-            )
-        else:
-            result = (
-                f"Strategic Opportunities analyzed {summary.evidence_count} responses. "
-                f"Atlas found {summary.finding_counts_by_type.get('brand', 0)} brand signals "
-                f"and {summary.finding_counts_by_type.get('feature', 0)} feature signals. "
-                f"This supports identification of competitive openings, messaging opportunities, "
-                f"feature gaps, and business recommendations."
-            )
 
         return TaskResult(
-            task="Strategic Opportunities",
-            summary=result,
+            task=self.task_name,
+            summary=(
+                f"Strategic Opportunities analyzed {summary.evidence_count} responses. "
+                f"Atlas found {summary.finding_counts_by_type.get('brand', 0)} brand signals "
+                f"and {summary.finding_counts_by_type.get('feature', 0)} feature signals."
+            ),
             confidence="Medium"
         )
