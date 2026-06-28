@@ -7,14 +7,14 @@ class InvestigationExecutor:
     def __init__(self):
         self.agents = AgentRegistry.build()
 
-    def execute(self, plan, analysis):
+    def execute(self, plan, analysis, request=None):
         results = []
 
         for task in plan.tasks:
             agent = self.agents.get(task)
 
             if agent:
-                results.append(agent.run(analysis))
+                results.append(agent.run(analysis, request))
             else:
                 results.append(
                     TaskResult(

@@ -30,7 +30,8 @@ class InvestigationEngine:
 
         task_results = self.executor.execute(
             plan,
-            analysis
+            analysis,
+            request
         )
 
         summary = self.summary_generator.generate(
