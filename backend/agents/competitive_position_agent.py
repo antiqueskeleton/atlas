@@ -17,20 +17,17 @@ class CompetitivePositionAgent(BaseAgent):
                 confidence="Low"
             )
 
-        if request is None:
-            summary = analysis["summary"]
+        if request is not None and provider_manager is not None:
+            reasoning = AgentAIService(provider_manager).ask(
+                request,
+                analysis
+            )
 
             return TaskResult(
                 task=self.task_name,
-                summary=(
-                    f"Competitive Positioning analyzed {summary.evidence_count} responses. "
-                    f"Atlas found {summary.finding_counts_by_type.get('brand', 0)} brand signals "
-                    f"and {summary.finding_counts_by_type.get('feature', 0)} feature signals."
-                ),
-                confidence="Medium"
+                summary=reasoning.executive_summary,
+                confidence=reasoning.confidence
             )
-
-        ai_service = AgentAIService(request.provider_manager) if hasattr(request, "provider_manager") else None
 
         summary = analysis["summary"]
 
@@ -39,8 +36,7 @@ class CompetitivePositionAgent(BaseAgent):
             summary=(
                 f"Competitive Positioning analyzed {summary.evidence_count} responses. "
                 f"Atlas found {summary.finding_counts_by_type.get('brand', 0)} brand signals "
-                f"and {summary.finding_counts_by_type.get('feature', 0)} feature signals. "
-                f"AI-enabled agent framework is ready for provider-backed competitive analysis."
+                f"and {summary.finding_counts_by_type.get('feature', 0)} feature signals."
             ),
             confidence="Medium"
         )
