@@ -6,3 +6,5 @@ class TaskResult:
     task: str
     summary: str
     confidence: str
+    provider: str = ""
+    raw_response: str = ""
