@@ -19,6 +19,7 @@ from desktop.widgets.prompt_panel import PromptPanel
 from desktop.widgets.evidence_viewer import EvidenceViewer
 from desktop.widgets.task_results_panel import TaskResultsPanel
 from desktop.widgets.investigation_plan_panel import InvestigationPlanPanel
+from desktop.widgets.executive_consensus_panel import ExecutiveConsensusPanel
 
 
 class InvestigationPage(QWidget):
@@ -45,6 +46,7 @@ class InvestigationPage(QWidget):
         self.intent = IntentPanel()
         self.plan_panel = InvestigationPlanPanel()
         self.summary = ScrollableCard("Executive Summary")
+        self.executive_consensus = ExecutiveConsensusPanel()
         self.ai_reasoning = AIReasoningPanel()
         self.task_results = TaskResultsPanel()
         self.recommendations = RecommendationCard()
@@ -64,11 +66,12 @@ class InvestigationPage(QWidget):
         left.addWidget(self.intent)
         left.addWidget(self.plan_panel)
         left.addWidget(self.summary)
+
         left.addWidget(self.ai_reasoning)
         left.addWidget(self.task_results)
         left.addWidget(self.recommendations)
         left.addStretch()
-
+        left.addWidget(self.executive_consensus)
         right = QVBoxLayout()
         right.setSpacing(16)
         right.addWidget(self.provider_card)
@@ -141,6 +144,7 @@ class InvestigationPage(QWidget):
             consensus_text += "\n".join(f"• {item}" for item in consensus.recommended_actions)
 
         self.summary.set_text(consensus_text)
+        self.executive_consensus.set_consensus(investigation["executive_consensus"])
 
         self.prompt_panel.set_prompt(self.engine.ai_service.last_prompt)
         self.relationships.set_relationships(relationships)
