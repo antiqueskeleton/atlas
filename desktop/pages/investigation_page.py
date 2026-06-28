@@ -18,6 +18,7 @@ from desktop.widgets.scrollable_card import ScrollableCard
 from desktop.widgets.prompt_panel import PromptPanel
 from desktop.widgets.evidence_viewer import EvidenceViewer
 from desktop.widgets.task_results_panel import TaskResultsPanel
+from desktop.widgets.investigation_plan_panel import InvestigationPlanPanel
 
 
 class InvestigationPage(QWidget):
@@ -42,6 +43,7 @@ class InvestigationPage(QWidget):
         self.search.connect(self.run)
 
         self.intent = IntentPanel()
+        self.plan_panel = InvestigationPlanPanel()
         self.summary = ScrollableCard("Executive Summary")
         self.ai_reasoning = AIReasoningPanel()
         self.task_results = TaskResultsPanel()
@@ -60,6 +62,7 @@ class InvestigationPage(QWidget):
         left = QVBoxLayout()
         left.setSpacing(16)
         left.addWidget(self.intent)
+        left.addWidget(self.plan_panel)
         left.addWidget(self.summary)
         left.addWidget(self.ai_reasoning)
         left.addWidget(self.task_results)
@@ -105,6 +108,7 @@ class InvestigationPage(QWidget):
         investigation = self.engine.investigate(question)
 
         self.intent.set_request(investigation["request"])
+        self.plan_panel.set_plan(investigation["plan"])
         self.provider_card.set_provider(investigation["provider"])
 
         analysis = investigation["analysis"]
