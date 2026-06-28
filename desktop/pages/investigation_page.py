@@ -123,7 +123,25 @@ class InvestigationPage(QWidget):
         self.summary.set_text(investigation["summary"])
         self.ai_reasoning.set_reasoning(investigation["ai_reasoning"])
         self.task_results.set_results(investigation["task_results"])
-        self.summary.set_text(investigation["executive_consensus"])
+        
+        consensus = investigation["executive_consensus"]
+
+        consensus_text = consensus.overall_read
+
+        if consensus.areas_of_agreement:
+            consensus_text += "\n\nAreas of Agreement:\n"
+            consensus_text += "\n".join(f"• {item}" for item in consensus.areas_of_agreement)
+
+        if consensus.key_risks:
+            consensus_text += "\n\nKey Risks:\n"
+            consensus_text += "\n".join(f"• {item}" for item in consensus.key_risks)
+
+        if consensus.recommended_actions:
+            consensus_text += "\n\nRecommended Actions:\n"
+            consensus_text += "\n".join(f"• {item}" for item in consensus.recommended_actions)
+
+        self.summary.set_text(consensus_text)
+
         self.prompt_panel.set_prompt(self.engine.ai_service.last_prompt)
         self.relationships.set_relationships(relationships)
 
