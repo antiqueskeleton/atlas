@@ -1,4 +1,5 @@
 from backend.models.investigation_request import InvestigationRequest
+from backend.models.comp_shop_request import CompShopRequest
 
 
 class QuestionInterpreter:
@@ -42,5 +43,23 @@ class QuestionInterpreter:
             if keyword in normalized:
                 request.target_feature = feature
                 break
+
+        if any(term in normalized for term in [
+            "comp shop",
+            "compare product",
+            "compare products",
+            "product a",
+            "against competitor",
+            "vs",
+            "versus",
+        ]):
+            request.intent = "comp_shop"
+            request.comp_shop = CompShopRequest(
+                firman_product=request.target_brand or "Firman product",
+                competitor_products=[
+                    request.competitor
+                ] if request.competitor else [],
+                category=request.target_feature,
+            )
 
         return request

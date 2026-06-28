@@ -1,4 +1,6 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+
+from backend.models.comp_shop_request import CompShopRequest
 
 
 @dataclass
@@ -12,3 +14,5 @@ class InvestigationRequest:
     target_feature: str | None = None
 
     competitor: str | None = None
+
+    comp_shop: CompShopRequest | None = None
