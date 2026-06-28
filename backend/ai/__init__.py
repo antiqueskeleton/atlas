@@ -4,3 +4,4 @@ from backend.ai.prompt_builder import PromptBuilder
 from backend.ai.provider_manager import ProviderManager
 from backend.ai.ai_service import AIService
 from backend.ai.provider_registry import ProviderRegistry
+from backend.ai.ai_reasoning_parser import AIReasoningParser
