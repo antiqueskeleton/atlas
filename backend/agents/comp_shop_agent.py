@@ -11,6 +11,7 @@ class CompShopAgent:
                 confidence="Low"
             )
 
+        summary = analysis["summary"]
         comp_shop = request.comp_shop if request else None
 
         if not comp_shop:
@@ -23,15 +24,17 @@ class CompShopAgent:
         competitors = ", ".join(comp_shop.competitor_products) or "competitor products"
         category = comp_shop.category or "the selected product category"
 
-        summary = (
-            f"Comp Shop framework detected a comparison request for "
+        result = (
+            f"Comp Shop analyzed {summary.evidence_count} responses for "
             f"{comp_shop.firman_product} against {competitors} in {category}. "
-            f"Atlas can use this structure to compare features, positioning, pricing, "
-            f"AI visibility, and customer-fit signals."
+            f"Atlas found {summary.finding_counts_by_type.get('brand', 0)} brand signals "
+            f"and {summary.finding_counts_by_type.get('feature', 0)} feature signals. "
+            f"This supports product-to-product comparison across features, positioning, "
+            f"pricing, customer fit, and AI visibility."
         )
 
         return TaskResult(
             task="Comp Shop",
-            summary=summary,
+            summary=result,
             confidence="Medium"
         )
