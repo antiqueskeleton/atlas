@@ -71,6 +71,13 @@ class VisibilityPage(QWidget):
     def refresh_runs(self):
         runs = self.service.list_runs() or []
 
+        latest_run_id = runs[0][0] if runs else None
+        latest_responses = (
+            self.service.get_responses_for_run(latest_run_id)
+            if latest_run_id
+            else []
+        )
+
         text = ""
 
         for run in runs[:10]:
@@ -82,8 +89,19 @@ class VisibilityPage(QWidget):
         runs_text = text or "No visibility runs yet."
         analytics_text = self.refresh_analytics()
 
+        response_text = "\n\nLatest Run Responses:\n"
+
+        if latest_responses:
+            for response in latest_responses:
+                response_text += (
+                    f"\nPrompt: {response[4]}\n"
+                    f"Response: {response[5][:500]}...\n"
+                )
+        else:
+            response_text += "No responses available.\n"
+
         self.output.setPlainText(
-            runs_text + "\n\n" + analytics_text
+            runs_text + "\n\n" + analytics_text + response_text
         )
     
     def refresh_analytics(self):
