@@ -6,12 +6,14 @@ from backend.investigations.recommendation_generator import RecommendationGenera
 from backend.investigations.evidence_ranker import EvidenceRanker
 from backend.ai.ai_service import AIService
 from backend.investigations.agent_result_synthesizer import AgentResultSynthesizer
+from backend.investigations.executive_consensus_engine import ExecutiveConsensusEngine
 
 
 class InvestigationEngine:
     def __init__(self, atlas_app):
         self.app = atlas_app
 
+        self.consensus_engine = ExecutiveConsensusEngine()
         self.interpreter = QuestionInterpreter()
         self.planner = InvestigationPlanner()
         self.executor = InvestigationExecutor(
@@ -40,6 +42,8 @@ class InvestigationEngine:
 
         agent_summary = self.agent_synthesizer.synthesize(task_results)
 
+        executive_consensus = self.consensus_engine.generate(task_results)
+
         summary = self.summary_generator.generate(
             request,
             analysis
@@ -65,6 +69,7 @@ class InvestigationEngine:
             "plan": plan,
             "task_results": task_results,
             "analysis": analysis,
+            "executive_consensus": executive_consensus,
             "summary": summary,
             "recommendation": recommendation,
             "ranked_evidence": ranked_evidence,
