@@ -1,20 +1,22 @@
-from backend.agents.competitive_position_agent import CompetitivePositionAgent
+from backend.agents.agent_registry import AgentRegistry
 from backend.investigations.task_result import TaskResult
 
 
 class InvestigationExecutor:
 
     def __init__(self):
-        self.competitive_agent = CompetitivePositionAgent()
+        self.agents = AgentRegistry.build()
 
     def execute(self, plan, analysis):
         results = []
 
         for task in plan.tasks:
 
-            if task == "Competitive Positioning":
+            agent = self.agents.get(task)
+
+            if agent:
                 results.append(
-                    self.competitive_agent.run(analysis)
+                    agent.run(analysis)
                 )
             else:
                 results.append(
