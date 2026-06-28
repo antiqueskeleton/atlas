@@ -3,6 +3,7 @@ from backend.agents.comp_shop_agent import CompShopAgent
 from backend.agents.customer_fit_agent import CustomerFitAgent
 from backend.agents.feature_comparison_agent import FeatureComparisonAgent
 from backend.agents.strategic_opportunities_agent import StrategicOpportunitiesAgent
+from backend.agents.customer_sentiment_agent import CustomerSentimentAgent
 
 
 class AgentRegistry:
@@ -15,4 +16,5 @@ class AgentRegistry:
             "Customer Fit": CustomerFitAgent(),
             "Feature Comparison": FeatureComparisonAgent(),
             "Strategic Opportunities": StrategicOpportunitiesAgent(),
+            "Customer Sentiment": CustomerSentimentAgent(),
         }
