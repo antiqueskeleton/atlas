@@ -123,7 +123,7 @@ class InvestigationPage(QWidget):
         self.summary.set_text(investigation["summary"])
         self.ai_reasoning.set_reasoning(investigation["ai_reasoning"])
         self.task_results.set_results(investigation["task_results"])
-        self.summary.set_text(investigation["agent_summary"])
+        self.summary.set_text(investigation["executive_consensus"])
         self.prompt_panel.set_prompt(self.engine.ai_service.last_prompt)
         self.relationships.set_relationships(relationships)
 
