@@ -29,6 +29,7 @@ class TaskResultsPanel(QFrame):
         text = "\n\n".join(
             f"{result.task}\n"
             f"Confidence: {result.confidence}\n"
+            f"Provider: {result.provider or 'Atlas'}\n"
             f"{result.summary}"
             for result in task_results
         )
