@@ -14,6 +14,7 @@ class AIReasoningParser:
                 raw_response=text,
                 opportunities=data.get("opportunities", []),
                 risks=data.get("risks", []),
+                supporting_evidence=data.get("supporting_evidence", []),
                 follow_up_questions=data.get("follow_up_questions", []),
                 provider=provider,
             )
@@ -29,6 +30,7 @@ class AIReasoningParser:
                 risks=[
                     "The provider returned text that could not be parsed into Atlas reasoning."
                 ],
+                supporting_evidence=[],
                 follow_up_questions=[
                     "Should Atlas retry with stricter JSON instructions?"
                 ],

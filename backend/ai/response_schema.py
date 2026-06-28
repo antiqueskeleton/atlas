@@ -14,8 +14,15 @@ Use exactly this structure:
   ],
   "follow_up_questions": [
     "string"
+  ],
+  "supporting_evidence": [
+    1,
+    2,
+    3
   ]
 }
+
+The supporting_evidence array should contain the numbered evidence items you used when forming your conclusion.
 
 Do not include markdown.
 
