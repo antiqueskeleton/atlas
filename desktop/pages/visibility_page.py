@@ -109,6 +109,9 @@ class VisibilityPage(QWidget):
 
         text = "Visibility Analytics\n\n"
 
+        text += f"Total Responses: {summary['total_responses']}\n"
+        text += f"Firman Visibility Score: {summary['firman_visibility_score']}%\n\n"
+
         text += "Brand Mentions:\n"
         if summary["brand_counts"]:
             for brand, count in summary["brand_counts"].items():

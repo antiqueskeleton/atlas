@@ -2,6 +2,7 @@ from collections import Counter, defaultdict
 
 
 class VisibilityAnalytics:
+
     BRANDS = [
         "Firman",
         "Champion",
@@ -24,11 +25,13 @@ class VisibilityAnalytics:
     ]
 
     def summarize_responses(self, responses):
+
         brand_counts = Counter()
         feature_counts = Counter()
         provider_brand_counts = defaultdict(Counter)
 
         for response in responses:
+
             provider = response[2]
             text = response[5].lower()
 
@@ -41,7 +44,18 @@ class VisibilityAnalytics:
                 if feature.lower() in text:
                     feature_counts[feature] += 1
 
+        total_responses = len(responses)
+        firman_mentions = brand_counts.get("Firman", 0)
+
+        firman_visibility_score = (
+            round((firman_mentions / total_responses) * 100, 1)
+            if total_responses
+            else 0
+        )
+
         return {
+            "total_responses": total_responses,
+            "firman_visibility_score": firman_visibility_score,
             "brand_counts": dict(brand_counts),
             "feature_counts": dict(feature_counts),
             "provider_brand_counts": {
