@@ -12,3 +12,4 @@ from backend.ai.prompt_result import PromptResult
 from backend.models.evidence_citation import EvidenceCitation
 from backend.models.comp_shop_request import CompShopRequest
 from backend.models.visibility_run import VisibilityRun
+from backend.models.visibility_response import VisibilityResponse
