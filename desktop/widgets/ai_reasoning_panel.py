@@ -1,4 +1,4 @@
-from PySide6.QtWidgets import QFrame, QLabel, QVBoxLayout
+from PySide6.QtWidgets import QFrame, QLabel, QTextEdit, QVBoxLayout
 
 
 class AIReasoningPanel(QFrame):
@@ -12,8 +12,9 @@ class AIReasoningPanel(QFrame):
         title = QLabel("AI Reasoning")
         title.setObjectName("CardTitle")
 
-        self.body = QLabel("No AI reasoning yet.")
-        self.body.setWordWrap(True)
+        self.body = QTextEdit()
+        self.body.setReadOnly(True)
+        self.body.setMinimumHeight(260)
 
         layout.addWidget(title)
         layout.addWidget(self.body)
@@ -38,4 +39,8 @@ class AIReasoningPanel(QFrame):
         text += f"\n\nProvider: {reasoning.provider}"
         text += f"\nConfidence: {reasoning.confidence}"
 
-        self.body.setText(text)
+        if reasoning.raw_response:
+            text += "\n\nRaw Response:\n"
+            text += reasoning.raw_response
+
+        self.body.setPlainText(text)

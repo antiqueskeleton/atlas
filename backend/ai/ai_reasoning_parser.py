@@ -11,6 +11,7 @@ class AIReasoningParser:
             return AIReasoning(
                 executive_summary=data.get("executive_summary", ""),
                 confidence=data.get("confidence", "Medium"),
+                raw_response=text,
                 opportunities=data.get("opportunities", []),
                 risks=data.get("risks", []),
                 follow_up_questions=data.get("follow_up_questions", []),
@@ -21,6 +22,7 @@ class AIReasoningParser:
             return AIReasoning(
                 executive_summary=text,
                 confidence="Low",
+                raw_response=text,
                 opportunities=[
                     "Review the raw AI response. It was not valid JSON."
                 ],
