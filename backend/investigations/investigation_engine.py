@@ -1,14 +1,13 @@
 from backend.investigations.question_interpreter import QuestionInterpreter
+from backend.investigations.investigation_planner import InvestigationPlanner
+from backend.investigations.investigation_executor import InvestigationExecutor
 from backend.investigations.executive_summary_generator import ExecutiveSummaryGenerator
 from backend.investigations.recommendation_generator import RecommendationGenerator
 from backend.investigations.evidence_ranker import EvidenceRanker
 from backend.ai.ai_service import AIService
-from backend.investigations.investigation_planner import InvestigationPlanner
-from backend.investigations.investigation_executor import InvestigationExecutor
 
 
 class InvestigationEngine:
-
     def __init__(self, atlas_app):
         self.app = atlas_app
 
@@ -24,15 +23,15 @@ class InvestigationEngine:
         )
 
     def investigate(self, question: str):
-
         request = self.interpreter.interpret(question)
         plan = self.planner.build(question)
+
+        analysis = self.app.analyze_active_dataset()
+
         task_results = self.executor.execute(
             plan,
             analysis
         )
-
-        analysis = self.app.analyze_active_dataset()
 
         summary = self.summary_generator.generate(
             request,
@@ -56,12 +55,12 @@ class InvestigationEngine:
 
         return {
             "request": request,
+            "plan": plan,
+            "task_results": task_results,
             "analysis": analysis,
             "summary": summary,
-            "plan": plan,
             "recommendation": recommendation,
             "ranked_evidence": ranked_evidence,
-            "task_results": task_results,
             "ai_reasoning": ai_reasoning,
             "provider": ai_reasoning.provider,
         }
