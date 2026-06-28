@@ -27,6 +27,7 @@ class ExecutiveConsensusPanel(QFrame):
             return
 
         text = consensus.overall_read
+        text += f"\n\nAtlas Confidence Score: {consensus.confidence_score}/100"
 
         if consensus.areas_of_agreement:
             text += "\n\nAreas of Agreement:\n"
