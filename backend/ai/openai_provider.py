@@ -1,5 +1,6 @@
 from backend.ai.base_provider import AIProvider
 from backend.ai.openai_client import OpenAIClient
+from backend.ai.ai_reasoning_parser import AIReasoningParser
 from backend.models.ai_reasoning import AIReasoning
 
 
@@ -8,6 +9,7 @@ class OpenAIProvider(AIProvider):
 
     def __init__(self):
         self.api_key = None
+        self.parser = AIReasoningParser()
 
     def set_api_key(self, api_key):
         self.api_key = api_key
@@ -30,20 +32,9 @@ class OpenAIProvider(AIProvider):
             client = OpenAIClient(self.api_key)
             result = client.generate(prompt)
 
-            return AIReasoning(
-                executive_summary=result.response,
-                confidence="Medium",
-                opportunities=[
-                    "Review the live OpenAI response and compare it against Atlas evidence."
-                ],
-                risks=[
-                    "Live AI output should be verified against supporting evidence."
-                ],
-                follow_up_questions=[
-                    "What evidence supports this conclusion?",
-                    "How would another AI provider answer this question?",
-                ],
-                provider=result.provider,
+            return self.parser.parse(
+                text=result.response,
+                provider=result.provider
             )
 
         except Exception as error:
