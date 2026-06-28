@@ -1,9 +1,9 @@
 from backend.ai.response_schema import RESPONSE_SCHEMA
 
 class PromptBuilder:
-    def build(self, request, analysis):
+    def build(self, request, analysis, ranked_evidence=None):
         summary = analysis["summary"]
-        evidence_items = analysis.get("evidence", [])[:8]
+        evidence_items = ranked_evidence or analysis.get("evidence", [])[:8]
         relationships = analysis.get("relationships", [])[:12]
 
         evidence_text = "\n\n".join(
