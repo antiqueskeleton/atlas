@@ -9,6 +9,7 @@ class InvestigationPlanner:
 
         plan.tasks.extend([
             "Competitive Positioning",
+            "Comp Shop",
             "Feature Comparison",
             "Customer Sentiment",
             "Strategic Opportunities",
