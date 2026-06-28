@@ -1,28 +1,45 @@
+from backend.agents.base_agent import BaseAgent
+from backend.agents.agent_ai_service import AgentAIService
 from backend.investigations.task_result import TaskResult
 
 
-class CustomerSentimentAgent:
+class CustomerSentimentAgent(BaseAgent):
+
+    @property
+    def task_name(self):
+        return "Customer Sentiment"
 
     def run(self, analysis, request=None, provider_manager=None):
         if analysis is None:
             return TaskResult(
-                task="Customer Sentiment",
+                task=self.task_name,
                 summary="No active dataset is available to evaluate customer sentiment.",
                 confidence="Low"
             )
 
+        if request is not None and provider_manager is not None:
+            reasoning = AgentAIService(provider_manager).ask(
+                self.task_name,
+                request,
+                analysis
+            )
+
+            return TaskResult(
+                task=self.task_name,
+                summary=reasoning.executive_summary,
+                confidence=reasoning.confidence,
+                provider=reasoning.provider,
+                raw_response=reasoning.raw_response
+            )
+
         summary = analysis["summary"]
 
-        result = (
-            f"Customer Sentiment analyzed {summary.evidence_count} responses. "
-            f"Atlas found {summary.finding_counts_by_type.get('brand', 0)} brand signals "
-            f"and {summary.finding_counts_by_type.get('feature', 0)} feature signals. "
-            f"This can help identify positive perception, negative perception, recurring complaints, "
-            f"and preference signals across the dataset."
-        )
-
         return TaskResult(
-            task="Customer Sentiment",
-            summary=result,
+            task=self.task_name,
+            summary=(
+                f"Customer Sentiment analyzed {summary.evidence_count} responses. "
+                f"Atlas found {summary.finding_counts_by_type.get('brand', 0)} brand signals "
+                f"and {summary.finding_counts_by_type.get('feature', 0)} feature signals."
+            ),
             confidence="Medium"
         )
