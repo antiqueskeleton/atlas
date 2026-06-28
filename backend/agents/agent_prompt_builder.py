@@ -1,3 +1,6 @@
+from backend.ai.response_schema import RESPONSE_SCHEMA
+
+
 class AgentPromptBuilder:
 
     def build(self, task_name, request, analysis):
@@ -18,5 +21,6 @@ Brand Signals: {summary.finding_counts_by_type.get("brand", 0)}
 Feature Signals: {summary.finding_counts_by_type.get("feature", 0)}
 
 Focus only on your assigned task.
-Return a concise task-specific analysis.
+
+{RESPONSE_SCHEMA}
 """.strip()
