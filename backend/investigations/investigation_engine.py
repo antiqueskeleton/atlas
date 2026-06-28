@@ -3,6 +3,7 @@ from backend.investigations.executive_summary_generator import ExecutiveSummaryG
 from backend.investigations.recommendation_generator import RecommendationGenerator
 from backend.investigations.evidence_ranker import EvidenceRanker
 from backend.ai.ai_service import AIService
+from backend.investigations.investigation_planner import InvestigationPlanner
 
 
 class InvestigationEngine:
@@ -11,6 +12,7 @@ class InvestigationEngine:
         self.app = atlas_app
 
         self.interpreter = QuestionInterpreter()
+        self.planner = InvestigationPlanner()
         self.summary_generator = ExecutiveSummaryGenerator()
         self.recommendation_generator = RecommendationGenerator()
         self.evidence_ranker = EvidenceRanker()
@@ -22,6 +24,7 @@ class InvestigationEngine:
     def investigate(self, question: str):
 
         request = self.interpreter.interpret(question)
+        plan = self.planner.build(question)
 
         analysis = self.app.analyze_active_dataset()
 
@@ -49,6 +52,7 @@ class InvestigationEngine:
             "request": request,
             "analysis": analysis,
             "summary": summary,
+            "plan": plan,
             "recommendation": recommendation,
             "ranked_evidence": ranked_evidence,
             "ai_reasoning": ai_reasoning,
