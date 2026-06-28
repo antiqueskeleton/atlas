@@ -4,14 +4,25 @@ from backend.investigations.task_result import TaskResult
 class CompetitivePositionAgent:
 
     def run(self, analysis, request=None):
-        summary = (
-            "Competitive positioning analysis completed. "
-            "Atlas identified the strongest competitive signals "
-            "within the current dataset."
+        if analysis is None:
+            return TaskResult(
+                task="Competitive Positioning",
+                summary="No active dataset is available for competitive positioning analysis.",
+                confidence="Low"
+            )
+
+        summary = analysis["summary"]
+
+        result = (
+            f"Competitive Positioning analyzed {summary.evidence_count} responses. "
+            f"Atlas found {summary.finding_counts_by_type.get('brand', 0)} brand signals "
+            f"and {summary.finding_counts_by_type.get('feature', 0)} feature signals. "
+            f"This provides the foundation for comparing brand visibility, feature association, "
+            f"and competitive positioning."
         )
 
         return TaskResult(
             task="Competitive Positioning",
-            summary=summary,
+            summary=result,
             confidence="Medium"
         )
