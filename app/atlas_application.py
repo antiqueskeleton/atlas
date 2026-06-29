@@ -4,6 +4,7 @@ from pathlib import Path
 from backend.services.knowledge_service import KnowledgeService
 from backend.services.evidence_service import EvidenceService
 from backend.services.dataset_manager import DatasetManager
+from backend.services.config_service import ConfigService
 from backend.registry.analyst_registry import AnalystRegistry
 from backend.engines.insight_engine import InsightEngine
 from backend.engines.relationship_engine import RelationshipEngine
@@ -14,12 +15,23 @@ from backend.ai.provider_manager import ProviderManager
 
 class AtlasApplication:
     def __init__(self):
+        self.config_service = ConfigService()
         self.dataset_manager = DatasetManager()
         self.provider_manager = ProviderManager()
+        self._load_saved_keys()
         self.current_results = []
         self.current_summary = None
         self.current_insights = []
         self.current_relationships = []
+
+    def _load_saved_keys(self):
+        for key in self.provider_manager.list_providers():
+            saved = self.config_service.get_api_key(key)
+            if saved:
+                self.provider_manager.set_provider_api_key(key, saved)
+
+    def get_target_brand(self) -> str:
+        return self.config_service.get_target_brand()
 
     def analyze(self, response_file=None):
         knowledge_service = KnowledgeService()
