@@ -120,26 +120,35 @@ class KnowledgeRepository:
     # ─── Brands ───────────────────────────────────────────────────────────────
 
     def _migrate_brands_table(self):
-        with self._conn() as c:
-            for col, defn in [
-                ("aliases",        "TEXT    DEFAULT ''"),
-                ("tier",           "INTEGER DEFAULT 0"),
-                ("product_types",  "TEXT    DEFAULT ''"),
-                ("country",        "TEXT    DEFAULT 'US'"),
-                ("parent_company", "TEXT    DEFAULT ''"),
-            ]:
-                try:
-                    c.execute(f"ALTER TABLE brands ADD COLUMN {col} {defn}")
-                except Exception:
-                    pass  # column already exists
-        # Seed full list if this is a fresh install
-        with self._conn() as c:
-            count = c.execute("SELECT COUNT(*) FROM brands").fetchone()[0]
-        if count < 20:
-            self._seed_full_brand_list()
+        if getattr(self, "_in_migration", False):
+            return
+        self._in_migration = True
+        try:
+            with self._conn() as c:
+                for col, defn in [
+                    ("aliases",        "TEXT    DEFAULT ''"),
+                    ("tier",           "INTEGER DEFAULT 0"),
+                    ("product_types",  "TEXT    DEFAULT ''"),
+                    ("country",        "TEXT    DEFAULT 'US'"),
+                    ("parent_company", "TEXT    DEFAULT ''"),
+                ]:
+                    try:
+                        c.execute(f"ALTER TABLE brands ADD COLUMN {col} {defn}")
+                    except Exception:
+                        pass  # column already exists
+            # Seed full list if this is a fresh install
+            with self._conn() as c:
+                count = c.execute("SELECT COUNT(*) FROM brands").fetchone()[0]
+            if count < 20:
+                self._seed_full_brand_list()
+        finally:
+            self._in_migration = False
 
     def _seed_full_brand_list(self):
-        existing_names = {row[1].lower() for row in self.list_brands()}
+        with self._conn() as c:
+            existing_names = {row[0].lower() for row in c.execute(
+                "SELECT name FROM brands WHERE market_id=?", (self.MARKET_ID,)
+            ).fetchall()}
         for entry in _FULL_BRAND_LIST:
             if entry[0].lower() not in existing_names:
                 self.add_brand(*entry)
