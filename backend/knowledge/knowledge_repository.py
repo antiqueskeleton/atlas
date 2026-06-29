@@ -109,6 +109,7 @@ _FULL_BRAND_LIST = [
 
 class KnowledgeRepository:
     MARKET_ID = 1
+    _migrated_dbs: set = set()  # tracks DBs already migrated this session
 
     def __init__(self):
         self._db = get_db_path()
@@ -120,6 +121,9 @@ class KnowledgeRepository:
     # ─── Brands ───────────────────────────────────────────────────────────────
 
     def _migrate_brands_table(self):
+        db_key = str(self._db)
+        if db_key in KnowledgeRepository._migrated_dbs:
+            return
         if getattr(self, "_in_migration", False):
             return
         self._in_migration = True
@@ -141,8 +145,28 @@ class KnowledgeRepository:
                 count = c.execute("SELECT COUNT(*) FROM brands").fetchone()[0]
             if count < 20:
                 self._seed_full_brand_list()
+            # Fill in empty metadata for any brand that matches the seed list
+            self._update_existing_from_seed()
+            KnowledgeRepository._migrated_dbs.add(db_key)
         finally:
             self._in_migration = False
+
+    def _update_existing_from_seed(self):
+        """For brands already in the DB, fill in metadata (aliases, types, country, etc.) from seed."""
+        seed_map = {entry[0].lower(): entry for entry in _FULL_BRAND_LIST}
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT brand_id, name FROM brands WHERE market_id=?", (self.MARKET_ID,)
+            ).fetchall()
+            for brand_id, name in rows:
+                seed = seed_map.get(name.lower())
+                if seed:
+                    # seed: (name, website, description, aliases, tier, product_types, country, parent_company)
+                    c.execute(
+                        "UPDATE brands SET aliases=?, tier=?, product_types=?, country=?, parent_company=? "
+                        "WHERE brand_id=?",
+                        (seed[3], seed[4], seed[5], seed[6], seed[7], brand_id),
+                    )
 
     def _seed_full_brand_list(self):
         with self._conn() as c:
