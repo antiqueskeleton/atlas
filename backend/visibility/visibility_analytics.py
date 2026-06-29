@@ -1,31 +1,42 @@
 from collections import Counter, defaultdict
+from pathlib import Path
 
 
 class VisibilityAnalytics:
 
-    BRANDS = [
-        "Firman",
-        "Champion",
-        "Westinghouse",
-        "Honda",
-        "Generac",
-        "Yamaha",
-        "Predator",
-    ]
+    def __init__(
+        self,
+        brands_path="data/brands.csv",
+        features_path="data/features.csv"
+    ):
+        self.brands = self._load_terms(
+            brands_path,
+            fallback=[
+                "Firman",
+                "Champion",
+                "Westinghouse",
+                "Honda",
+                "Generac",
+                "Yamaha",
+                "Predator",
+            ]
+        )
 
-    FEATURES = [
-        "Dual Fuel",
-        "Electric Start",
-        "RV Ready",
-        "Quiet",
-        "Inverter",
-        "Home Backup",
-        "Portable",
-        "Value",
-    ]
+        self.features = self._load_terms(
+            features_path,
+            fallback=[
+                "Dual Fuel",
+                "Electric Start",
+                "RV Ready",
+                "Quiet",
+                "Inverter",
+                "Home Backup",
+                "Portable",
+                "Value",
+            ]
+        )
 
     def summarize_responses(self, responses):
-
         brand_counts = Counter()
         feature_counts = Counter()
         provider_brand_counts = defaultdict(Counter)
@@ -35,7 +46,6 @@ class VisibilityAnalytics:
         first_mentioned_brands = Counter()
 
         for response in responses:
-
             provider = response[2]
             prompt_set = response[7] if len(response) > 7 else "unknown"
             text = response[5].lower()
@@ -45,7 +55,7 @@ class VisibilityAnalytics:
 
             mentioned_brands = []
 
-            for brand in self.BRANDS:
+            for brand in self.brands:
                 brand_lower = brand.lower()
 
                 if brand_lower in text:
@@ -58,7 +68,7 @@ class VisibilityAnalytics:
                 mentioned_brands.sort(key=lambda item: item[0])
                 first_mentioned_brands[mentioned_brands[0][1]] += 1
 
-            for feature in self.FEATURES:
+            for feature in self.features:
                 if feature.lower() in text:
                     feature_counts[feature] += 1
 
@@ -72,7 +82,6 @@ class VisibilityAnalytics:
         )
 
         provider_visibility_scores = {}
-
         for provider, response_count in provider_response_counts.items():
             provider_firman_mentions = provider_brand_counts[provider].get("Firman", 0)
 
@@ -83,7 +92,6 @@ class VisibilityAnalytics:
             )
 
         prompt_set_visibility_scores = {}
-
         for prompt_set, response_count in prompt_set_response_counts.items():
             prompt_set_firman_mentions = prompt_set_brand_counts[prompt_set].get("Firman", 0)
 
@@ -94,7 +102,6 @@ class VisibilityAnalytics:
             )
 
         first_mention_share = {}
-
         for brand, count in first_mentioned_brands.items():
             first_mention_share[brand] = (
                 round((count / total_responses) * 100, 1)
@@ -116,3 +123,28 @@ class VisibilityAnalytics:
                 for provider, counts in provider_brand_counts.items()
             },
         }
+
+    def _load_terms(self, path, fallback):
+        file_path = Path(path)
+
+        if not file_path.exists():
+            return fallback
+
+        terms = []
+
+        for line in file_path.read_text(encoding="utf-8").splitlines():
+            value = line.strip()
+
+            if not value:
+                continue
+
+            if value.lower() in ["brand", "brands", "feature", "features", "name"]:
+                continue
+
+            if "," in value:
+                value = value.split(",")[0].strip()
+
+            if value:
+                terms.append(value)
+
+        return terms or fallback
