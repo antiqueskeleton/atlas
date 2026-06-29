@@ -161,11 +161,10 @@ class TrendsPage(QWidget):
         kpi_row = QHBoxLayout()
         kpi_row.setSpacing(12)
         brand = self.app.get_target_brand() or "Target Brand"
-        self._kpi_runs_card,    self._kpi_runs    = _kpi("Visibility Runs", "—", "completed runs")
-        self._kpi_score_card,   self._kpi_score   = _kpi(f"{brand} Avg Score", "—%", "avg across all runs")
-        self._kpi_trend_card,   self._kpi_trend   = _kpi("Score Trend", "—", "latest vs. first run")
-        self._kpi_best_card,    self._kpi_best    = _kpi("Best Provider", "—", "highest avg score")
-        for card in (self._kpi_runs_card, self._kpi_score_card, self._kpi_trend_card, self._kpi_best_card):
+        self._kpi_score_card,  self._kpi_score  = _kpi(f"{brand} Avg Score", "—%", "avg across all runs")
+        self._kpi_top_ps_card, self._kpi_top_ps = _kpi("Top Prompt Set", "—", "best performing category")
+        self._kpi_best_card,   self._kpi_best   = _kpi("Best Provider", "—", "highest avg score")
+        for card in (self._kpi_score_card, self._kpi_top_ps_card, self._kpi_best_card):
             kpi_row.addWidget(card)
         kpi_w = QWidget()
         kpi_w.setLayout(kpi_row)
@@ -181,7 +180,7 @@ class TrendsPage(QWidget):
         # Tabs
         self.tabs = QTabWidget()
         self.tabs.addTab(_tab(self._c_score),    "Visibility Score")
-        self.tabs.addTab(_tab(self._c_brands),   "Brand Competition")
+        self.tabs.addTab(_tab(self._c_brands),   "Brand Standing")
         self.tabs.addTab(_tab(self._c_provider), "By Provider")
         self.tabs.addTab(_tab(self._c_features), "Features")
         self.tabs.addTab(_tab(self._c_position), "Positions")
@@ -223,15 +222,15 @@ class TrendsPage(QWidget):
         # KPIs
         scores = [s["target_score"] for s in self._summaries]
         avg = round(sum(scores) / len(scores), 1) if scores else 0
-        trend = round(scores[-1] - scores[0], 1) if len(scores) > 1 else 0
-        trend_str = (f"+{trend}%" if trend >= 0 else f"{trend}%")
 
         prov_avgs = self.service.provider_averages(self._summaries)
         best_prov = max(prov_avgs, key=prov_avgs.get) if prov_avgs else "—"
 
-        self._kpi_runs.setText(str(n))
+        top_ps = self.service.best_prompt_set_for_target(self._summaries)
+        top_ps_display = (top_ps[:22] + "…") if len(top_ps) > 22 else top_ps
+
         self._kpi_score.setText(f"{avg}%")
-        self._kpi_trend.setText(trend_str)
+        self._kpi_top_ps.setText(top_ps_display)
         self._kpi_best.setText(best_prov)
 
         # Draw active tab + pre-draw score tab
@@ -258,6 +257,12 @@ class TrendsPage(QWidget):
         s = self._summaries
         if not s:
             self._c_score.no_data()
+            return
+        if len(s) < 5:
+            self._c_score.no_data(
+                f"Score trend needs 5+ runs to be meaningful.\n"
+                f"You have {len(s)} — keep running Visibility to build history."
+            )
             return
 
         c = self._c_score
@@ -325,37 +330,27 @@ class TrendsPage(QWidget):
         ax = c.ax
         brand = self.app.get_target_brand() or ""
 
-        series = self.service.brand_time_series(s, top_n=6)
-        labels = [x["label"] for x in s]
-        xs = range(len(s))
+        snapshot = self.service.brand_snapshot(s, top_n=8)
+        # Sort ascending so highest appears at top of horizontal bar chart
+        sorted_brands = sorted(snapshot, key=lambda b: snapshot[b])
+        names  = sorted_brands
+        values = [snapshot[b] for b in names]
+        colors = ["#2563EB" if n == brand else "#94A3B8" for n in names]
 
-        colors = list(_BRAND_PALETTE)
-        brand_names = list(series.keys())
+        bars = ax.barh(names, values, color=colors, height=0.5, zorder=3)
+        for bar, val in zip(bars, values):
+            ax.text(
+                bar.get_width() + 0.5, bar.get_y() + bar.get_height() / 2,
+                f"{val:.1f}%", va="center", fontsize=9, color="#374151"
+            )
 
-        # Draw target brand last (on top) with thicker line
-        def draw_brand(name, idx):
-            rates = series[name]
-            is_target = (name == brand)
-            color = "#2563EB" if is_target else colors[idx % len(colors)]
-            lw = 2.5 if is_target else 1.5
-            zorder = 5 if is_target else 3
-            ax.plot(xs, rates, color=color, linewidth=lw, zorder=zorder,
-                    label=f"{name} (now: {rates[-1]:.0f}%)" if rates else name,
-                    marker="o" if len(s) <= 15 else None, markersize=4)
-
-        non_targets = [b for b in brand_names if b != brand]
-        for i, b in enumerate(non_targets):
-            draw_brand(b, i + 1)
-        if brand in brand_names:
-            draw_brand(brand, 0)
-
-        ax.set_xticks(list(xs))
-        ax.set_xticklabels(labels, rotation=35, ha="right", fontsize=8)
-        ax.set_ylabel("Mention Rate (%)", fontsize=9)
-        ax.set_ylim(bottom=0)
-        ax.set_title("Brand Mention Rates Over Time", fontsize=11, fontweight="bold", pad=8)
-        ax.yaxis.set_major_formatter(mticker.FormatStrFormatter("%.0f%%"))
-        ax.legend(fontsize=7, loc="upper left", ncol=2)
+        ax.set_xlabel("Avg Mention Rate (%)", fontsize=9)
+        ax.set_xlim(0, (max(values) * 1.35 if values else 10))
+        ax.set_title(
+            "Brand Mention Rates — Current Standing\n(avg across all runs · target brand in blue)",
+            fontsize=10, fontweight="bold", pad=8
+        )
+        ax.xaxis.set_major_formatter(mticker.FormatStrFormatter("%.0f%%"))
         c.draw()
 
     def _draw_provider(self):
@@ -400,6 +395,12 @@ class TrendsPage(QWidget):
         if not s:
             self._c_features.no_data()
             return
+        if len(s) < 5:
+            self._c_features.no_data(
+                f"Feature trend needs 5+ runs to be meaningful.\n"
+                f"You have {len(s)} — keep running Visibility to build history."
+            )
+            return
 
         c = self._c_features
         c.reset()
@@ -432,6 +433,12 @@ class TrendsPage(QWidget):
         s = self._summaries
         if not s:
             self._c_position.no_data()
+            return
+        if len(s) < 5:
+            self._c_position.no_data(
+                f"Position trend needs 5+ runs to be meaningful.\n"
+                f"You have {len(s)} — keep running Visibility to build history."
+            )
             return
 
         c = self._c_position

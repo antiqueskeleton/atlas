@@ -120,6 +120,27 @@ class TrendsService:
             for ps, scores in totals.items()
         }
 
+    def best_prompt_set_for_target(self, summaries: list[dict]) -> str:
+        """Returns the prompt set name with the highest avg target brand score."""
+        ps_avgs = self.prompt_set_averages(summaries)
+        if not ps_avgs:
+            return "—"
+        return max(ps_avgs, key=ps_avgs.get)
+
+    def brand_snapshot(self, summaries: list[dict], top_n: int = 8) -> dict[str, float]:
+        """Returns {brand: avg_mention_rate} across all runs, top_n + target brand."""
+        totals: dict[str, float] = defaultdict(float)
+        counts: dict[str, int] = defaultdict(int)
+        for s in summaries:
+            for brand, rate in s["brand_rates"].items():
+                totals[brand] += rate
+                counts[brand] += 1
+        avgs = {b: round(totals[b] / counts[b], 1) for b in totals}
+        ranked = sorted(avgs, key=lambda b: -avgs[b])[:top_n]
+        if self.target_brand and self.target_brand not in ranked:
+            ranked.append(self.target_brand)
+        return {b: avgs.get(b, 0.0) for b in ranked}
+
     def position_time_series(self, summaries: list[dict], top_n: int = 5) -> dict:
         """
         Returns {brand: [position1_share_per_run, ...]} for position 1 (first mention).
