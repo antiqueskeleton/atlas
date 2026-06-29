@@ -5,6 +5,7 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QFrame,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QMessageBox,
     QProgressBar,
@@ -12,6 +13,8 @@ from PySide6.QtWidgets import (
     QScrollArea,
     QSizePolicy,
     QSplitter,
+    QTableWidget,
+    QTableWidgetItem,
     QTextEdit,
     QVBoxLayout,
     QWidget,
@@ -126,6 +129,49 @@ def _section(title):
     return frame, body
 
 
+def _table_section(title, columns, stretch_last=True):
+    frame = QFrame()
+    frame.setObjectName("StatCard")
+    frame.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+
+    lay = QVBoxLayout()
+    lay.setSpacing(6)
+    lay.setContentsMargins(12, 10, 12, 10)
+
+    t = QLabel(title); t.setObjectName("CardTitle")
+
+    tbl = QTableWidget()
+    tbl.setColumnCount(len(columns))
+    tbl.setHorizontalHeaderLabels(columns)
+    tbl.verticalHeader().hide()
+    tbl.setEditTriggers(QTableWidget.NoEditTriggers)
+    tbl.setSelectionBehavior(QTableWidget.SelectRows)
+    tbl.setAlternatingRowColors(True)
+    tbl.setSortingEnabled(True)
+    tbl.setStyleSheet("font-size: 12px;")
+    tbl.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+    tbl.horizontalHeader().setHighlightSections(False)
+    if stretch_last:
+        tbl.horizontalHeader().setStretchLastSection(True)
+
+    lay.addWidget(t)
+    lay.addWidget(tbl)
+    frame.setLayout(lay)
+    return frame, t, tbl
+
+
+def _set_tbl(tbl: QTableWidget, rows: list[list]):
+    tbl.setSortingEnabled(False)
+    tbl.setRowCount(len(rows))
+    for r, cells in enumerate(rows):
+        for c, val in enumerate(cells):
+            item = QTableWidgetItem()
+            item.setData(Qt.DisplayRole, val)
+            item.setFlags(item.flags() & ~Qt.ItemIsEditable)
+            tbl.setItem(r, c, item)
+    tbl.setSortingEnabled(True)
+
+
 # ── Page ──────────────────────────────────────────────────────────────────────
 
 class VisibilityPage(QWidget):
@@ -165,7 +211,6 @@ class VisibilityPage(QWidget):
         lbl_ps.setFixedWidth(88)
         lbl_ps.setAlignment(Qt.AlignTop | Qt.AlignLeft)
 
-        # Scrollable checklist of prompt sets
         ps_inner = QWidget()
         ps_lay = QVBoxLayout()
         ps_lay.setSpacing(3)
@@ -180,7 +225,6 @@ class VisibilityPage(QWidget):
             self._set_checks[set_name] = cb
             ps_lay.addWidget(cb)
         ps_lay.addStretch()
-
         ps_inner.setLayout(ps_lay)
 
         ps_scroll = QScrollArea()
@@ -192,7 +236,6 @@ class VisibilityPage(QWidget):
             "QScrollArea { border: 1px solid #D1D5DB; border-radius: 4px; background: transparent; }"
         )
 
-        # All / None buttons + live count
         btn_all = QPushButton("All")
         btn_all.setFixedWidth(42)
         btn_all.setStyleSheet("font-size: 11px; padding: 2px 4px;")
@@ -300,9 +343,15 @@ class VisibilityPage(QWidget):
         self._score_card, self._score_title, self._score_val = _stat_card(
             f"{brand_label} Visibility Score", "—%", f"% of responses mentioning {brand_label}"
         )
-        self._total_card, _, self._total_val = _stat_card("Responses Analyzed", "—", "across all collected runs")
-        self._top_card,   self._top_title, self._top_val   = _stat_card("Brand Mention Rank", "—", "target brand vs competitors")
-        self._last_card,  _, self._last_val  = _stat_card("Last Collection", "—", "most recent visibility run")
+        self._total_card, _, self._total_val = _stat_card(
+            "Responses Analyzed", "—", "across all collected runs"
+        )
+        self._top_card, self._top_title, self._top_val = _stat_card(
+            "Brand Mention Rank", "—", "target brand vs competitors"
+        )
+        self._last_card, _, self._last_val = _stat_card(
+            "Last Collection", "—", "most recent visibility run"
+        )
         for card in (self._score_card, self._total_card, self._top_card, self._last_card):
             kpi_row.addWidget(card)
 
@@ -313,7 +362,13 @@ class VisibilityPage(QWidget):
         self._pos_frame,       self._pos_body       = _section("Brand Position Share")
         self._brand_frame,     self._brand_body     = _section("Brand Mentions by Provider")
         self._feature_frame,   self._feature_body   = _section("Feature Mentions")
-        self._runs_frame,      self._runs_body      = _section("Recent Runs")
+        self._runs_frame, _,   self._runs_tbl       = _table_section(
+            "Recent Runs", ["Date", "Provider", "Prompt Set", "Responses"]
+        )
+        self._runs_tbl.setColumnWidth(0, 130)
+        self._runs_tbl.setColumnWidth(1, 90)
+        self._runs_tbl.setColumnWidth(3, 80)
+
         self._responses_frame, self._responses_body = _section("Latest Run Responses")
 
         left_split = QSplitter(Qt.Vertical)
@@ -325,7 +380,7 @@ class VisibilityPage(QWidget):
         right_split.addWidget(self._feature_frame)
         right_split.addWidget(self._runs_frame)
         right_split.addWidget(self._responses_frame)
-        right_split.setSizes([200, 160, 240])
+        right_split.setSizes([180, 200, 220])
 
         h_split = QSplitter(Qt.Horizontal)
         h_split.addWidget(left_split)
@@ -334,38 +389,43 @@ class VisibilityPage(QWidget):
         h_split.setHandleWidth(6)
 
         # ── Channel intelligence row ──────────────────────────────────────────
-        ch_frame = QFrame()
-        ch_frame.setObjectName("StatCard")
-        ch_frame.setFixedHeight(210)
         ch_lay = QHBoxLayout()
         ch_lay.setSpacing(10)
-        ch_lay.setContentsMargins(12, 10, 12, 10)
+        ch_lay.setContentsMargins(0, 0, 0, 0)
 
-        self._channel_frame, self._channel_body = _section("Channel Intelligence")
-        self._channel_frame.setMinimumWidth(0)
+        self._channel_frame, _, self._channel_tbl = _table_section(
+            "Channel Intelligence", ["Channel", "Mentions", "Top Brands"]
+        )
+        self._channel_tbl.setColumnWidth(0, 160)
+        self._channel_tbl.setColumnWidth(1, 70)
 
         target_label = self.app.get_target_brand() or "Target Brand"
-        self._gap_frame, self._gap_body = _section(
-            f"{target_label} Channel Gaps  —  channels where competitors have stronger reach"
+        self._gap_frame, self._gap_title, self._gap_tbl = _table_section(
+            f"{target_label} Channel Gaps  —  channels where competitors have stronger reach",
+            ["Channel", target_label, "Top Competitor", "Their Count"],
+            stretch_last=False,
         )
-        self._gap_frame.setMinimumWidth(0)
-        self._gap_body.setStyleSheet(
-            "font-size: 12px; font-family: Consolas, monospace; color: #DC2626;"
-        )
+        self._gap_tbl.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
+        self._gap_tbl.setColumnWidth(1, 70)
+        self._gap_tbl.setColumnWidth(2, 130)
+        self._gap_tbl.setColumnWidth(3, 80)
 
         ch_lay.addWidget(self._channel_frame, 1)
         ch_lay.addWidget(self._gap_frame, 1)
-        ch_frame.setLayout(ch_lay)
+
+        ch_widget = QWidget()
+        ch_widget.setLayout(ch_lay)
+        ch_widget.setMinimumHeight(230)
 
         root.addWidget(title)
         root.addWidget(subtitle)
         root.addWidget(ctrl_frame)
         root.addWidget(kpi_widget)
-        root.addWidget(h_split)
-        root.addWidget(ch_frame)
+        root.addWidget(h_split, 1)
+        root.addWidget(ch_widget)
         self.setLayout(root)
 
-        self._on_sets_changed()  # set initial count label
+        self._on_sets_changed()
         self.refresh()
 
     # ── Prompt set helpers ────────────────────────────────────────────────────
@@ -499,14 +559,14 @@ class VisibilityPage(QWidget):
         total = summary["total_responses"]
         brand_counts = summary.get("brand_counts", {})
 
-        # Score tile — title tracks Settings target brand
+        # Score tile
         self._score_title.setText(f"{brand_label} Visibility Score")
         self._score_val.setText(f"{score}%")
 
         # Responses analyzed
         self._total_val.setText(str(total))
 
-        # Brand Mention Rank — position of target brand by mention count
+        # Brand Mention Rank
         sorted_brands = sorted(brand_counts.items(), key=lambda x: -x[1])
         rank = next((i + 1 for i, (b, _) in enumerate(sorted_brands) if b == brand_label), None)
         if rank:
@@ -555,14 +615,12 @@ class VisibilityPage(QWidget):
         ) if feature_counts else "No feature data yet."
         self._feature_body.setPlainText(feat_text)
 
-        # Recent Runs
-        runs_text = ""
-        if runs:
-            for run in runs[:20]:
-                runs_text += f"{run[4][:16]}  {run[1]:<14}  {run[3]:<28}  {run[7]} resp\n"
-        else:
-            runs_text = "No visibility runs yet."
-        self._runs_body.setPlainText(runs_text)
+        # Recent Runs table
+        run_rows = [
+            [r[4][:16], r[1], r[3], r[7]]
+            for r in runs[:25]
+        ]
+        _set_tbl(self._runs_tbl, run_rows)
 
         # Latest Run Responses
         latest_id = runs[0][0] if runs else None
@@ -574,42 +632,27 @@ class VisibilityPage(QWidget):
             resp_text = "No responses available."
         self._responses_body.setPlainText(resp_text)
 
-        # Channel Intelligence
+        # Channel Intelligence table
         channel_counts = summary.get("channel_counts", {})
         channel_brand_counts = summary.get("channel_brand_counts", {})
-        if channel_counts:
-            lines = []
-            for ch, count in sorted(channel_counts.items(), key=lambda x: -x[1]):
-                top_brands = channel_brand_counts.get(ch, {})
-                brand_str = ", ".join(
-                    f"{b}({c})" for b, c in
-                    sorted(top_brands.items(), key=lambda x: -x[1])[:4]
-                )
-                lines.append(f"{ch:<22} {count:>3}  ·  {brand_str}")
-            self._channel_body.setPlainText("\n".join(lines))
-        else:
-            self._channel_body.setPlainText(
-                "No channel data yet.\n\nRun the 'Channel Intelligence' prompt set\nto start tracking which channels AI\nassociates with each brand."
+        ch_rows = []
+        for ch, count in sorted(channel_counts.items(), key=lambda x: -x[1]):
+            top = channel_brand_counts.get(ch, {})
+            brand_str = ", ".join(
+                f"{b} ({c})" for b, c in sorted(top.items(), key=lambda x: -x[1])[:4]
             )
+            ch_rows.append([ch, count, brand_str])
+        _set_tbl(self._channel_tbl, ch_rows)
 
-        # Target Brand Channel Gaps
+        # Channel Gaps table
         gap_data = summary.get("firman_channel_gap", [])
-        target_brand = self.app.get_target_brand() or "Firman"
-        if gap_data:
-            lines = [f"{'CHANNEL':<22}  {'FIRMAN':>6}  {'TOP COMPETITOR':>18}  MENTIONS", "─" * 66]
-            for g in gap_data[:12]:
-                ch = g["channel"]
-                fc = g["firman_count"]
-                tc = g["top_competitor"]
-                tcc = g["top_competitor_count"]
-                fc_str = str(fc) if fc else "NONE"
-                lines.append(f"{ch:<22}  {fc_str:>6}  {tc:>18}={tcc}")
-            self._gap_body.setPlainText("\n".join(lines))
-        elif channel_counts:
-            self._gap_body.setPlainText(
-                f"No gaps detected — {target_brand} appears alongside\nall channels mentioned by competitors.\n\nRun more prompts for a fuller picture."
-            )
-        else:
-            self._gap_body.setPlainText(
-                "Gap analysis appears here once channel data\nis collected from visibility runs.\n\nChannels where competitors outperform Firman\nwill be highlighted here."
-            )
+        self._gap_title.setText(
+            f"{brand_label} Channel Gaps  —  channels where competitors have stronger reach"
+        )
+        self._gap_tbl.setHorizontalHeaderLabels(
+            ["Channel", brand_label, "Top Competitor", "Their Count"]
+        )
+        _set_tbl(self._gap_tbl, [
+            [g["channel"], g["firman_count"] or 0, g["top_competitor"], g["top_competitor_count"]]
+            for g in gap_data[:20]
+        ])
