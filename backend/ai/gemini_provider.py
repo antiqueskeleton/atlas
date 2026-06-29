@@ -31,7 +31,7 @@ class GeminiProvider(AIProvider):
                 model=self.model,
                 contents=prompt,
             )
-            text = response.text
+            text = response.text or ""
             return self.parser.parse(text=text, provider=self.provider_name)
 
         except ImportError:
