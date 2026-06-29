@@ -32,14 +32,13 @@ class VisibilityAnalytics:
         provider_response_counts = Counter()
         prompt_set_brand_counts = defaultdict(Counter)
         prompt_set_response_counts = Counter()
-        recommendation_leaders = Counter()
+        first_mentioned_brands = Counter()
 
         for response in responses:
 
             provider = response[2]
             prompt_set = response[7] if len(response) > 7 else "unknown"
-            text_original = response[5]
-            text = text_original.lower()
+            text = response[5].lower()
 
             provider_response_counts[provider] += 1
             prompt_set_response_counts[prompt_set] += 1
@@ -47,15 +46,17 @@ class VisibilityAnalytics:
             mentioned_brands = []
 
             for brand in self.BRANDS:
-                if brand.lower() in text:
+                brand_lower = brand.lower()
+
+                if brand_lower in text:
                     brand_counts[brand] += 1
                     provider_brand_counts[provider][brand] += 1
                     prompt_set_brand_counts[prompt_set][brand] += 1
-                    mentioned_brands.append((text.find(brand.lower()), brand))
+                    mentioned_brands.append((text.find(brand_lower), brand))
 
             if mentioned_brands:
                 mentioned_brands.sort(key=lambda item: item[0])
-                recommendation_leaders[mentioned_brands[0][1]] += 1
+                first_mentioned_brands[mentioned_brands[0][1]] += 1
 
             for feature in self.FEATURES:
                 if feature.lower() in text:
@@ -92,10 +93,10 @@ class VisibilityAnalytics:
                 else 0
             )
 
-        recommendation_share = {}
+        first_mention_share = {}
 
-        for brand, count in recommendation_leaders.items():
-            recommendation_share[brand] = (
+        for brand, count in first_mentioned_brands.items():
+            first_mention_share[brand] = (
                 round((count / total_responses) * 100, 1)
                 if total_responses
                 else 0
@@ -106,8 +107,8 @@ class VisibilityAnalytics:
             "firman_visibility_score": firman_visibility_score,
             "provider_visibility_scores": provider_visibility_scores,
             "prompt_set_visibility_scores": prompt_set_visibility_scores,
-            "recommendation_leaders": dict(recommendation_leaders),
-            "recommendation_share": recommendation_share,
+            "first_mentioned_brands": dict(first_mentioned_brands),
+            "first_mention_share": first_mention_share,
             "brand_counts": dict(brand_counts),
             "feature_counts": dict(feature_counts),
             "provider_brand_counts": {
