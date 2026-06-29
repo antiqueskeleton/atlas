@@ -264,11 +264,35 @@ class VisibilityPage(QWidget):
         h_split.setSizes([580, 420])
         h_split.setHandleWidth(6)
 
+        # ── Channel intelligence row ──────────────────────────────────────────
+        ch_frame = QFrame()
+        ch_frame.setObjectName("StatCard")
+        ch_frame.setFixedHeight(210)
+        ch_lay = QHBoxLayout()
+        ch_lay.setSpacing(10)
+        ch_lay.setContentsMargins(12, 10, 12, 10)
+
+        self._channel_frame, self._channel_body = _section("Channel Intelligence")
+        self._channel_frame.setMinimumWidth(0)
+
+        self._gap_frame, self._gap_body = _section(
+            f"Firman Channel Gaps  —  channels where competitors have stronger reach"
+        )
+        self._gap_frame.setMinimumWidth(0)
+        self._gap_body.setStyleSheet(
+            "font-size: 12px; font-family: Consolas, monospace; color: #DC2626;"
+        )
+
+        ch_lay.addWidget(self._channel_frame, 1)
+        ch_lay.addWidget(self._gap_frame, 1)
+        ch_frame.setLayout(ch_lay)
+
         root.addWidget(title)
         root.addWidget(subtitle)
         root.addWidget(ctrl_frame)
         root.addWidget(kpi_widget)
         root.addWidget(h_split)
+        root.addWidget(ch_frame)
         self.setLayout(root)
 
         self._on_set_changed(self.prompt_set.currentText())
@@ -420,3 +444,43 @@ class VisibilityPage(QWidget):
         else:
             resp_text = "No responses available."
         self._responses_body.setPlainText(resp_text)
+
+        # Channel Intelligence
+        channel_counts = summary.get("channel_counts", {})
+        channel_brand_counts = summary.get("channel_brand_counts", {})
+        if channel_counts:
+            lines = []
+            for ch, count in sorted(channel_counts.items(), key=lambda x: -x[1]):
+                top_brands = channel_brand_counts.get(ch, {})
+                brand_str = ", ".join(
+                    f"{b}({c})" for b, c in
+                    sorted(top_brands.items(), key=lambda x: -x[1])[:4]
+                )
+                lines.append(f"{ch:<22} {count:>3}  ·  {brand_str}")
+            self._channel_body.setPlainText("\n".join(lines))
+        else:
+            self._channel_body.setPlainText(
+                "No channel data yet.\n\nRun the 'Channel Intelligence' prompt set\nto start tracking which channels AI\nassociates with each brand."
+            )
+
+        # Firman Channel Gaps
+        gap_data = summary.get("firman_channel_gap", [])
+        target_brand = self.app.get_target_brand() or "Firman"
+        if gap_data:
+            lines = [f"{'CHANNEL':<22}  {'FIRMAN':>6}  {'TOP COMPETITOR':>18}  MENTIONS", "─" * 66]
+            for g in gap_data[:12]:
+                ch = g["channel"]
+                fc = g["firman_count"]
+                tc = g["top_competitor"]
+                tcc = g["top_competitor_count"]
+                fc_str = str(fc) if fc else "NONE"
+                lines.append(f"{ch:<22}  {fc_str:>6}  {tc:>18}={tcc}")
+            self._gap_body.setPlainText("\n".join(lines))
+        elif channel_counts:
+            self._gap_body.setPlainText(
+                f"No gaps detected — {target_brand} appears alongside\nall channels mentioned by competitors.\n\nRun more prompts for a fuller picture."
+            )
+        else:
+            self._gap_body.setPlainText(
+                "Gap analysis appears here once channel data\nis collected from visibility runs.\n\nChannels where competitors outperform Firman\nwill be highlighted here."
+            )
