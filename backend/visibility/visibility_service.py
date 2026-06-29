@@ -1,3 +1,5 @@
+from typing import Callable
+
 from backend.visibility.prompt_library import PromptLibrary
 from backend.visibility.visibility_repository import VisibilityRepository
 from backend.visibility.visibility_runner import VisibilityRunner
@@ -13,12 +15,20 @@ class VisibilityService:
         self.analytics = VisibilityAnalytics(target_brand=target_brand)
         self.repository = VisibilityRepository()
 
-    def run(self, prompt_set="default", provider_name=None):
+    def run(
+        self,
+        prompt_set: str = "default",
+        provider_name: str | None = None,
+        progress_callback: Callable[[int, int], None] | None = None,
+        cancelled: Callable[[], bool] | None = None,
+    ) -> dict:
         prompts = self.prompt_library.get(prompt_set)
         result = self.runner.run_prompt_set(
             prompts=prompts,
             provider_name=provider_name,
             prompt_set=prompt_set,
+            progress_callback=progress_callback,
+            cancelled=cancelled,
         )
         self.repository.save_run(result["run"])
         self.repository.save_responses(result["responses"])
