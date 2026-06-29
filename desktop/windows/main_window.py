@@ -12,6 +12,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from PySide6.QtWidgets import QPushButton
+
 from app.atlas_application import AtlasApplication
 from desktop.pages.home_page import HomePage
 from desktop.pages.investigation_page import InvestigationPage
@@ -21,6 +23,7 @@ from desktop.pages.intelligence_page import IntelligencePage
 from desktop.pages.settings_page import SettingsPage
 from desktop.pages.visibility_page import VisibilityPage
 from desktop.theme.colors import NAVY, SLATE, STEEL, SILVER, LIGHT, PRIMARY, TEXT_MUTED
+from desktop.updater import UpdateChecker, APP_VERSION
 
 
 _NAV_ITEMS = [
@@ -48,7 +51,9 @@ class AtlasMainWindow(QMainWindow):
         self._build_layout()
 
         self.setStatusBar(QStatusBar())
-        self.statusBar().showMessage("Ready.")
+        self.statusBar().showMessage(f"Atlas AI  v{APP_VERSION}  —  Ready.")
+
+        self._start_update_check()
 
     # ── Menu ──────────────────────────────────────────────────────────────────
 
@@ -171,6 +176,38 @@ class AtlasMainWindow(QMainWindow):
 
     def _on_nav_changed(self, row: int):
         self.pages.setCurrentIndex(row)
+
+    # ── Update checker ────────────────────────────────────────────────────────
+
+    def _start_update_check(self):
+        self._update_checker = UpdateChecker()
+        self._update_checker.update_available.connect(self._on_update_available)
+        self._update_checker.start()
+
+    def _on_update_available(self, version: str, url: str, notes: str):
+        bar = self.statusBar()
+        bar.clearMessage()
+
+        msg = QLabel(f"  Update available:  Atlas AI v{version}  —  {notes[:80] + '…' if len(notes) > 80 else notes}  ")
+        msg.setStyleSheet("color: #0B84FF; font-weight: bold;")
+
+        if url:
+            btn = QPushButton(f"Download v{version}")
+            btn.setStyleSheet(
+                "QPushButton { background: #0B84FF; color: white; border: none; "
+                "border-radius: 4px; padding: 3px 10px; font-size: 11px; }"
+                "QPushButton:hover { background: #0056CC; }"
+            )
+            btn.clicked.connect(lambda: self._open_download(url))
+            bar.addWidget(msg)
+            bar.addWidget(btn)
+        else:
+            bar.showMessage(f"Update available: Atlas AI v{version} — check Firman portal.")
+
+    def _open_download(self, url: str):
+        from PySide6.QtGui import QDesktopServices
+        from PySide6.QtCore import QUrl
+        QDesktopServices.openUrl(QUrl(url))
 
     def _import_responses(self):
         file_path, _ = QFileDialog.getOpenFileName(
