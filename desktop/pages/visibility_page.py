@@ -75,7 +75,20 @@ class VisibilityPage(QWidget):
         text += f"Total Responses: {summary['total_responses']}\n"
         text += f"Firman Visibility Score: {summary['firman_visibility_score']}%\n\n"
 
-        text += "First Mentioned Brand:\n"
+        text += "Brand Position Share:\n"
+        text += "Note: this is factual mention order, not a recommendation rank.\n"
+        if summary.get("brand_position_counts"):
+            for position in sorted(summary["brand_position_counts"].keys()):
+                text += f"\nPosition {position}:\n"
+                brands = summary["brand_position_counts"][position]
+                shares = summary["brand_position_share"].get(position, {})
+                for brand, count in brands.items():
+                    share = shares.get(brand, 0)
+                    text += f"  • {brand}: {count} responses ({share}%)\n"
+        else:
+            text += "No brand position data found yet.\n"
+
+        text += "\nFirst Mentioned Brand:\n"
         text += "Note: this is not treated as a recommendation. It only shows which brand appeared first in each response.\n"
         if summary["first_mentioned_brands"]:
             for brand, count in summary["first_mentioned_brands"].items():

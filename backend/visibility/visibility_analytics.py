@@ -44,6 +44,7 @@ class VisibilityAnalytics:
         prompt_set_brand_counts = defaultdict(Counter)
         prompt_set_response_counts = Counter()
         first_mentioned_brands = Counter()
+        brand_position_counts = defaultdict(Counter)
 
         for response in responses:
             provider = response[2]
@@ -67,6 +68,9 @@ class VisibilityAnalytics:
             if mentioned_brands:
                 mentioned_brands.sort(key=lambda item: item[0])
                 first_mentioned_brands[mentioned_brands[0][1]] += 1
+
+                for index, (_, brand) in enumerate(mentioned_brands[:5], start=1):
+                    brand_position_counts[index][brand] += 1
 
             for feature in self.features:
                 if feature.lower() in text:
@@ -109,6 +113,16 @@ class VisibilityAnalytics:
                 else 0
             )
 
+        brand_position_share = {}
+        for position, counts in brand_position_counts.items():
+            brand_position_share[position] = {}
+            for brand, count in counts.items():
+                brand_position_share[position][brand] = (
+                    round((count / total_responses) * 100, 1)
+                    if total_responses
+                    else 0
+                )
+
         return {
             "total_responses": total_responses,
             "firman_visibility_score": firman_visibility_score,
@@ -116,6 +130,11 @@ class VisibilityAnalytics:
             "prompt_set_visibility_scores": prompt_set_visibility_scores,
             "first_mentioned_brands": dict(first_mentioned_brands),
             "first_mention_share": first_mention_share,
+            "brand_position_counts": {
+                position: dict(counts)
+                for position, counts in brand_position_counts.items()
+            },
+            "brand_position_share": brand_position_share,
             "brand_counts": dict(brand_counts),
             "feature_counts": dict(feature_counts),
             "provider_brand_counts": {
@@ -132,17 +151,17 @@ class VisibilityAnalytics:
 
         terms = []
 
-        for line in file_path.read_text(encoding="utf-8").splitlines():
+        for i, line in enumerate(file_path.read_text(encoding="utf-8").splitlines()):
             value = line.strip()
 
             if not value:
                 continue
 
-            if value.lower() in ["brand", "brands", "feature", "features", "name"]:
-                continue
-
             if "," in value:
                 value = value.split(",")[0].strip()
+
+            if value.lower() in ["brand", "brands", "feature", "features", "name"]:
+                continue
 
             if value:
                 terms.append(value)
