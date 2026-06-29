@@ -395,33 +395,25 @@ class IntelligenceService:
     # ── Helpers ───────────────────────────────────────────────────────────────
 
     def _count_brands(self, collected: dict) -> dict:
-        brand_list = self._load_brands()
+        brand_terms = self._load_brands()
         counts: Counter = Counter()
         total = 0
         for pairs in collected.values():
             for _, text in pairs:
                 total += 1
                 lower = text.lower()
-                for brand in brand_list:
-                    if brand.lower() in lower:
+                for brand, terms in brand_terms.items():
+                    if any(t in lower for t in terms):
                         counts[brand] += 1
         return {"counts": dict(counts), "total_responses": total}
 
-    def _load_brands(self) -> list[str]:
-        from backend.services.paths import get_data_dir
-        path = get_data_dir() / "brands.csv"
-        if not path.exists():
-            return ["Firman", "Champion", "Westinghouse", "Honda", "Generac", "Yamaha", "Predator"]
-        brands = []
-        for line in path.read_text(encoding="utf-8").splitlines():
-            val = line.strip()
-            if not val:
-                continue
-            if "," in val:
-                val = val.split(",")[0].strip()
-            if val.lower() not in ("brand", "brands", "name"):
-                brands.append(val)
-        return brands or ["Firman", "Champion", "Westinghouse", "Honda", "Generac"]
+    def _load_brands(self) -> dict[str, list[str]]:
+        from backend.knowledge.knowledge_repository import KnowledgeRepository
+        terms = KnowledgeRepository().get_brand_detection_terms()
+        if not terms:
+            defaults = ["Firman", "Champion", "Westinghouse", "Honda", "Generac", "Yamaha", "Predator"]
+            return {b: [b.lower()] for b in defaults}
+        return terms
 
     @staticmethod
     def _join_responses(pairs: list[tuple[str, str]]) -> str:

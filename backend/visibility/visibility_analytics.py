@@ -15,22 +15,23 @@ class VisibilityAnalytics:
         target_brand="",
     ):
         data_dir = get_data_dir()
-        brands_path = brands_path or str(data_dir / "brands.csv")
         features_path = features_path or str(data_dir / "features.csv")
         channels_path = channels_path or str(data_dir / "channels.csv")
         self.target_brand = target_brand
-        self.brands = self._load_terms(
-            brands_path,
-            fallback=[
-                "Firman",
-                "Champion",
-                "Westinghouse",
-                "Honda",
-                "Generac",
-                "Yamaha",
-                "Predator",
-            ]
-        )
+
+        # Load brands from DB (brands_path kept for backwards compat but ignored when DB has data)
+        from backend.knowledge.knowledge_repository import KnowledgeRepository
+        brand_terms = KnowledgeRepository().get_brand_detection_terms()
+        if brand_terms:
+            self.brands = list(brand_terms.keys())
+            self.brand_terms = brand_terms
+        else:
+            fallback = ["Firman", "Champion", "Westinghouse", "Honda", "Generac", "Yamaha", "Predator"]
+            self.brands = self._load_terms(
+                brands_path or str(data_dir / "brands.csv"),
+                fallback=fallback,
+            )
+            self.brand_terms = {b: [b.lower()] for b in self.brands}
 
         self.features = self._load_terms(
             features_path,
@@ -72,13 +73,14 @@ class VisibilityAnalytics:
             mentioned_brands = []
 
             for brand in self.brands:
-                brand_lower = brand.lower()
-
-                if brand_lower in text:
+                search_terms = self.brand_terms.get(brand, [brand.lower()])
+                positions = [text.find(t) for t in search_terms if text.find(t) >= 0]
+                if positions:
+                    match_pos = min(positions)
                     brand_counts[brand] += 1
                     provider_brand_counts[provider][brand] += 1
                     prompt_set_brand_counts[prompt_set][brand] += 1
-                    mentioned_brands.append((text.find(brand_lower), brand))
+                    mentioned_brands.append((match_pos, brand))
 
             if mentioned_brands:
                 mentioned_brands.sort(key=lambda item: item[0])
