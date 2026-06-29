@@ -326,29 +326,18 @@ class IntelligencePage(QWidget):
 
     def _compute_brand_stats(self, results):
         from collections import Counter
-        from backend.services.paths import get_data_dir
-
-        path = get_data_dir() / "brands.csv"
-        brands = []
-        if path.exists():
-            for line in path.read_text(encoding="utf-8").splitlines():
-                val = line.strip()
-                if not val:
-                    continue
-                if "," in val:
-                    val = val.split(",")[0].strip()
-                if val.lower() not in ("brand", "brands", "name"):
-                    brands.append(val)
-        if not brands:
-            brands = ["Firman", "Champion", "Westinghouse", "Honda", "Generac", "Yamaha"]
+        from backend.knowledge.knowledge_repository import KnowledgeRepository
+        brand_terms = KnowledgeRepository().get_brand_detection_terms()
+        if not brand_terms:
+            defaults = ["Firman", "Champion", "Westinghouse", "Honda", "Generac", "Yamaha"]
+            brand_terms = {b: [b.lower()] for b in defaults}
 
         counts: Counter = Counter()
         total = 0
         for _, _, response, _ in results:
             total += 1
             lower = response.lower()
-            for brand in brands:
-                if brand.lower() in lower:
+            for brand, terms in brand_terms.items():
+                if any(t in lower for t in terms):
                     counts[brand] += 1
-
         return {"counts": dict(counts), "total": total}
