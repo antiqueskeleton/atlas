@@ -6,7 +6,6 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QPushButton,
-    QScrollArea,
     QSizePolicy,
     QVBoxLayout,
     QWidget,
@@ -200,10 +199,10 @@ class SettingsPage(QWidget):
             self.status.setText(f"{provider_key}: no API key entered.")
             return
 
-        self.app.provider_manager.set_provider_api_key(provider_key, api_key)
-        self.app.provider_manager.set_active_provider(provider_key)
+        provider = self.app.provider_manager.registry.create_provider(provider_key)
+        if hasattr(provider, "set_api_key"):
+            provider.set_api_key(api_key)
 
-        provider = self.app.provider_manager.get_active_provider()
         self.status.setText(f"Testing {provider.provider_name}…")
         self.status.repaint()
 
