@@ -1,11 +1,14 @@
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QFrame,
     QFileDialog,
+    QFrame,
     QHBoxLayout,
+    QLabel,
     QListWidget,
     QMainWindow,
     QStatusBar,
     QTabWidget,
+    QVBoxLayout,
     QWidget,
 )
 
@@ -17,6 +20,18 @@ from desktop.pages.knowledge_page import KnowledgePage
 from desktop.pages.intelligence_page import IntelligencePage
 from desktop.pages.settings_page import SettingsPage
 from desktop.pages.visibility_page import VisibilityPage
+from desktop.theme.colors import NAVY, SLATE, STEEL, SILVER, LIGHT, PRIMARY, TEXT_MUTED
+
+
+_NAV_ITEMS = [
+    ("🏠", "Home"),
+    ("🔍", "Investigate"),
+    ("👁", "Visibility"),
+    ("💡", "Intelligence"),
+    ("📈", "Trends"),
+    ("🧠", "Knowledge"),
+    ("⚙", "Settings"),
+]
 
 
 class AtlasMainWindow(QMainWindow):
@@ -25,94 +40,143 @@ class AtlasMainWindow(QMainWindow):
 
         self.app = AtlasApplication()
 
-        self.setWindowTitle("Atlas AI Intelligence Platform")
-        self.resize(1300, 850)
+        self.setWindowTitle("Atlas — AI Intelligence Platform")
+        self.resize(1340, 860)
         self.setMinimumSize(1100, 700)
 
-        self.build_menu()
-        self.build_layout()
+        self._build_menu()
+        self._build_layout()
 
         self.setStatusBar(QStatusBar())
         self.statusBar().showMessage("Ready.")
 
-    def build_menu(self):
+    # ── Menu ──────────────────────────────────────────────────────────────────
+
+    def _build_menu(self):
         menu = self.menuBar()
 
         file_menu = menu.addMenu("File")
         file_menu.addAction("New Project")
         file_menu.addAction("Open Project")
-        file_menu.addAction("Save Project")
         file_menu.addSeparator()
         file_menu.addAction("Exit", self.close)
 
-        investigation_menu = menu.addMenu("Investigation")
-        investigation_menu.addAction("New Investigation")
-        investigation_menu.addAction("Run Analysis")
-
         tools_menu = menu.addMenu("Tools")
-
         import_action = tools_menu.addAction("Import Responses")
-        import_action.triggered.connect(self.import_responses)
-
+        import_action.triggered.connect(self._import_responses)
         tools_menu.addAction("Manage Knowledge")
 
         help_menu = menu.addMenu("Help")
         help_menu.addAction("About Atlas")
 
-    def build_layout(self):
-        main_widget = QWidget()
-        main_layout = QHBoxLayout()
+    # ── Layout ────────────────────────────────────────────────────────────────
 
+    def _build_layout(self):
+        root_widget = QWidget()
+        root_layout = QHBoxLayout()
+        root_layout.setContentsMargins(0, 0, 0, 0)
+        root_layout.setSpacing(0)
+
+        root_layout.addWidget(self._build_nav())
+        root_layout.addWidget(self._build_pages())
+
+        root_widget.setLayout(root_layout)
+        self.setCentralWidget(root_widget)
+
+    def _build_nav(self) -> QWidget:
+        panel = QWidget()
+        panel.setFixedWidth(210)
+        panel.setStyleSheet(f"background: {NAVY};")
+
+        layout = QVBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+
+        # ── Brand header ──────────────────────────────────────────────────────
+        header = QWidget()
+        header.setFixedHeight(76)
+        header.setStyleSheet(
+            f"background: {NAVY}; border-bottom: 1px solid {STEEL};"
+        )
+        h_lay = QVBoxLayout()
+        h_lay.setContentsMargins(16, 14, 16, 12)
+        h_lay.setSpacing(2)
+
+        brand = QLabel("ATLAS")
+        brand.setStyleSheet(
+            f"font-size: 22px; font-weight: bold; color: {PRIMARY}; "
+            "letter-spacing: 4px; border: none; background: transparent;"
+        )
+
+        tagline = QLabel("AI INTELLIGENCE")
+        tagline.setStyleSheet(
+            f"font-size: 9px; color: {SILVER}; letter-spacing: 2px; "
+            "border: none; background: transparent;"
+        )
+
+        h_lay.addWidget(brand)
+        h_lay.addWidget(tagline)
+        header.setLayout(h_lay)
+
+        # ── Navigation list ───────────────────────────────────────────────────
         self.nav = QListWidget()
-        self.nav.addItems([
-            "🏠 Home",
-            "🔍 Investigate",
-            "👁 Visibility",
-            "💡 Intelligence",
-            "📈 Trends",
-            "🧠 Knowledge",
-            "⚙ Settings",
-        ])
-        self.nav.setFixedWidth(220)
+        self.nav.setObjectName("AtlasNav")
+        for icon, label in _NAV_ITEMS:
+            self.nav.addItem(f"  {icon}  {label}")
         self.nav.setCurrentRow(0)
+        self.nav.currentRowChanged.connect(self._on_nav_changed)
+
+        # ── Version footer ────────────────────────────────────────────────────
+        version = QLabel("v 0.2  ·  Atlas AI")
+        version.setStyleSheet(
+            f"color: {STEEL}; font-size: 10px; padding: 10px 16px; "
+            "border: none; background: transparent;"
+        )
+        version.setAlignment(Qt.AlignLeft | Qt.AlignBottom)
+
+        layout.addWidget(header)
+        layout.addWidget(self.nav)
+        layout.addStretch()
+        layout.addWidget(version)
+        panel.setLayout(layout)
+        return panel
+
+    def _build_pages(self) -> QWidget:
+        wrapper = QWidget()
+        lay = QVBoxLayout()
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(0)
 
         self.pages = QTabWidget()
         self.pages.tabBar().hide()
 
-        self.home_page = HomePage(self.app)
+        self.home_page       = HomePage(self.app)
         self.investigation_page = InvestigationPage(self.app)
         self.visibility_page = VisibilityPage(self.app)
         self.intelligence_page = IntelligencePage(self.app)
 
-        self.pages.addTab(self.home_page, "Home")
-        self.pages.addTab(self.investigation_page, "Investigate")
-        self.pages.addTab(self.visibility_page, "Visibility")
-        self.pages.addTab(self.intelligence_page, "Intelligence")
-        self.pages.addTab(TrendsPage(self.app), "Trends")
-        self.pages.addTab(KnowledgePage(self.app), "Knowledge")
-        self.pages.addTab(SettingsPage(self.app), "Settings")
+        self.pages.addTab(self.home_page,          "Home")
+        self.pages.addTab(self.investigation_page,  "Investigate")
+        self.pages.addTab(self.visibility_page,     "Visibility")
+        self.pages.addTab(self.intelligence_page,   "Intelligence")
+        self.pages.addTab(TrendsPage(self.app),     "Trends")
+        self.pages.addTab(KnowledgePage(self.app),  "Knowledge")
+        self.pages.addTab(SettingsPage(self.app),   "Settings")
 
-        self.nav.currentRowChanged.connect(self.pages.setCurrentIndex)
+        lay.addWidget(self.pages)
+        wrapper.setLayout(lay)
+        return wrapper
 
-        divider = QFrame()
-        divider.setFrameShape(QFrame.VLine)
-        divider.setFrameShadow(QFrame.Sunken)
+    # ── Handlers ──────────────────────────────────────────────────────────────
 
-        main_layout.addWidget(self.nav)
-        main_layout.addWidget(divider)
-        main_layout.addWidget(self.pages)
+    def _on_nav_changed(self, row: int):
+        self.pages.setCurrentIndex(row)
 
-        main_widget.setLayout(main_layout)
-        self.setCentralWidget(main_widget)
-
-    def import_responses(self):
+    def _import_responses(self):
         file_path, _ = QFileDialog.getOpenFileName(
-            self,
-            "Import AI Responses",
-            "",
+            self, "Import AI Responses", "",
             "JSON Files (*.json);;All Files (*)"
         )
-
         if file_path:
             self.home_page.run_analysis(file_path)
-            self.statusBar().showMessage(f"Imported and analyzed: {file_path}")
+            self.statusBar().showMessage(f"Imported: {file_path}")
