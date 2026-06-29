@@ -198,6 +198,7 @@ class KnowledgePage(QWidget):
         self._tabs.addTab(self._scenarios_tab(),"Scenarios")
         self._tabs.addTab(self._stages_tab(),   "Buying Stages")
         self._tabs.addTab(self._prompt_sets_tab(), "Prompt Sets")
+        self._tabs.addTab(self._web_tab(),      "Web Intelligence")
         self._tabs.addTab(self._providers_tab(),"Providers")
 
         root.addWidget(title)
@@ -782,6 +783,163 @@ class KnowledgePage(QWidget):
         self.repo.delete_prompt(fname, prompt_text)
         self._refresh_families()
         self._select_family_by_name(fname)
+
+    # ─── Web Intelligence ─────────────────────────────────────────────────────
+
+    def _web_tab(self) -> QWidget:
+        w = QWidget()
+        lay = QVBoxLayout()
+        lay.setContentsMargins(0, 8, 0, 0)
+        lay.setSpacing(6)
+
+        note = QLabel(
+            "Track website metrics per brand — monthly visits, domain authority, backlinks, and organic keywords. "
+            "Enter data manually or import from SEO tools (SimilarWeb, SEMrush, Ahrefs, Moz)."
+        )
+        note.setStyleSheet("color: #6B7280; font-size: 12px;")
+        note.setWordWrap(True)
+
+        self._web_table = _make_table(
+            ["Brand", "Domain", "Monthly Visits", "Domain Authority", "Keywords", "Backlinks", "Source", "Updated"],
+            [120, 160, 110, 130, 90, 90, 80, 110],
+        )
+        self._web_table.doubleClicked.connect(lambda _: self._edit_web())
+
+        self._web_count = QLabel()
+
+        btn_add  = QPushButton("+ Add Entry")
+        btn_edit = QPushButton("Edit")
+        btn_del  = QPushButton("Delete")
+        btn_add.clicked.connect(self._add_web)
+        btn_edit.clicked.connect(self._edit_web)
+        btn_del.clicked.connect(self._delete_web)
+
+        bar = _action_bar(btn_add, btn_edit, btn_del, "stretch", self._web_count)
+
+        lay.addWidget(note)
+        lay.addWidget(self._web_table)
+        lay.addLayout(bar)
+        w.setLayout(lay)
+        self._refresh_web()
+        return w
+
+    def _refresh_web(self):
+        rows = self.repo.list_web_intelligence()
+        t = self._web_table
+        t.setRowCount(0)
+        for entry_id, brand, domain, visits, da, kw, backlinks, top_kw, notes, source, updated in rows:
+            r = t.rowCount()
+            t.insertRow(r)
+            t.setItem(r, 0, _cell(brand, entry_id))
+            t.setItem(r, 1, _cell(domain))
+            t.setItem(r, 2, _cell(f"{visits:,}" if visits else "—"))
+            t.setItem(r, 3, _cell(f"{da}/100" if da else "—"))
+            t.setItem(r, 4, _cell(f"{kw:,}" if kw else "—"))
+            t.setItem(r, 5, _cell(f"{backlinks:,}" if backlinks else "—"))
+            t.setItem(r, 6, _cell(source or "manual"))
+            t.setItem(r, 7, _cell((updated or "")[:10]))
+        self._web_count.setText(f"{len(rows)} entries")
+
+    def _web_fields(self, brands_list):
+        """Build field spec list for the web intelligence dialog."""
+        return [
+            ("Brand *",          "brand",            "combo", brands_list),
+            ("Domain",           "domain",           "text",  ""),
+            ("Monthly Visits",   "monthly_visits",   "text",  "0"),
+            ("Domain Authority", "domain_authority", "text",  "0"),
+            ("Organic Keywords", "organic_keywords", "text",  "0"),
+            ("Backlinks",        "backlinks",        "text",  "0"),
+            ("Top Keywords",     "top_keywords",     "text",  ""),
+            ("Notes",            "notes",            "area",  ""),
+            ("Source",           "data_source",      "combo", ["manual", "similarweb", "semrush", "ahrefs", "moz"]),
+        ]
+
+    @staticmethod
+    def _safe_int(v) -> int:
+        try:
+            return max(0, int(str(v).replace(",", "").strip()))
+        except (ValueError, TypeError):
+            return 0
+
+    def _add_web(self):
+        brands = [(bid, bname) for bid, bname, *_ in self.repo.list_brands()]
+        brand_names = [bname for _, bname in brands]
+        if not brand_names:
+            QMessageBox.information(self, "No Brands", "Add brands on the Brands tab first.")
+            return
+        dlg = _FieldDialog("Add Web Intelligence Entry", self._web_fields(brand_names), parent=self)
+        if dlg.exec() != QDialog.Accepted:
+            return
+        v = dlg.values()
+        brand_id = next((bid for bid, bn in brands if bn == v["brand"]), None)
+        if not brand_id:
+            return
+        self.repo.add_web_entry(
+            brand_id=brand_id,
+            domain=v.get("domain", ""),
+            monthly_visits=self._safe_int(v.get("monthly_visits")),
+            domain_authority=self._safe_int(v.get("domain_authority")),
+            organic_keywords=self._safe_int(v.get("organic_keywords")),
+            backlinks=self._safe_int(v.get("backlinks")),
+            top_keywords=v.get("top_keywords", ""),
+            notes=v.get("notes", ""),
+            source=v.get("data_source", "manual"),
+        )
+        self._refresh_web()
+
+    def _edit_web(self):
+        row = self._web_table.currentRow()
+        if row < 0:
+            return
+        entry_id = self._web_table.item(row, 0).data(Qt.UserRole)
+        rec = self.repo.get_web_entry(entry_id)
+        if not rec:
+            return
+        _, brand_id, brand_name, domain, visits, da, kw, backlinks, top_kw, notes, source = rec
+
+        brands = [(bid, bname) for bid, bname, *_ in self.repo.list_brands()]
+        brand_names = [bname for _, bname in brands]
+        initial = {
+            "brand": brand_name, "domain": domain or "",
+            "monthly_visits": str(visits or 0), "domain_authority": str(da or 0),
+            "organic_keywords": str(kw or 0), "backlinks": str(backlinks or 0),
+            "top_keywords": top_kw or "", "notes": notes or "",
+            "data_source": source or "manual",
+        }
+        dlg = _FieldDialog("Edit Web Intelligence Entry", self._web_fields(brand_names),
+                            initial=initial, parent=self)
+        if dlg.exec() != QDialog.Accepted:
+            return
+        v = dlg.values()
+        new_brand_id = next((bid for bid, bn in brands if bn == v["brand"]), brand_id)
+        self.repo.update_web_entry(
+            entry_id=entry_id,
+            brand_id=new_brand_id,
+            domain=v.get("domain", ""),
+            monthly_visits=self._safe_int(v.get("monthly_visits")),
+            domain_authority=self._safe_int(v.get("domain_authority")),
+            organic_keywords=self._safe_int(v.get("organic_keywords")),
+            backlinks=self._safe_int(v.get("backlinks")),
+            top_keywords=v.get("top_keywords", ""),
+            notes=v.get("notes", ""),
+            source=v.get("data_source", "manual"),
+        )
+        self._refresh_web()
+
+    def _delete_web(self):
+        row = self._web_table.currentRow()
+        if row < 0:
+            return
+        brand = self._web_table.item(row, 0).text()
+        entry_id = self._web_table.item(row, 0).data(Qt.UserRole)
+        reply = QMessageBox.question(
+            self, "Delete Entry", f"Delete web intelligence entry for '{brand}'?",
+            QMessageBox.Yes | QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
+            return
+        self.repo.delete_web_entry(entry_id)
+        self._refresh_web()
 
     # ─── Providers ────────────────────────────────────────────────────────────
 

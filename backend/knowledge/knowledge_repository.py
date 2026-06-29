@@ -272,6 +272,82 @@ class KnowledgeRepository:
         with open(csv_path, "a", newline="", encoding="utf-8") as f:
             csv.writer(f).writerow([family_name, prompt_style, prompt_text, influence_score])
 
+    # ─── Web Intelligence ─────────────────────────────────────────────────────
+
+    def _ensure_web_table(self):
+        with self._conn() as c:
+            c.execute("""
+                CREATE TABLE IF NOT EXISTS web_intelligence (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    brand_id INTEGER REFERENCES brands(brand_id),
+                    domain TEXT,
+                    monthly_visits_est INTEGER DEFAULT 0,
+                    domain_authority INTEGER DEFAULT 0,
+                    organic_keywords_est INTEGER DEFAULT 0,
+                    backlink_count INTEGER DEFAULT 0,
+                    top_keywords TEXT,
+                    notes TEXT,
+                    data_source TEXT DEFAULT 'manual',
+                    recorded_at TEXT DEFAULT (datetime('now'))
+                )
+            """)
+
+    def list_web_intelligence(self):
+        self._ensure_web_table()
+        with self._conn() as c:
+            return c.execute("""
+                SELECT w.id, COALESCE(b.name, '?') AS brand_name, w.domain,
+                       w.monthly_visits_est, w.domain_authority, w.organic_keywords_est,
+                       w.backlink_count, w.top_keywords, w.notes, w.data_source,
+                       w.recorded_at
+                FROM web_intelligence w
+                LEFT JOIN brands b ON b.brand_id = w.brand_id
+                ORDER BY brand_name
+            """).fetchall()
+
+    def get_web_entry(self, entry_id):
+        self._ensure_web_table()
+        with self._conn() as c:
+            return c.execute("""
+                SELECT w.id, w.brand_id, COALESCE(b.name,'?') AS brand_name, w.domain,
+                       w.monthly_visits_est, w.domain_authority, w.organic_keywords_est,
+                       w.backlink_count, w.top_keywords, w.notes, w.data_source
+                FROM web_intelligence w
+                LEFT JOIN brands b ON b.brand_id = w.brand_id
+                WHERE w.id=?
+            """, (entry_id,)).fetchone()
+
+    def add_web_entry(self, brand_id, domain, monthly_visits=0, domain_authority=0,
+                      organic_keywords=0, backlinks=0, top_keywords="", notes="", source="manual"):
+        self._ensure_web_table()
+        with self._conn() as c:
+            cur = c.execute("""
+                INSERT INTO web_intelligence
+                    (brand_id, domain, monthly_visits_est, domain_authority,
+                     organic_keywords_est, backlink_count, top_keywords, notes, data_source)
+                VALUES (?,?,?,?,?,?,?,?,?)
+            """, (brand_id, domain.strip(), monthly_visits, domain_authority,
+                  organic_keywords, backlinks, top_keywords.strip(), notes.strip(), source))
+            return cur.lastrowid
+
+    def update_web_entry(self, entry_id, brand_id, domain, monthly_visits=0, domain_authority=0,
+                          organic_keywords=0, backlinks=0, top_keywords="", notes="", source="manual"):
+        self._ensure_web_table()
+        with self._conn() as c:
+            c.execute("""
+                UPDATE web_intelligence
+                SET brand_id=?, domain=?, monthly_visits_est=?, domain_authority=?,
+                    organic_keywords_est=?, backlink_count=?, top_keywords=?, notes=?,
+                    data_source=?, recorded_at=datetime('now')
+                WHERE id=?
+            """, (brand_id, domain.strip(), monthly_visits, domain_authority,
+                  organic_keywords, backlinks, top_keywords.strip(), notes.strip(), source, entry_id))
+
+    def delete_web_entry(self, entry_id):
+        self._ensure_web_table()
+        with self._conn() as c:
+            c.execute("DELETE FROM web_intelligence WHERE id=?", (entry_id,))
+
     def delete_prompt(self, family_name, prompt_text):
         csv_path = self._data / "market_questions.csv"
         if not csv_path.exists():
