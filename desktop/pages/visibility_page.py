@@ -273,18 +273,25 @@ class VisibilityPage(QWidget):
         for key in provider_keys:
             has_key = bool(self.app.provider_manager.get_provider_api_key(key))
 
-            dot = QLabel("●")
-            dot.setFixedWidth(14)
-            dot.setStyleSheet(
-                f"color: {'#16A34A' if has_key else '#DC2626'}; font-size: 11px; padding: 0;"
-            )
-
-            cb = QCheckBox(key.capitalize())
+            cb = QCheckBox()
             cb.setChecked(has_key)
             self._provider_checks[key] = cb
 
-            row2.addWidget(dot)
+            dot = QLabel("⬤")
+            dot.setFixedWidth(16)
+            dot.setStyleSheet(
+                f"color: {'#16A34A' if has_key else '#DC2626'}; font-size: 14px; padding: 0 1px;"
+            )
+
+            name_lbl = QLabel(key.capitalize())
+            name_lbl.setStyleSheet("font-size: 12px;")
+            name_lbl.setCursor(Qt.PointingHandCursor)
+            name_lbl.mousePressEvent = lambda _e, c=cb: c.setChecked(not c.isChecked())
+
             row2.addWidget(cb)
+            row2.addWidget(dot)
+            row2.addWidget(name_lbl)
+            row2.addSpacing(10)
 
         row2.addStretch()
 
@@ -352,6 +359,7 @@ class VisibilityPage(QWidget):
         self._last_card, _, self._last_val = _stat_card(
             "Last Collection", "—", "most recent visibility run"
         )
+        self._last_val.setStyleSheet("font-size: 14px; font-weight: 600;")
         for card in (self._score_card, self._total_card, self._top_card, self._last_card):
             kpi_row.addWidget(card)
 
@@ -576,8 +584,12 @@ class VisibilityPage(QWidget):
             self._top_title.setText("Brand Mention Rank")
             self._top_val.setText("Unranked")
 
-        # Last Collection
-        self._last_val.setText(runs[0][4][:16] if runs else "Never")
+        # Last Collection — two compact lines so it fits the tile at smaller font
+        if runs:
+            dt = runs[0][4]
+            self._last_val.setText(f"{dt[:10]}\n{dt[11:16]}")
+        else:
+            self._last_val.setText("Never")
 
         # Brand Position Share
         pos_text = "Factual mention order — not a recommendation rank.\n\n"

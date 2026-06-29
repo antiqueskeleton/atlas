@@ -206,7 +206,6 @@ class TrendsPage(QWidget):
 
         if n == 0:
             self.status_lbl.setText("No visibility runs yet.")
-            self._kpi_runs.setText("0")
             for c in (self._c_score, self._c_brands, self._c_provider,
                       self._c_features, self._c_position, self._c_promptset):
                 c.no_data()
@@ -338,14 +337,19 @@ class TrendsPage(QWidget):
         colors = ["#2563EB" if n == brand else "#94A3B8" for n in names]
 
         bars = ax.barh(names, values, color=colors, height=0.5, zorder=3)
-        for bar, val in zip(bars, values):
+        x_max = max(values) * 1.35 if values else 10
+        for bar, val, name in zip(bars, values, names):
+            label_x = bar.get_width() + x_max * 0.012
+            weight = "bold" if name == brand else "normal"
             ax.text(
-                bar.get_width() + 0.5, bar.get_y() + bar.get_height() / 2,
-                f"{val:.1f}%", va="center", fontsize=9, color="#374151"
+                label_x, bar.get_y() + bar.get_height() / 2,
+                f"{val:.1f}%", va="center", fontsize=9,
+                color="#1D4ED8" if name == brand else "#374151",
+                fontweight=weight,
             )
 
         ax.set_xlabel("Avg Mention Rate (%)", fontsize=9)
-        ax.set_xlim(0, (max(values) * 1.35 if values else 10))
+        ax.set_xlim(0, x_max)
         ax.set_title(
             "Brand Mention Rates — Current Standing\n(avg across all runs · target brand in blue)",
             fontsize=10, fontweight="bold", pad=8
