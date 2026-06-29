@@ -441,6 +441,10 @@ class IntelligenceService:
         results = self.repository.get_results_for_run(run_id)
         return {"run": run, "briefing": briefing, "results": results}
 
+    def total_response_count(self) -> int:
+        """Total rows in visibility_responses — the full data reservoir."""
+        return VisibilityRepository().count_responses()
+
     def db_response_counts(self) -> dict[str, int]:
         """Return per-bucket counts from the visibility DB (for UI display)."""
         vis_repo = VisibilityRepository()
