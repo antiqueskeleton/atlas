@@ -94,32 +94,38 @@ class IntelligencePage(QWidget):
 
     def _build_ui(self):
         root = QVBoxLayout()
-        root.setSpacing(6)
+        root.setSpacing(8)
+        root.setContentsMargins(24, 14, 24, 12)
 
-        # Header
+        # ── Header ────────────────────────────────────────────────────────────
         title = QLabel("Intelligence Engine")
-        title.setStyleSheet("font-size:30px;font-weight:bold;")
+        title.setStyleSheet("font-size:24px; font-weight:bold;")
+        title.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         subtitle = QLabel(
             "Synthesizes stored AI responses into brand positioning, consumer insights, "
             "and strategic opportunities."
         )
-        subtitle.setStyleSheet("font-size:15px;color:#6B7280;")
+        subtitle.setStyleSheet("font-size:13px; color:#6B7280;")
         subtitle.setWordWrap(True)
+        subtitle.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
-        # Controls
+        # ── Controls bar ──────────────────────────────────────────────────────
         ctrl = QHBoxLayout()
-        ctrl.setSpacing(10)
+        ctrl.setSpacing(12)
+        ctrl.setContentsMargins(0, 0, 0, 0)
 
         self.run_btn = QPushButton("Run Intelligence Analysis")
         self.run_btn.setFixedWidth(210)
         self.run_btn.clicked.connect(self._start_run)
 
         self.last_run_lbl = QLabel("No runs yet.")
-        self.last_run_lbl.setStyleSheet("color:#6B7280;font-size:13px;")
+        self.last_run_lbl.setStyleSheet("color:#6B7280; font-size:12px;")
+        self.last_run_lbl.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         self._mode_lbl = QLabel()
         self._mode_lbl.setStyleSheet("font-size:12px;")
+        self._mode_lbl.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self._update_mode_label()
 
         ctrl.addWidget(self.run_btn)
@@ -128,14 +134,19 @@ class IntelligencePage(QWidget):
         ctrl.addWidget(self._mode_lbl)
 
         ctrl_widget = QWidget()
+        ctrl_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         ctrl_widget.setLayout(ctrl)
 
+        # Status label — single compact line below controls
         self.status_lbl = QLabel("")
-        self.status_lbl.setStyleSheet("color:#6B7280;font-size:13px;")
+        self.status_lbl.setStyleSheet("color:#6B7280; font-size:12px;")
+        self.status_lbl.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.status_lbl.setFixedHeight(18)
 
-        # KPI row
+        # ── KPI row ───────────────────────────────────────────────────────────
         kpi_row = QHBoxLayout()
         kpi_row.setSpacing(12)
+        kpi_row.setContentsMargins(0, 0, 0, 0)
 
         brand = self.app.get_target_brand() or "Target Brand"
         self._kpi_brand_card, self._kpi_brand_val = _kpi(
@@ -153,9 +164,10 @@ class IntelligencePage(QWidget):
         kpi_row.addWidget(self._kpi_prompts_card)
 
         kpi_widget = QWidget()
+        kpi_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         kpi_widget.setLayout(kpi_row)
 
-        # Left: tabbed research panels
+        # ── Research panels + Executive Briefing ──────────────────────────────
         self.tabs = QTabWidget()
 
         self._product_frame, self._product_body = _section_card("Product Intelligence")
@@ -168,7 +180,6 @@ class IntelligencePage(QWidget):
         self.tabs.addTab(self._journey_frame, "Journey")
         self.tabs.addTab(self._opp_frame, "Opportunities")
 
-        # Right: Executive Briefing (always visible)
         self._brief_frame, self._brief_body = _section_card("Executive Briefing")
 
         h_splitter = QSplitter(Qt.Horizontal)
@@ -177,13 +188,13 @@ class IntelligencePage(QWidget):
         h_splitter.setSizes([560, 440])
         h_splitter.setHandleWidth(6)
 
-        # Assemble
+        # ── Assemble — splitter gets all remaining vertical space ──────────────
         root.addWidget(title)
         root.addWidget(subtitle)
         root.addWidget(ctrl_widget)
         root.addWidget(self.status_lbl)
         root.addWidget(kpi_widget)
-        root.addWidget(h_splitter)
+        root.addWidget(h_splitter, stretch=1)
 
         self.setLayout(root)
 
