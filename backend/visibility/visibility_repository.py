@@ -109,25 +109,28 @@ class VisibilityRepository:
             """)
 
             return cursor.fetchall()
-        
+
     def list_responses(self, limit=100):
         with self.connect() as conn:
             cursor = conn.execute("""
                 SELECT
-                    id,
-                    run_id,
-                    provider,
-                    model,
-                    prompt,
-                    response,
-                    collected_at
+                    visibility_responses.id,
+                    visibility_responses.run_id,
+                    visibility_responses.provider,
+                    visibility_responses.model,
+                    visibility_responses.prompt,
+                    visibility_responses.response,
+                    visibility_responses.collected_at,
+                    visibility_runs.prompt_set
                 FROM visibility_responses
-                ORDER BY collected_at DESC
+                LEFT JOIN visibility_runs
+                    ON visibility_responses.run_id = visibility_runs.run_id
+                ORDER BY visibility_responses.collected_at DESC
                 LIMIT ?
             """, (limit,))
 
             return cursor.fetchall()
-        
+
     def get_responses_for_run(self, run_id):
         with self.connect() as conn:
             cursor = conn.execute("""

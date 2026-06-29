@@ -38,7 +38,7 @@ class VisibilityPage(QWidget):
         layout.addWidget(QLabel("Provider"))
         layout.addWidget(self.provider)
         layout.addWidget(run_button)
-        layout.addWidget(QLabel("Recent Runs"))
+        layout.addWidget(QLabel("Visibility Results"))
         layout.addWidget(self.output)
 
         self.setLayout(layout)
@@ -68,6 +68,53 @@ class VisibilityPage(QWidget):
 
         self.refresh_runs()
 
+    def refresh_analytics(self):
+        summary = self.service.analytics_summary()
+
+        text = "Visibility Analytics\n\n"
+        text += f"Total Responses: {summary['total_responses']}\n"
+        text += f"Firman Visibility Score: {summary['firman_visibility_score']}%\n\n"
+
+        text += "Firman Visibility by Provider:\n"
+        if summary["provider_visibility_scores"]:
+            for provider, score in summary["provider_visibility_scores"].items():
+                text += f"• {provider}: {score}%\n"
+        else:
+            text += "No provider visibility scores yet.\n"
+
+        text += "\nFirman Visibility by Prompt Set:\n"
+        if summary["prompt_set_visibility_scores"]:
+            for prompt_set, score in summary["prompt_set_visibility_scores"].items():
+                text += f"• {prompt_set}: {score}%\n"
+        else:
+            text += "No prompt set visibility scores yet.\n"
+
+        text += "\nBrand Mentions:\n"
+        if summary["brand_counts"]:
+            for brand, count in summary["brand_counts"].items():
+                text += f"• {brand}: {count}\n"
+        else:
+            text += "No brand mentions found yet.\n"
+
+        text += "\nFeature Mentions:\n"
+        if summary["feature_counts"]:
+            for feature, count in summary["feature_counts"].items():
+                text += f"• {feature}: {count}\n"
+        else:
+            text += "No feature mentions found yet.\n"
+
+        text += "\nBrand Mentions by Provider:\n"
+
+        if summary["provider_brand_counts"]:
+            for provider, brands in summary["provider_brand_counts"].items():
+                text += f"\n{provider}:\n"
+                for brand, count in brands.items():
+                    text += f"• {brand}: {count}\n"
+        else:
+            text += "No provider brand mentions found yet.\n"
+
+        return text
+
     def refresh_runs(self):
         runs = self.service.list_runs() or []
 
@@ -78,15 +125,17 @@ class VisibilityPage(QWidget):
             else []
         )
 
-        text = ""
+        runs_text = "Recent Runs\n\n"
 
-        for run in runs[:10]:
-            text += (
-                f"{run[4]} | {run[1]} | {run[3]} | "
-                f"{run[6]} | {run[7]} responses\n"
-            )
+        if runs:
+            for run in runs[:10]:
+                runs_text += (
+                    f"{run[4]} | {run[1]} | {run[3]} | "
+                    f"{run[6]} | {run[7]} responses\n"
+                )
+        else:
+            runs_text += "No visibility runs yet.\n"
 
-        runs_text = text or "No visibility runs yet."
         analytics_text = self.refresh_analytics()
 
         response_text = "\n\nLatest Run Responses:\n"
@@ -103,37 +152,3 @@ class VisibilityPage(QWidget):
         self.output.setPlainText(
             runs_text + "\n\n" + analytics_text + response_text
         )
-    
-    def refresh_analytics(self):
-        summary = self.service.analytics_summary()
-
-        text = "Visibility Analytics\n\n"
-
-        text += f"Total Responses: {summary['total_responses']}\n"
-        text += f"Firman Visibility Score: {summary['firman_visibility_score']}%\n\n"
-
-        text += "Brand Mentions:\n"
-        if summary["brand_counts"]:
-            for brand, count in summary["brand_counts"].items():
-                text += f"• {brand}: {count}\n"
-        else:
-            text += "No brand mentions found yet.\n"
-
-        text += "\nFeature Mentions:\n"
-        if summary["feature_counts"]:
-            for feature, count in summary["feature_counts"].items():
-                text += f"• {feature}: {count}\n"
-        else:
-            text += "No feature mentions found yet.\n"
-
-            text += "\nBrand Mentions by Provider:\n"
-
-        if summary["provider_brand_counts"]:
-            for provider, brands in summary["provider_brand_counts"].items():
-                text += f"\n{provider}:\n"
-                for brand, count in brands.items():
-                    text += f"• {brand}: {count}\n"
-        else:
-            text += "No provider brand mentions found yet.\n"
-
-        return text
