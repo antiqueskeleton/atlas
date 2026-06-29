@@ -1,20 +1,20 @@
+import threading
+
 from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
     QFrame,
-    QGroupBox,
     QHBoxLayout,
     QLabel,
     QMessageBox,
     QProgressBar,
     QPushButton,
+    QScrollArea,
     QSizePolicy,
     QSplitter,
     QTextEdit,
     QVBoxLayout,
     QWidget,
-    QComboBox,
-    QScrollArea,
 )
 
 from backend.visibility.visibility_service import VisibilityService
@@ -23,21 +23,35 @@ from backend.visibility.visibility_service import VisibilityService
 # ── Worker thread ─────────────────────────────────────────────────────────────
 
 class _RunWorker(QThread):
-    progress = Signal(int, int)       # completed, total
-    run_done = Signal(dict)           # result dict for one provider
+    progress = Signal(int, int)
+    run_done = Signal(dict)
     all_done = Signal()
     error    = Signal(str)
 
-    def __init__(self, service: VisibilityService, prompt_set: str, providers: list[str]):
+    def __init__(self, service: VisibilityService, prompts: list, label: str, providers: list):
         super().__init__()
         self.service = service
-        self.prompt_set = prompt_set
+        self.prompts = prompts
+        self.label = label
         self.providers = providers
         self._cancelled = False
-        self._total_prompts = service.prompt_library.count(prompt_set)
+        self._pause_event = threading.Event()
+        self._pause_event.set()  # start in running state
+        self._total_prompts = len(prompts)
 
     def cancel(self):
         self._cancelled = True
+        self._pause_event.set()  # unblock if currently paused
+
+    def pause(self):
+        self._pause_event.clear()
+
+    def resume(self):
+        self._pause_event.set()
+
+    @property
+    def is_paused(self) -> bool:
+        return not self._pause_event.is_set()
 
     def run(self):
         offset = 0
@@ -52,10 +66,12 @@ class _RunWorker(QThread):
 
             try:
                 result = self.service.run(
-                    prompt_set=self.prompt_set,
+                    prompts=self.prompts,
+                    prompt_set=self.label,
                     provider_name=provider_name,
                     progress_callback=_cb,
                     cancelled=lambda: self._cancelled,
+                    paused=lambda: not self._pause_event.is_set(),
                 )
                 self.run_done.emit(result)
             except Exception as exc:
@@ -66,7 +82,7 @@ class _RunWorker(QThread):
         self.all_done.emit()
 
 
-# ── Stat card helpers ─────────────────────────────────────────────────────────
+# ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _stat_card(title, value, subtitle=""):
     frame = QFrame()
@@ -141,26 +157,68 @@ class VisibilityPage(QWidget):
         ctrl_lay.setContentsMargins(14, 12, 14, 12)
         ctrl_lay.setSpacing(8)
 
-        # Row 1: Prompt set picker
+        # ── Row 1: Prompt set multi-select ────────────────────────────────────
         row1 = QHBoxLayout()
         row1.setSpacing(10)
 
-        lbl_ps = QLabel("Prompt Set:")
+        lbl_ps = QLabel("Prompt Sets:")
         lbl_ps.setFixedWidth(88)
-        self.prompt_set = QComboBox()
-        self.prompt_set.setMinimumWidth(260)
-        self.prompt_set.addItems(self.service.prompt_library.list_sets())
-        self.prompt_set.currentTextChanged.connect(self._on_set_changed)
+        lbl_ps.setAlignment(Qt.AlignTop | Qt.AlignLeft)
 
-        self._count_lbl = QLabel()
+        # Scrollable checklist of prompt sets
+        ps_inner = QWidget()
+        ps_lay = QVBoxLayout()
+        ps_lay.setSpacing(3)
+        ps_lay.setContentsMargins(6, 4, 6, 4)
+
+        self._set_checks: dict[str, QCheckBox] = {}
+        all_sets = [s for s in self.service.prompt_library.list_sets() if s != "All Prompts"]
+        for set_name in all_sets:
+            n = self.service.prompt_library.count(set_name)
+            cb = QCheckBox(f"{set_name}  ({n})")
+            cb.stateChanged.connect(self._on_sets_changed)
+            self._set_checks[set_name] = cb
+            ps_lay.addWidget(cb)
+        ps_lay.addStretch()
+
+        ps_inner.setLayout(ps_lay)
+
+        ps_scroll = QScrollArea()
+        ps_scroll.setWidget(ps_inner)
+        ps_scroll.setWidgetResizable(True)
+        ps_scroll.setFixedHeight(96)
+        ps_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        ps_scroll.setStyleSheet(
+            "QScrollArea { border: 1px solid #D1D5DB; border-radius: 4px; background: transparent; }"
+        )
+
+        # All / None buttons + live count
+        btn_all = QPushButton("All")
+        btn_all.setFixedWidth(42)
+        btn_all.setStyleSheet("font-size: 11px; padding: 2px 4px;")
+        btn_all.clicked.connect(self._select_all_sets)
+
+        btn_none = QPushButton("None")
+        btn_none.setFixedWidth(42)
+        btn_none.setStyleSheet("font-size: 11px; padding: 2px 4px;")
+        btn_none.clicked.connect(self._clear_sets)
+
+        self._count_lbl = QLabel("0 prompts selected")
         self._count_lbl.setStyleSheet("color: #6B7280; font-size: 12px;")
 
-        row1.addWidget(lbl_ps)
-        row1.addWidget(self.prompt_set)
-        row1.addWidget(self._count_lbl)
-        row1.addStretch()
+        ps_ctrl = QVBoxLayout()
+        ps_ctrl.setSpacing(4)
+        ps_ctrl.addWidget(btn_all)
+        ps_ctrl.addWidget(btn_none)
+        ps_ctrl.addSpacing(4)
+        ps_ctrl.addWidget(self._count_lbl)
+        ps_ctrl.addStretch()
 
-        # Row 2: Provider checkboxes
+        row1.addWidget(lbl_ps)
+        row1.addWidget(ps_scroll, 1)
+        row1.addLayout(ps_ctrl)
+
+        # ── Row 2: Provider checkboxes with connection status ─────────────────
         row2 = QHBoxLayout()
         row2.setSpacing(6)
         lbl_prov = QLabel("Providers:")
@@ -170,19 +228,24 @@ class VisibilityPage(QWidget):
         self._provider_checks: dict[str, QCheckBox] = {}
         provider_keys = [k for k in self.app.provider_manager.list_providers() if k != "mock"]
         for key in provider_keys:
-            cb = QCheckBox(key.capitalize())
-            cb.setChecked(False)
-            self._provider_checks[key] = cb
-            row2.addWidget(cb)
+            has_key = bool(self.app.provider_manager.get_provider_api_key(key))
 
-        # Default: activate whichever provider is currently active
-        active = self.app.provider_manager.active_provider_name
-        if active in self._provider_checks:
-            self._provider_checks[active].setChecked(True)
+            dot = QLabel("●")
+            dot.setFixedWidth(14)
+            dot.setStyleSheet(
+                f"color: {'#16A34A' if has_key else '#DC2626'}; font-size: 11px; padding: 0;"
+            )
+
+            cb = QCheckBox(key.capitalize())
+            cb.setChecked(has_key)
+            self._provider_checks[key] = cb
+
+            row2.addWidget(dot)
+            row2.addWidget(cb)
 
         row2.addStretch()
 
-        # Row 3: Run controls + progress
+        # ── Row 3: Run / Pause / Stop + progress ──────────────────────────────
         row3 = QHBoxLayout()
         row3.setSpacing(10)
 
@@ -195,6 +258,11 @@ class VisibilityPage(QWidget):
             "QPushButton:disabled { background: #9CA3AF; }"
         )
         self._run_btn.clicked.connect(self._start_run)
+
+        self._pause_btn = QPushButton("Pause")
+        self._pause_btn.setFixedWidth(70)
+        self._pause_btn.setEnabled(False)
+        self._pause_btn.clicked.connect(self._toggle_pause)
 
         self._stop_btn = QPushButton("Stop")
         self._stop_btn.setFixedWidth(70)
@@ -214,6 +282,7 @@ class VisibilityPage(QWidget):
         self._status_lbl.setStyleSheet("color: #6B7280; font-size: 12px;")
 
         row3.addWidget(self._run_btn)
+        row3.addWidget(self._pause_btn)
         row3.addWidget(self._stop_btn)
         row3.addWidget(self._progress)
         row3.addWidget(self._status_lbl)
@@ -296,19 +365,42 @@ class VisibilityPage(QWidget):
         root.addWidget(ch_frame)
         self.setLayout(root)
 
-        self._on_set_changed(self.prompt_set.currentText())
+        self._on_sets_changed()  # set initial count label
         self.refresh()
 
     # ── Prompt set helpers ────────────────────────────────────────────────────
 
-    def _on_set_changed(self, name: str):
-        n = self.service.prompt_library.count(name)
-        self._count_lbl.setText(f"({n} prompts)")
+    def _on_sets_changed(self):
+        prompts, _ = self._get_selected_prompts()
+        n = len(prompts)
+        self._count_lbl.setText(f"{n} prompt{'s' if n != 1 else ''} selected")
 
-    def _checked_providers(self) -> list[str]:
+    def _select_all_sets(self):
+        for cb in self._set_checks.values():
+            cb.setChecked(True)
+
+    def _clear_sets(self):
+        for cb in self._set_checks.values():
+            cb.setChecked(False)
+
+    def _get_selected_prompts(self) -> tuple:
+        selected = [name for name, cb in self._set_checks.items() if cb.isChecked()]
+        if not selected:
+            return [], ""
+        prompts = []
+        seen = set()
+        for name in selected:
+            for p in self.service.prompt_library.get(name):
+                if p not in seen:
+                    seen.add(p)
+                    prompts.append(p)
+        label = selected[0] if len(selected) == 1 else f"Custom ({len(selected)} sets)"
+        return prompts, label
+
+    def _checked_providers(self) -> list:
         return [k for k, cb in self._provider_checks.items() if cb.isChecked()]
 
-    # ── Run / stop ────────────────────────────────────────────────────────────
+    # ── Run / Pause / Stop ────────────────────────────────────────────────────
 
     def _start_run(self):
         providers = self._checked_providers()
@@ -316,8 +408,12 @@ class VisibilityPage(QWidget):
             QMessageBox.warning(self, "No Provider", "Check at least one AI provider to run against.")
             return
 
-        prompt_set = self.prompt_set.currentText()
-        n_prompts = self.service.prompt_library.count(prompt_set)
+        prompts, label = self._get_selected_prompts()
+        if not prompts:
+            QMessageBox.warning(self, "No Prompts", "Select at least one prompt set.")
+            return
+
+        n_prompts = len(prompts)
         total = n_prompts * len(providers)
 
         if total > 30:
@@ -335,24 +431,39 @@ class VisibilityPage(QWidget):
                 return
 
         self._run_btn.setEnabled(False)
+        self._pause_btn.setEnabled(True)
+        self._pause_btn.setText("Pause")
         self._stop_btn.setEnabled(True)
         self._progress.setVisible(True)
         self._progress.setRange(0, total)
         self._progress.setValue(0)
         self._status_lbl.setText("Starting…")
 
-        self._worker = _RunWorker(self.service, prompt_set, providers)
+        self._worker = _RunWorker(self.service, prompts, label, providers)
         self._worker.progress.connect(self._on_progress)
         self._worker.run_done.connect(self._on_run_done)
         self._worker.all_done.connect(self._on_all_done)
         self._worker.error.connect(self._on_error)
         self._worker.start()
 
+    def _toggle_pause(self):
+        if not self._worker:
+            return
+        if self._worker.is_paused:
+            self._worker.resume()
+            self._pause_btn.setText("Pause")
+            self._status_lbl.setText("Resumed…")
+        else:
+            self._worker.pause()
+            self._pause_btn.setText("Resume")
+            self._status_lbl.setText("Paused — click Resume to continue.")
+
     def _stop_run(self):
         if self._worker:
             self._worker.cancel()
         self._status_lbl.setText("Stopping after current prompt…")
         self._stop_btn.setEnabled(False)
+        self._pause_btn.setEnabled(False)
 
     def _on_progress(self, done: int, total: int):
         self._progress.setValue(done)
@@ -367,6 +478,8 @@ class VisibilityPage(QWidget):
 
     def _on_all_done(self):
         self._run_btn.setEnabled(True)
+        self._pause_btn.setEnabled(False)
+        self._pause_btn.setText("Pause")
         self._stop_btn.setEnabled(False)
         self._progress.setVisible(False)
         self._status_lbl.setText("Done.")
@@ -464,7 +577,7 @@ class VisibilityPage(QWidget):
                 "No channel data yet.\n\nRun the 'Channel Intelligence' prompt set\nto start tracking which channels AI\nassociates with each brand."
             )
 
-        # Firman Channel Gaps
+        # Target Brand Channel Gaps
         gap_data = summary.get("firman_channel_gap", [])
         target_brand = self.app.get_target_brand() or "Firman"
         if gap_data:
