@@ -124,11 +124,16 @@ class IntelligencePage(QWidget):
         self.last_run_lbl = QLabel("No runs yet.")
         self.last_run_lbl.setStyleSheet("color:#6B7280;font-size:13px;")
 
+        self._mode_lbl = QLabel()
+        self._mode_lbl.setStyleSheet("font-size:12px;")
+        self._update_mode_label()
+
         ctrl.addWidget(QLabel("Provider:"))
         ctrl.addWidget(self.provider_select)
         ctrl.addWidget(self.run_btn)
         ctrl.addWidget(self.last_run_lbl)
         ctrl.addStretch()
+        ctrl.addWidget(self._mode_lbl)
 
         ctrl_widget = QWidget()
         ctrl_widget.setLayout(ctrl)
@@ -148,7 +153,7 @@ class IntelligencePage(QWidget):
             "Top Brand in Research", "—", "most mentioned across all responses"
         )
         self._kpi_prompts_card, self._kpi_prompts_val = _kpi(
-            "Research Questions", "14", "per run (product + persona + journey)"
+            "Responses Used", "—", "for last synthesis run"
         )
         self._kpi_runs_card, self._kpi_runs_val = _kpi(
             "Runs Completed", "—", "intelligence engine runs"
@@ -208,13 +213,35 @@ class IntelligencePage(QWidget):
         self._worker.error.connect(self._on_run_error)
         self._worker.start()
 
+    def _update_mode_label(self):
+        counts = self.service.db_response_counts()
+        total = counts.get("total", 0)
+        if total == 0:
+            self._mode_lbl.setText("Mode: Live  (no DB data yet)")
+            self._mode_lbl.setStyleSheet("font-size:12px; color:#6B7280;")
+        else:
+            from backend.intelligence.intelligence_service import _MIN_PER_BUCKET
+            buckets_ok = all(
+                counts.get(k, 0) >= _MIN_PER_BUCKET
+                for k in ("Product Intelligence", "Consumer Personas", "Buying Journey")
+            )
+            if buckets_ok:
+                self._mode_lbl.setText(f"Mode: DB  ({total} stored responses — 2 API calls)")
+                self._mode_lbl.setStyleSheet("font-size:12px; color:#16A34A; font-weight:bold;")
+            else:
+                self._mode_lbl.setText(f"Mode: Live  (DB has {total} responses but missing buckets)")
+                self._mode_lbl.setStyleSheet("font-size:12px; color:#F59E0B;")
+
     def _on_run_finished(self, result: dict):
         self.run_btn.setEnabled(True)
         dur = result.get("duration_seconds", 0)
+        source = result.get("source", "live")
+        used = result.get("responses_used", 0)
+        mode_str = f"DB ({used} responses)" if source == "db" else f"Live ({used} prompts)"
         self.status_lbl.setText(
-            f"Complete — {result['provider']} · {dur:.0f}s · "
-            f"14 research prompts + 2 synthesis passes"
+            f"Complete — {result['provider']} · {dur:.0f}s · {mode_str} + 2 synthesis passes"
         )
+        self._update_mode_label()
         self._load_latest()
 
     def _on_run_error(self, message: str):
@@ -246,6 +273,7 @@ class IntelligencePage(QWidget):
         started = run[4][:19].replace("T", " ")
         dur = f"{run[7]:.0f}s" if run[7] else ""
         self.last_run_lbl.setText(f"Last run: {started} · {provider} {dur}")
+        self._kpi_prompts_val.setText(str(len(results)))
 
         # Group results by analyst
         by_analyst: dict[str, list[tuple[str, str]]] = {}
