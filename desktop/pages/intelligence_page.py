@@ -288,10 +288,10 @@ class IntelligencePage(QWidget):
         self._kpi_top_val.setText(top_brand)
 
     def _compute_brand_stats(self, results):
-        from pathlib import Path
         from collections import Counter
+        from backend.services.paths import get_data_dir
 
-        path = Path("data/brands.csv")
+        path = get_data_dir() / "brands.csv"
         brands = []
         if path.exists():
             for line in path.read_text(encoding="utf-8").splitlines():
