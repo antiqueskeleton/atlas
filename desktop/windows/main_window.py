@@ -1,4 +1,7 @@
+from pathlib import Path
+
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -10,6 +13,8 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
+_IMAGES_DIR = Path(__file__).resolve().parents[2] / "images"
 
 from PySide6.QtWidgets import QPushButton
 
@@ -98,28 +103,30 @@ class AtlasMainWindow(QMainWindow):
 
         # ── Brand header ──────────────────────────────────────────────────────
         header = QWidget()
-        header.setFixedHeight(76)
         header.setStyleSheet(
             f"background: {NAVY}; border-bottom: 1px solid {STEEL};"
         )
         h_lay = QVBoxLayout()
-        h_lay.setContentsMargins(16, 14, 16, 12)
-        h_lay.setSpacing(2)
+        h_lay.setContentsMargins(8, 8, 8, 8)
+        h_lay.setSpacing(0)
 
-        brand = QLabel("ATLAS")
-        brand.setStyleSheet(
-            f"font-size: 22px; font-weight: bold; color: {PRIMARY}; "
-            "letter-spacing: 4px; border: none; background: transparent;"
-        )
+        logo_lbl = QLabel()
+        logo_lbl.setStyleSheet("border: none; background: transparent;")
+        logo_lbl.setAlignment(Qt.AlignCenter)
+        logo_pix = QPixmap(str(_IMAGES_DIR / "atlas_sidebar.png"))
+        if not logo_pix.isNull():
+            scaled = logo_pix.scaledToWidth(194, Qt.SmoothTransformation)
+            logo_lbl.setPixmap(scaled)
+            header.setFixedHeight(scaled.height() + 16)
+        else:
+            logo_lbl.setText("ATLAS")
+            logo_lbl.setStyleSheet(
+                f"font-size: 22px; font-weight: bold; color: {PRIMARY}; "
+                "letter-spacing: 4px; border: none; background: transparent;"
+            )
+            header.setFixedHeight(76)
 
-        tagline = QLabel("AI INTELLIGENCE")
-        tagline.setStyleSheet(
-            f"font-size: 9px; color: {SILVER}; letter-spacing: 2px; "
-            "border: none; background: transparent;"
-        )
-
-        h_lay.addWidget(brand)
-        h_lay.addWidget(tagline)
+        h_lay.addWidget(logo_lbl)
         header.setLayout(h_lay)
 
         # ── Navigation list ───────────────────────────────────────────────────

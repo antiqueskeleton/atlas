@@ -424,23 +424,43 @@ class KnowledgeRepository:
     # ─── Prompt Families ──────────────────────────────────────────────────────
 
     def list_prompt_families(self):
-        with self._conn() as c:
-            return c.execute(
-                "SELECT family_id, family_name, search_intent, business_value, priority "
-                "FROM prompt_families WHERE market_id=? ORDER BY "
-                "CASE priority WHEN 'High' THEN 1 WHEN 'Medium' THEN 2 ELSE 3 END, family_name",
-                (self.MARKET_ID,),
-            ).fetchall()
+        """Returns families from market_questions.csv, sorted by max influence score desc."""
+        csv_path = self._data / "market_questions.csv"
+        if not csv_path.exists():
+            return []
+        scores: dict[str, int] = {}
+        seen: list[str] = []
+        with open(csv_path, newline="", encoding="utf-8") as f:
+            for row in csv.DictReader(f):
+                fn = row.get("family_name", "").strip()
+                if not fn:
+                    continue
+                try:
+                    score = int(row.get("prompt_influence_score", 0))
+                except (ValueError, TypeError):
+                    score = 0
+                if fn not in scores:
+                    seen.append(fn)
+                    scores[fn] = score
+                elif score > scores[fn]:
+                    scores[fn] = score
+        seen.sort(key=lambda n: (-scores[n], n))
+        return [(None, fn, "", "", scores[fn]) for fn in seen]
 
-    def add_prompt_family(self, family_name, search_intent="", business_value="", priority="Medium"):
-        with self._conn() as c:
-            cur = c.execute(
-                "INSERT INTO prompt_families (market_id, family_name, search_intent, business_value, priority) "
-                "VALUES (?,?,?,?,?)",
-                (self.MARKET_ID, family_name.strip(), search_intent.strip(),
-                 business_value.strip(), priority),
-            )
-            return cur.lastrowid
+    def add_prompt_family(self, family_name):
+        """Creates a new family in market_questions.csv with a blank placeholder row."""
+        csv_path = self._data / "market_questions.csv"
+        name = family_name.strip()
+        if not name:
+            return
+        # Check if already exists
+        if csv_path.exists():
+            with open(csv_path, newline="", encoding="utf-8") as f:
+                for row in csv.DictReader(f):
+                    if row.get("family_name", "").strip() == name:
+                        return
+        with open(csv_path, "a", newline="", encoding="utf-8") as f:
+            csv.writer(f).writerow([name, "", "", "0"])
 
     def get_prompt_counts(self):
         """Returns {family_name: count} from market_questions.csv."""
@@ -464,11 +484,13 @@ class KnowledgeRepository:
         with open(csv_path, newline="", encoding="utf-8") as f:
             for row in csv.DictReader(f):
                 if row.get("family_name", "").strip() == family_name:
-                    rows.append((
-                        row.get("prompt_style", ""),
-                        row.get("prompt_text", ""),
-                        row.get("prompt_influence_score", ""),
-                    ))
+                    text = row.get("prompt_text", "").strip()
+                    if text:
+                        rows.append((
+                            row.get("prompt_style", ""),
+                            text,
+                            row.get("prompt_influence_score", ""),
+                        ))
         return rows
 
     def add_prompt(self, family_name, prompt_style, prompt_text, influence_score="5"):
