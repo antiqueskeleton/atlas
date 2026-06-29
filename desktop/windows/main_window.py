@@ -1,6 +1,5 @@
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QFileDialog,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -176,6 +175,8 @@ class AtlasMainWindow(QMainWindow):
 
     def _on_nav_changed(self, row: int):
         self.pages.setCurrentIndex(row)
+        if row == 0:
+            self.home_page.refresh()
 
     # ── Update checker ────────────────────────────────────────────────────────
 
@@ -210,10 +211,9 @@ class AtlasMainWindow(QMainWindow):
         QDesktopServices.openUrl(QUrl(url))
 
     def _import_responses(self):
-        file_path, _ = QFileDialog.getOpenFileName(
-            self, "Import AI Responses", "",
-            "JSON Files (*.json);;All Files (*)"
+        from PySide6.QtWidgets import QMessageBox
+        QMessageBox.information(
+            self, "Import Responses",
+            "AI responses are now collected directly through the Visibility page.\n\n"
+            "Navigate to Visibility → select a prompt set → Run to collect and store responses.",
         )
-        if file_path:
-            self.home_page.run_analysis(file_path)
-            self.statusBar().showMessage(f"Imported: {file_path}")

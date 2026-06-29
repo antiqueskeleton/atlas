@@ -1,111 +1,159 @@
-from PySide6.QtWidgets import QLabel, QPushButton, QGridLayout, QVBoxLayout, QHBoxLayout, QWidget
+from collections import Counter
+from datetime import datetime
 
-from desktop.widgets.stat_card import StatCard
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QSizePolicy, QVBoxLayout, QWidget
+
+from backend.intelligence.intelligence_service import IntelligenceService
+from backend.knowledge.knowledge_repository import KnowledgeRepository
+from backend.visibility.visibility_repository import VisibilityRepository
 from desktop.widgets.activity_feed import ActivityFeed
-from desktop.widgets.dataset_card import DatasetCard
-from desktop.widgets.dataset_list import DatasetList
+from desktop.widgets.stat_card import StatCard
 
 
 class HomePage(QWidget):
     def __init__(self, app):
         super().__init__()
-
         self.app = app
+        self._build_ui()
+        self.refresh()
 
-        root_layout = QHBoxLayout()
+    # ── Build ─────────────────────────────────────────────────────────────────
 
-        left_panel = QVBoxLayout()
-        right_panel = QVBoxLayout()
+    def _build_ui(self):
+        root = QVBoxLayout()
+        root.setContentsMargins(24, 20, 24, 20)
+        root.setSpacing(16)
 
-        title = QLabel("Good Morning")
-        title.setStyleSheet("font-size: 30px; font-weight: bold;")
+        brand = self.app.get_target_brand() or "your market"
+        hour = datetime.now().hour
+        greeting = (
+            "Good Morning" if hour < 12
+            else "Good Afternoon" if hour < 17
+            else "Good Evening"
+        )
 
-        subtitle = QLabel("Here's what Atlas knows about your market today.")
-        subtitle.setStyleSheet("font-size: 15px; color: #6B7280;")
+        self._title = QLabel(greeting)
+        self._title.setStyleSheet("font-size: 28px; font-weight: bold;")
+        self._title.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
-        self.dataset_list = DatasetList()
-        self.dataset_list.connect_selection_changed(self.select_dataset)
+        self._subtitle = QLabel(f"Here's what Atlas knows about {brand} today.")
+        self._subtitle.setStyleSheet("font-size: 14px; color: #6B7280;")
+        self._subtitle.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
-        self.current_dataset = DatasetCard()
+        # KPI row
+        self._mention_card    = StatCard("Brand Mention Rate",  "—", "run Intelligence Analysis first")
+        self._responses_card  = StatCard("Responses Stored",    "—", "in visibility database")
+        self._vis_runs_card   = StatCard("Visibility Runs",     "—", "completed")
+        self._intel_runs_card = StatCard("Intelligence Runs",   "—", "completed")
+        self._brands_card     = StatCard("Brands Tracked",      "—", "active in knowledge base")
 
-        import_hint = QLabel("Import a response dataset to begin analysis.")
-        import_hint.setStyleSheet("font-size: 13px; color: #6B7280;")
+        kpi_row = QHBoxLayout()
+        kpi_row.setSpacing(12)
+        for card in (
+            self._mention_card, self._responses_card, self._vis_runs_card,
+            self._intel_runs_card, self._brands_card,
+        ):
+            kpi_row.addWidget(card)
 
-        self.visibility_card = StatCard("AI Visibility Score", "71", "Sample score")
-        self.responses_card = StatCard("Responses Loaded", "-", "Ready to analyze")
-        self.brands_card = StatCard("Brands Found", "-", "")
-        self.features_card = StatCard("Features Found", "-", "")
-        self.relationships_card = StatCard("Relationships", "-", "")
+        kpi_widget = QWidget()
+        kpi_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        kpi_widget.setLayout(kpi_row)
 
-        self.activity_feed = ActivityFeed("Recent Activity")
-        self.activity_feed.set_items([
-            "Atlas workspace opened",
-            "Evidence service ready",
-            "Analyst registry loaded",
-        ])
+        self._activity = ActivityFeed("Recent Activity")
 
-        button = QPushButton("Analyze Dataset")
-        button.clicked.connect(self.run_analysis)
+        root.addWidget(self._title)
+        root.addWidget(self._subtitle)
+        root.addSpacing(8)
+        root.addWidget(kpi_widget)
+        root.addSpacing(8)
+        root.addWidget(self._activity)
+        root.addStretch()
+        self.setLayout(root)
 
-        left_panel.addWidget(QLabel("<h2>Datasets</h2>"))
-        left_panel.addWidget(import_hint)
-        left_panel.addSpacing(10)
-        left_panel.addWidget(self.dataset_list)
-        left_panel.addSpacing(10)
-        left_panel.addWidget(button)
-        left_panel.addStretch()
+    # ── Data ──────────────────────────────────────────────────────────────────
 
-        grid = QGridLayout()
-        grid.addWidget(self.current_dataset, 0, 0)
-        grid.addWidget(self.visibility_card, 0, 1)
-        grid.addWidget(self.responses_card, 0, 2)
-        grid.addWidget(self.brands_card, 1, 0)
-        grid.addWidget(self.features_card, 1, 1)
-        grid.addWidget(self.relationships_card, 1, 2)
+    def refresh(self):
+        vis_repo   = VisibilityRepository()
+        know_repo  = KnowledgeRepository()
+        intel_svc  = IntelligenceService(
+            self.app.provider_manager,
+            target_brand=self.app.get_target_brand(),
+        )
+        target = self.app.get_target_brand()
 
-        right_panel.addWidget(title)
-        right_panel.addWidget(subtitle)
-        right_panel.addSpacing(20)
-        right_panel.addLayout(grid)
-        right_panel.addSpacing(20)
-        right_panel.addWidget(self.activity_feed)
-        right_panel.addStretch()
+        # Update subtitle in case target brand changed in Settings
+        brand = target or "your market"
+        self._subtitle.setText(f"Here's what Atlas knows about {brand} today.")
 
-        left_container = QWidget()
-        left_container.setLayout(left_panel)
-        left_container.setFixedWidth(300)
+        # ── Responses stored ──────────────────────────────────────────────────
+        total_responses = vis_repo.count_responses()
+        self._responses_card.set_value(str(total_responses))
+        self._responses_card.set_subtitle(
+            "run Visibility to collect data" if not total_responses
+            else "in visibility database"
+        )
 
-        right_container = QWidget()
-        right_container.setLayout(right_panel)
+        # ── Visibility runs ───────────────────────────────────────────────────
+        # list_runs returns DESC (most recent first); TrendsService reverses for charts
+        vis_runs       = vis_repo.list_runs()
+        completed_vis  = [r for r in vis_runs if r[6] == "completed"]
+        self._vis_runs_card.set_value(str(len(completed_vis)))
+        if completed_vis:
+            last_date = completed_vis[0][4][:10]
+            self._vis_runs_card.set_subtitle(f"last: {last_date}")
 
-        root_layout.addWidget(left_container)
-        root_layout.addWidget(right_container)
+        # ── Intelligence runs ─────────────────────────────────────────────────
+        intel_runs      = intel_svc.list_runs()   # already DESC by started_at
+        completed_intel = [r for r in intel_runs if r[6] == "completed"]
+        self._intel_runs_card.set_value(str(len(completed_intel)))
+        if completed_intel:
+            last_date = completed_intel[0][4][:10]
+            self._intel_runs_card.set_subtitle(f"last: {last_date}")
 
-        self.setLayout(root_layout)
+        # ── Brand mention rate (from last IE run — DB only, no API calls) ─────
+        latest = intel_svc.get_latest_briefing()
+        if latest and target:
+            results     = latest["results"]
+            brand_terms = know_repo.get_brand_detection_terms()
+            counts: Counter = Counter()
+            total = 0
+            for _, _, response, _ in results:
+                total += 1
+                lower = response.lower()
+                for b, terms in brand_terms.items():
+                    if any(t in lower for t in terms):
+                        counts[b] += 1
+            rate = round(counts.get(target, 0) / max(total, 1) * 100)
+            self._mention_card.set_value(f"{rate}%")
+            self._mention_card.set_subtitle(f"{target} · {total} responses analyzed")
+        else:
+            self._mention_card.set_value("—")
+            self._mention_card.set_subtitle("run Intelligence Analysis first")
 
-    def run_analysis(self, response_file=None):
-        result = self.app.analyze(response_file)
-        self.update_dashboard(result)
+        # ── Active brands ─────────────────────────────────────────────────────
+        brands       = know_repo.list_brands()
+        active_count = sum(1 for b in brands if b[4])
+        self._brands_card.set_value(str(active_count))
+        self._brands_card.set_subtitle(f"of {len(brands)} total in knowledge base")
 
-    def select_dataset(self, dataset):
-        self.app.dataset_manager.set_active(dataset.name)
-        result = self.app.analyze_active_dataset()
-        self.update_dashboard(result)
+        # ── Recent activity — merge vis + intel runs, newest first ────────────
+        events = []
+        for r in completed_vis[:6]:
+            _id, provider, _model, prompt_set, started_at, *_ = r
+            date = started_at[:10] if started_at else "?"
+            events.append((started_at or "", f"Visibility · {prompt_set} · {provider} · {date}"))
+        for r in completed_intel[:4]:
+            _id, provider, _model, _brand, started_at, *_ = r
+            date = started_at[:10] if started_at else "?"
+            events.append((started_at or "", f"Intelligence · {provider} · {date}"))
 
-    def update_dashboard(self, result):
-        dataset = result["dataset"]
-        summary = result["summary"]
+        events.sort(key=lambda x: x[0], reverse=True)
+        items = [text for _, text in events[:8]]
 
-        self.current_dataset.set_dataset(dataset)
-        self.dataset_list.set_datasets(result["datasets"])
-
-        self.responses_card.set_value(summary.evidence_count)
-        self.brands_card.set_value(summary.finding_counts_by_type.get("brand", 0))
-        self.features_card.set_value(summary.finding_counts_by_type.get("feature", 0))
-        self.relationships_card.set_value(len(result["relationships"]))
-
-        self.activity_feed.set_items([
-            f"Loaded dataset: {dataset.name}",
-            f"Analyzed {summary.evidence_count} responses",
-            f"Generated {len(result['relationships'])} relationships",
-        ])
+        self._activity.set_items(
+            items if items
+            else [
+                "No runs yet.",
+                "Visit Visibility to collect AI responses.",
+            ]
+        )
