@@ -75,7 +75,15 @@ class VisibilityPage(QWidget):
         text += f"Total Responses: {summary['total_responses']}\n"
         text += f"Firman Visibility Score: {summary['firman_visibility_score']}%\n\n"
 
-        text += "Firman Visibility by Provider:\n"
+        text += "Recommendation Leaders:\n"
+        if summary["recommendation_leaders"]:
+            for brand, count in summary["recommendation_leaders"].items():
+                share = summary["recommendation_share"].get(brand, 0)
+                text += f"• {brand}: {count} responses ({share}%)\n"
+        else:
+            text += "No recommendation leaders found yet.\n"
+
+        text += "\nFirman Visibility by Provider:\n"
         if summary["provider_visibility_scores"]:
             for provider, score in summary["provider_visibility_scores"].items():
                 text += f"• {provider}: {score}%\n"
