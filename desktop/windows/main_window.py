@@ -88,7 +88,7 @@ class AtlasMainWindow(QMainWindow):
         self.pages.addTab(self.investigation_page, "Investigate")
         self.pages.addTab(self.visibility_page, "Visibility")
         self.pages.addTab(self.intelligence_page, "Intelligence")
-        self.pages.addTab(TrendsPage(), "Trends")
+        self.pages.addTab(TrendsPage(self.app), "Trends")
         self.pages.addTab(KnowledgePage(), "Knowledge")
         self.pages.addTab(SettingsPage(self.app), "Settings")
 
