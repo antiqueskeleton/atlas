@@ -10,10 +10,8 @@ class PerplexityProvider(AIProvider):
 
     def __init__(self):
         self.api_key = None
+        self.model = self.__class__.model
         self.parser = AIReasoningParser()
-
-    def set_api_key(self, api_key):
-        self.api_key = api_key
 
     def ask(self, prompt: str, context: str | None = None) -> AIReasoning:
         if not self.api_key:
@@ -33,14 +31,17 @@ class PerplexityProvider(AIProvider):
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.2,
             )
-            text = response.choices[0].message.content
+            text = response.choices[0].message.content or ""
             return self.parser.parse(text=text, provider=self.provider_name)
 
         except Exception as error:
             return AIReasoning(
-                executive_summary=f"Perplexity request failed: {error}",
+                executive_summary=f"Perplexity request failed ({self.model}): {error}",
                 confidence="Low",
                 risks=["The API key may be invalid or the request timed out."],
-                follow_up_questions=["Check the Perplexity API key in Settings."],
+                follow_up_questions=[
+                    "Check the Perplexity API key in Settings.",
+                    "Current models: sonar, sonar-pro, sonar-reasoning",
+                ],
                 provider=self.provider_name,
             )

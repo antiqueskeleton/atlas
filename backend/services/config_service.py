@@ -34,6 +34,15 @@ class ConfigService:
         self.settings["target_brand"] = brand
         self._save()
 
+    def get_model(self, provider_name: str) -> str:
+        return self.settings.get("models", {}).get(provider_name, "")
+
+    def set_model(self, provider_name: str, model: str):
+        if "models" not in self.settings:
+            self.settings["models"] = {}
+        self.settings["models"][provider_name] = model
+        self._save()
+
     def get_user_config_path(self) -> Path:
         return self._user_config_path
 
@@ -64,7 +73,7 @@ class ConfigService:
 
     def _save(self):
         # Only write user-owned keys to user config (never back to project config)
-        user_keys = {"target_brand", "api_keys"}
+        user_keys = {"target_brand", "api_keys", "models"}
         user_data = {k: v for k, v in self.settings.items() if k in user_keys}
         with self._user_config_path.open("w", encoding="utf-8") as f:
             json.dump(user_data, f, indent=2)

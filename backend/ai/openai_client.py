@@ -4,12 +4,13 @@ from backend.ai.prompt_result import PromptResult
 
 
 class OpenAIClient:
-    def __init__(self, api_key: str):
+    def __init__(self, api_key: str, model: str = "gpt-4.1-mini"):
         self.client = OpenAI(api_key=api_key)
+        self.model = model
 
     def generate(self, prompt: str) -> PromptResult:
         response = self.client.responses.create(
-            model="gpt-4.1-mini",
+            model=self.model,
             input=prompt,
             temperature=0.2,
         )

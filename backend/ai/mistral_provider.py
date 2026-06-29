@@ -10,10 +10,8 @@ class MistralProvider(AIProvider):
 
     def __init__(self):
         self.api_key = None
+        self.model = self.__class__.model
         self.parser = AIReasoningParser()
-
-    def set_api_key(self, api_key):
-        self.api_key = api_key
 
     def ask(self, prompt: str, context: str | None = None) -> AIReasoning:
         if not self.api_key:
@@ -33,14 +31,17 @@ class MistralProvider(AIProvider):
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.2,
             )
-            text = response.choices[0].message.content
+            text = response.choices[0].message.content or ""
             return self.parser.parse(text=text, provider=self.provider_name)
 
         except Exception as error:
             return AIReasoning(
-                executive_summary=f"Mistral request failed: {error}",
+                executive_summary=f"Mistral request failed ({self.model}): {error}",
                 confidence="Low",
                 risks=["The API key may be invalid or the request timed out."],
-                follow_up_questions=["Check the Mistral API key in Settings."],
+                follow_up_questions=[
+                    "Check the Mistral API key in Settings.",
+                    "Models: mistral-large-latest, mistral-small-latest, open-mistral-nemo",
+                ],
                 provider=self.provider_name,
             )
