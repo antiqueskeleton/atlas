@@ -14,6 +14,7 @@ from desktop.pages.home_page import HomePage
 from desktop.pages.investigation_page import InvestigationPage
 from desktop.pages.trends_page import TrendsPage
 from desktop.pages.knowledge_page import KnowledgePage
+from desktop.pages.intelligence_page import IntelligencePage
 from desktop.pages.settings_page import SettingsPage
 from desktop.pages.visibility_page import VisibilityPage
 
@@ -67,6 +68,7 @@ class AtlasMainWindow(QMainWindow):
             "🏠 Home",
             "🔍 Investigate",
             "👁 Visibility",
+            "💡 Intelligence",
             "📈 Trends",
             "🧠 Knowledge",
             "⚙ Settings",
@@ -80,10 +82,12 @@ class AtlasMainWindow(QMainWindow):
         self.home_page = HomePage(self.app)
         self.investigation_page = InvestigationPage(self.app)
         self.visibility_page = VisibilityPage(self.app)
+        self.intelligence_page = IntelligencePage(self.app)
 
         self.pages.addTab(self.home_page, "Home")
         self.pages.addTab(self.investigation_page, "Investigate")
         self.pages.addTab(self.visibility_page, "Visibility")
+        self.pages.addTab(self.intelligence_page, "Intelligence")
         self.pages.addTab(TrendsPage(), "Trends")
         self.pages.addTab(KnowledgePage(), "Knowledge")
         self.pages.addTab(SettingsPage(self.app), "Settings")
