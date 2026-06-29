@@ -86,8 +86,8 @@ class VisibilityPage(QWidget):
         controls.setSpacing(10)
 
         self.prompt_set = QComboBox()
-        self.prompt_set.addItems(["default", "home backup", "rv"])
-        self.prompt_set.setFixedWidth(180)
+        self.prompt_set.addItems(self.service.prompt_library.list_sets())
+        self.prompt_set.setFixedWidth(220)
 
         self.provider = QComboBox()
         for key in self.app.provider_manager.list_providers():
