@@ -125,7 +125,7 @@ class HomePage(QWidget):
                         counts[b] += 1
             rate = round(counts.get(target, 0) / max(total, 1) * 100)
             self._mention_card.set_value(f"{rate}%")
-            self._mention_card.set_subtitle(f"{target} · {total} responses analyzed")
+            self._mention_card.set_subtitle(f"intelligence analysis · {total} responses")
         else:
             self._mention_card.set_value("—")
             self._mention_card.set_subtitle("run Intelligence Analysis first")

@@ -354,12 +354,13 @@ class VisibilityPage(QWidget):
             "Responses Analyzed", "—", "across all collected runs"
         )
         self._top_card, self._top_title, self._top_val = _stat_card(
-            "Brand Mention Rank", "—", "target brand vs competitors"
+            "Visibility Mention Rank", "—", "across all visibility collection responses"
         )
         self._last_card, _, self._last_val = _stat_card(
             "Last Collection", "—", "most recent visibility run"
         )
-        self._last_val.setStyleSheet("font-size: 14px; font-weight: 600;")
+        # Must use objectName selector to beat the global QLabel#CardValue rule
+        self._last_val.setStyleSheet("QLabel#CardValue { font-size: 14px; font-weight: 600; }")
         for card in (self._score_card, self._total_card, self._top_card, self._last_card):
             kpi_row.addWidget(card)
 
@@ -578,10 +579,10 @@ class VisibilityPage(QWidget):
         sorted_brands = sorted(brand_counts.items(), key=lambda x: -x[1])
         rank = next((i + 1 for i, (b, _) in enumerate(sorted_brands) if b == brand_label), None)
         if rank:
-            self._top_title.setText(f"{brand_label} Mention Rank")
+            self._top_title.setText(f"Visibility Mention Rank  —  {brand_label}")
             self._top_val.setText(f"#{rank} of {len(sorted_brands)}")
         else:
-            self._top_title.setText("Brand Mention Rank")
+            self._top_title.setText("Visibility Mention Rank")
             self._top_val.setText("Unranked")
 
         # Last Collection — two compact lines so it fits the tile at smaller font
