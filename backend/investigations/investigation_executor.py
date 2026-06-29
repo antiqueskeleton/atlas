@@ -8,19 +8,19 @@ class InvestigationExecutor:
         self.agents = AgentRegistry.build()
         self.provider_manager = provider_manager
 
-    def execute(self, plan, analysis, request=None):
+    def execute(self, plan, analysis, request=None, progress_callback=None):
         results = []
+        total = len(plan.tasks)
 
-        for task in plan.tasks:
+        for i, task in enumerate(plan.tasks):
+            if progress_callback:
+                progress_callback(task, i + 1, total)
+
             agent = self.agents.get(task)
 
             if agent:
                 results.append(
-                    agent.run(
-                        analysis,
-                        request,
-                        self.provider_manager
-                    )
+                    agent.run(analysis, request, self.provider_manager)
                 )
             else:
                 results.append(
