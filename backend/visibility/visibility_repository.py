@@ -1,10 +1,12 @@
 import sqlite3
 from pathlib import Path
 
+from backend.services.paths import get_db_path
+
 
 class VisibilityRepository:
-    def __init__(self, db_path="database/atlas.db"):
-        self.db_path = Path(db_path)
+    def __init__(self, db_path=None):
+        self.db_path = Path(db_path) if db_path else get_db_path()
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self.initialize()
 

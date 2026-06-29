@@ -2,10 +2,17 @@ import csv
 from collections import defaultdict
 from pathlib import Path
 
+from backend.services.paths import get_data_dir
+
 
 class PromptLibrary:
-    PROMPTS_CSV = Path("data/prompts.csv")
-    MARKET_QUESTIONS_CSV = Path("data/market_questions.csv")
+    @property
+    def PROMPTS_CSV(self):
+        return get_data_dir() / "prompts.csv"
+
+    @property
+    def MARKET_QUESTIONS_CSV(self):
+        return get_data_dir() / "market_questions.csv"
 
     def __init__(self):
         self._by_scenario = self._load_by_scenario()

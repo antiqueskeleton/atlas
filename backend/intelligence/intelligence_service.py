@@ -195,8 +195,8 @@ class IntelligenceService:
         return {"counts": dict(counts), "total_responses": total}
 
     def _load_brands(self) -> list[str]:
-        from pathlib import Path
-        path = Path("data/brands.csv")
+        from backend.services.paths import get_data_dir
+        path = get_data_dir() / "brands.csv"
         if not path.exists():
             return [
                 "Firman", "Champion", "Westinghouse",

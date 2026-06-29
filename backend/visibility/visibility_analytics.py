@@ -1,15 +1,20 @@
 from collections import Counter, defaultdict
 from pathlib import Path
 
+from backend.services.paths import get_data_dir
+
 
 class VisibilityAnalytics:
 
     def __init__(
         self,
-        brands_path="data/brands.csv",
-        features_path="data/features.csv",
+        brands_path=None,
+        features_path=None,
         target_brand="",
     ):
+        data_dir = get_data_dir()
+        brands_path = brands_path or str(data_dir / "brands.csv")
+        features_path = features_path or str(data_dir / "features.csv")
         self.target_brand = target_brand
         self.brands = self._load_terms(
             brands_path,
