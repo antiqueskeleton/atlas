@@ -22,7 +22,6 @@ _PROVIDER_INFO = {
 _BRAND_FIELDS = [
     ("Name *",         "name",           "text",  ""),
     ("Aliases",        "aliases",        "text",  ""),
-    ("Tier",           "tier",           "combo", ["1 — Major", "2 — Mid-size", "3 — Canadian", "4 — Retailer", "5 — Standby", "6 — Commercial", "7 — Solar/Battery", "0 — Other"]),
     ("Product Types",  "product_types",  "text",  ""),
     ("Country",        "country",        "combo", ["US", "Canada", "Global", "Other"]),
     ("Parent Company", "parent_company", "text",  ""),
@@ -218,8 +217,8 @@ class KnowledgePage(QWidget):
         lay.setContentsMargins(0, 8, 0, 0)
 
         self._brands_table = _make_table(
-            ["Name", "Tier", "Types", "Aliases", "Country", "Active"],
-            [160, 60, 120, 200, 70, 55]
+            ["Name", "Types", "Aliases", "Country", "Active"],
+            [160, 130, 220, 80, 55]
         )
         self._brands_table.doubleClicked.connect(lambda _: self._edit_brand())
 
@@ -249,11 +248,10 @@ class KnowledgePage(QWidget):
             r = t.rowCount()
             t.insertRow(r)
             t.setItem(r, 0, _cell(name, brand_id))
-            t.setItem(r, 1, _cell(str(tier) if tier else ""))
-            t.setItem(r, 2, _cell(product_types or ""))
-            t.setItem(r, 3, _cell(_trunc(aliases or "", 40)))
-            t.setItem(r, 4, _cell(country or ""))
-            t.setItem(r, 5, _cell("Yes" if active else "No"))
+            t.setItem(r, 1, _cell(product_types or ""))
+            t.setItem(r, 2, _cell(_trunc(aliases or "", 40)))
+            t.setItem(r, 3, _cell(country or ""))
+            t.setItem(r, 4, _cell("Yes" if active else "No"))
         self._brands_count.setText(f"{len(rows)} brands")
 
     def _add_brand(self):
@@ -264,13 +262,11 @@ class KnowledgePage(QWidget):
         if not v["name"]:
             QMessageBox.warning(self, "Name Required", "Brand name cannot be empty.")
             return
-        tier = int(v.get("tier", "0 — Other").split()[0])
         self.repo.add_brand(
             name=v["name"],
             website=v.get("website", ""),
             description="",
             aliases=v.get("aliases", ""),
-            tier=tier,
             product_types=v.get("product_types", ""),
             country=v.get("country", "US"),
             parent_company=v.get("parent_company", ""),
@@ -286,19 +282,12 @@ class KnowledgePage(QWidget):
         if not rec:
             return
         _, name, website, description, active, aliases, tier, product_types, country, parent_company = rec
-        _tier_map = {
-            1: "1 — Major", 2: "2 — Mid-size", 3: "3 — Canadian",
-            4: "4 — Retailer", 5: "5 — Standby", 6: "6 — Commercial",
-            7: "7 — Solar/Battery", 0: "0 — Other",
-        }
-        tier_str = _tier_map.get(int(tier) if tier else 0, "0 — Other")
         dlg = _FieldDialog(
             "Edit Brand", _BRAND_FIELDS,
             initial={
                 "name": name,
                 "website": website or "",
                 "aliases": aliases or "",
-                "tier": tier_str,
                 "product_types": product_types or "",
                 "country": country or "US",
                 "parent_company": parent_company or "",
@@ -312,7 +301,6 @@ class KnowledgePage(QWidget):
         if not v["name"]:
             QMessageBox.warning(self, "Name Required", "Brand name cannot be empty.")
             return
-        tier_val = int(v.get("tier", "0 — Other").split()[0])
         self.repo.update_brand(
             brand_id,
             name=v["name"],
@@ -320,7 +308,7 @@ class KnowledgePage(QWidget):
             description=description or "",
             active=1 if v.get("active") else 0,
             aliases=v.get("aliases", ""),
-            tier=tier_val,
+            tier=tier,
             product_types=v.get("product_types", ""),
             country=v.get("country", "US"),
             parent_company=v.get("parent_company", ""),
