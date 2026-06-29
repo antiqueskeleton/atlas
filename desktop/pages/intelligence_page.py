@@ -150,10 +150,10 @@ class IntelligencePage(QWidget):
 
         brand = self.app.get_target_brand() or "Target Brand"
         self._kpi_brand_card, self._kpi_brand_val = _kpi(
-            f"{brand} Mention Rate", "—%", "% of research responses"
+            f"{brand} Mention Rate", "—%", "in latest intelligence analysis"
         )
         self._kpi_top_card, self._kpi_top_val = _kpi(
-            "Brand Mention Rank", "—", "target brand vs competitors"
+            "Intelligence Mention Rank", "—", "in latest intelligence analysis"
         )
         self._kpi_prompts_card, self._kpi_prompts_val = _kpi(
             "Responses Analyzed", "—", "total stored in database"
@@ -320,7 +320,7 @@ class IntelligencePage(QWidget):
         sorted_brands = sorted(counts.items(), key=lambda x: -x[1])
         rank = next((i + 1 for i, (b, _) in enumerate(sorted_brands) if b == target), None)
         if rank and target:
-            self._kpi_top_val.setText(f"#{rank}  {target.upper()}")
+            self._kpi_top_val.setText(f"#{rank} of {len(sorted_brands)}")
         else:
             self._kpi_top_val.setText("Unranked")
 
