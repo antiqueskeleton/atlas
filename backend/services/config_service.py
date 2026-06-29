@@ -1,17 +1,70 @@
 import json
+import os
 from pathlib import Path
 
 
 class ConfigService:
-
     def __init__(self):
+        self._project_root = Path(__file__).resolve().parents[2]
+        self._user_config_path = self._resolve_user_config()
+        self.settings = self._load()
 
-        self.project_root = Path(__file__).resolve().parents[2]
-
-        config_path = self.project_root / "config" / "settings.json"
-
-        with config_path.open("r", encoding="utf-8") as file:
-            self.settings = json.load(file)
+    # ── Public API ────────────────────────────────────────────────────────────
 
     def get(self, key, default=None):
         return self.settings.get(key, default)
+
+    def set(self, key, value):
+        self.settings[key] = value
+        self._save()
+
+    def get_api_key(self, provider_name: str) -> str:
+        return self.settings.get("api_keys", {}).get(provider_name, "")
+
+    def set_api_key(self, provider_name: str, api_key: str):
+        if "api_keys" not in self.settings:
+            self.settings["api_keys"] = {}
+        self.settings["api_keys"][provider_name] = api_key
+        self._save()
+
+    def get_target_brand(self) -> str:
+        return self.settings.get("target_brand", "")
+
+    def set_target_brand(self, brand: str):
+        self.settings["target_brand"] = brand
+        self._save()
+
+    def get_user_config_path(self) -> Path:
+        return self._user_config_path
+
+    # ── Internal ──────────────────────────────────────────────────────────────
+
+    def _resolve_user_config(self) -> Path:
+        appdata = os.environ.get("APPDATA")
+        base = Path(appdata) if appdata else Path.home() / ".config"
+        config_dir = base / "Atlas"
+        config_dir.mkdir(parents=True, exist_ok=True)
+        return config_dir / "settings.json"
+
+    def _load(self) -> dict:
+        settings = {}
+
+        # Load project defaults first
+        default_path = self._project_root / "config" / "settings.json"
+        if default_path.exists():
+            with default_path.open("r", encoding="utf-8") as f:
+                settings.update(json.load(f))
+
+        # User config overrides defaults (API keys live here only)
+        if self._user_config_path.exists():
+            with self._user_config_path.open("r", encoding="utf-8") as f:
+                settings.update(json.load(f))
+
+        return settings
+
+    def _save(self):
+        # Only write user-owned keys to user config (never back to project config)
+        user_keys = {"target_brand", "api_keys"}
+        user_data = {k: v for k, v in self.settings.items() if k in user_keys}
+        with self._user_config_path.open("w", encoding="utf-8") as f:
+            json.dump(user_data, f, indent=2)

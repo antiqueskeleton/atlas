@@ -67,7 +67,10 @@ class VisibilityPage(QWidget):
         super().__init__()
 
         self.app = app
-        self.service = VisibilityService(self.app.provider_manager)
+        self.service = VisibilityService(
+            self.app.provider_manager,
+            target_brand=self.app.get_target_brand(),
+        )
 
         root = QVBoxLayout()
         root.setSpacing(12)
@@ -116,8 +119,9 @@ class VisibilityPage(QWidget):
         kpi_row = QHBoxLayout()
         kpi_row.setSpacing(12)
 
+        brand_label = self.app.get_target_brand() or "Target Brand"
         self._score_card, self._score_val = _stat_card(
-            "Firman Visibility Score", "—%", "% of responses mentioning Firman"
+            f"{brand_label} Visibility Score", "—%", f"% of responses mentioning {brand_label}"
         )
         self._total_card, self._total_val = _stat_card(
             "Total Responses", "—", "across all runs"
@@ -197,7 +201,7 @@ class VisibilityPage(QWidget):
         runs = self.service.list_runs() or []
 
         # KPI cards
-        score = summary["firman_visibility_score"]
+        score = summary["target_visibility_score"]
         total = summary["total_responses"]
         brand_counts = summary.get("brand_counts", {})
         top_brand = (

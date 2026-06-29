@@ -1,5 +1,10 @@
 from backend.ai.mock_provider import MockAIProvider
 from backend.ai.openai_provider import OpenAIProvider
+from backend.ai.anthropic_provider import AnthropicProvider
+from backend.ai.gemini_provider import GeminiProvider
+from backend.ai.perplexity_provider import PerplexityProvider
+from backend.ai.grok_provider import GrokProvider
+from backend.ai.mistral_provider import MistralProvider
 
 
 class ProviderRegistry:
@@ -7,12 +12,16 @@ class ProviderRegistry:
         self.providers = {
             "mock": MockAIProvider,
             "openai": OpenAIProvider,
+            "anthropic": AnthropicProvider,
+            "gemini": GeminiProvider,
+            "perplexity": PerplexityProvider,
+            "grok": GrokProvider,
+            "mistral": MistralProvider,
         }
 
     def create_provider(self, provider_key):
         if provider_key not in self.providers:
             raise ValueError(f"Unknown provider: {provider_key}")
-
         return self.providers[provider_key]()
 
     def list_provider_keys(self):
