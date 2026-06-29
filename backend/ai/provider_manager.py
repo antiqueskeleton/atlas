@@ -9,16 +9,17 @@ class ProviderManager:
         self.models: dict[str, str] = {}
 
     def get_active_provider(self):
-        provider = self.registry.create_provider(self.active_provider_name)
+        return self.get_provider(self.active_provider_name)
 
-        api_key = self.api_keys.get(self.active_provider_name)
+    def get_provider(self, provider_name: str):
+        """Create and configure a provider by name without changing active_provider_name."""
+        provider = self.registry.create_provider(provider_name)
+        api_key = self.api_keys.get(provider_name)
         if api_key:
             provider.set_api_key(api_key)
-
-        model = self.models.get(self.active_provider_name)
+        model = self.models.get(provider_name)
         if model:
             provider.set_model(model)
-
         return provider
 
     def set_active_provider(self, provider_name: str):

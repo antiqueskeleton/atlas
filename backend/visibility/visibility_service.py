@@ -19,6 +19,7 @@ class VisibilityService:
         self,
         prompt_set: str = "default",
         provider_name: str | None = None,
+        provider=None,
         progress_callback: Callable[[int, int], None] | None = None,
         cancelled: Callable[[], bool] | None = None,
         paused: Callable[[], bool] | None = None,
@@ -29,6 +30,7 @@ class VisibilityService:
         result = self.runner.run_prompt_set(
             prompts=prompts,
             provider_name=provider_name,
+            provider=provider,
             prompt_set=prompt_set,
             progress_callback=progress_callback,
             cancelled=cancelled,

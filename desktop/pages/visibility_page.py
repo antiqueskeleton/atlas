@@ -57,21 +57,33 @@ class _RunWorker(QThread):
         return not self._pause_event.is_set()
 
     def run(self):
-        offset = 0
+        import threading
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
         total = self._total_prompts * len(self.providers)
+        lock = threading.Lock()
+        completed = [0]
 
-        for provider_name in self.providers:
+        # Resolve all provider objects up-front (sequential, no race)
+        pm = self.service.provider_manager
+        provider_objects = {name: pm.get_provider(name) for name in self.providers}
+
+        def _run_one(provider_name: str):
             if self._cancelled:
-                break
+                return
 
-            def _cb(done, _of_run, _off=offset, _tot=total):
-                self.progress.emit(_off + done, _tot)
+            provider_obj = provider_objects[provider_name]
+
+            def _cb(done, _of_run):
+                with lock:
+                    completed[0] += 1
+                    self.progress.emit(completed[0], total)
 
             try:
                 result = self.service.run(
                     prompts=self.prompts,
                     prompt_set=self.label,
-                    provider_name=provider_name,
+                    provider=provider_obj,
                     progress_callback=_cb,
                     cancelled=lambda: self._cancelled,
                     paused=lambda: not self._pause_event.is_set(),
@@ -80,7 +92,13 @@ class _RunWorker(QThread):
             except Exception as exc:
                 self.error.emit(f"{provider_name}: {exc}")
 
-            offset += self._total_prompts
+        with ThreadPoolExecutor(max_workers=len(self.providers)) as pool:
+            futures = [pool.submit(_run_one, name) for name in self.providers]
+            for future in as_completed(futures):
+                try:
+                    future.result()
+                except Exception as exc:
+                    self.error.emit(f"Thread error: {exc}")
 
         self.all_done.emit()
 
