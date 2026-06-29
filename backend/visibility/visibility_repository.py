@@ -112,7 +112,7 @@ class VisibilityRepository:
 
             return cursor.fetchall()
 
-    def list_responses(self, limit=100):
+    def list_responses(self):
         with self.connect() as conn:
             cursor = conn.execute("""
                 SELECT
@@ -128,8 +128,7 @@ class VisibilityRepository:
                 LEFT JOIN visibility_runs
                     ON visibility_responses.run_id = visibility_runs.run_id
                 ORDER BY visibility_responses.collected_at DESC
-                LIMIT ?
-            """, (limit,))
+            """)
 
             return cursor.fetchall()
 
