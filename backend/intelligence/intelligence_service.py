@@ -101,7 +101,7 @@ class IntelligenceService:
         Falls back to live 14-prompt collection when DB data is insufficient.
         """
         vis_repo = VisibilityRepository()
-        raw = vis_repo.list_responses(limit=500)
+        raw = vis_repo.list_responses()
 
         if raw:
             collected = self._classify_visibility_responses(raw)
@@ -440,7 +440,7 @@ class IntelligenceService:
     def db_response_counts(self) -> dict[str, int]:
         """Return per-bucket counts from the visibility DB (for UI display)."""
         vis_repo = VisibilityRepository()
-        raw = vis_repo.list_responses(limit=500)
+        raw = vis_repo.list_responses()
         if not raw:
             return {"Product Intelligence": 0, "Consumer Personas": 0,
                     "Buying Journey": 0, "Brand Intelligence": 0, "total": 0}
