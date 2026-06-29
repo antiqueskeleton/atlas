@@ -1,3 +1,4 @@
+import csv
 from collections import Counter, defaultdict
 from pathlib import Path
 
@@ -10,11 +11,13 @@ class VisibilityAnalytics:
         self,
         brands_path=None,
         features_path=None,
+        channels_path=None,
         target_brand="",
     ):
         data_dir = get_data_dir()
         brands_path = brands_path or str(data_dir / "brands.csv")
         features_path = features_path or str(data_dir / "features.csv")
+        channels_path = channels_path or str(data_dir / "channels.csv")
         self.target_brand = target_brand
         self.brands = self._load_terms(
             brands_path,
@@ -43,6 +46,8 @@ class VisibilityAnalytics:
             ]
         )
 
+        self.channels = self._load_channels(channels_path)
+
     def summarize_responses(self, responses):
         brand_counts = Counter()
         feature_counts = Counter()
@@ -52,6 +57,9 @@ class VisibilityAnalytics:
         prompt_set_response_counts = Counter()
         first_mentioned_brands = Counter()
         brand_position_counts = defaultdict(Counter)
+        channel_counts = Counter()
+        brand_channel_counts: dict[str, Counter] = defaultdict(Counter)
+        channel_brand_counts: dict[str, Counter] = defaultdict(Counter)
 
         for response in responses:
             provider = response[2]
@@ -82,6 +90,15 @@ class VisibilityAnalytics:
             for feature in self.features:
                 if feature.lower() in text:
                     feature_counts[feature] += 1
+
+            # Channel co-occurrence: track which channels appear alongside which brands
+            brand_names_in_response = [b for _, b in mentioned_brands]
+            for ch_name, ch_terms, _ in self.channels:
+                if any(t in text for t in ch_terms):
+                    channel_counts[ch_name] += 1
+                    for brand in brand_names_in_response:
+                        brand_channel_counts[brand][ch_name] += 1
+                        channel_brand_counts[ch_name][brand] += 1
 
         total_responses = len(responses)
         target = self.target_brand
@@ -129,6 +146,29 @@ class VisibilityAnalytics:
                     else 0
                 )
 
+        # Channel gap: channels where competitors appear more than Firman
+        firman_channel_gap = []
+        if target:
+            for ch_name, _, _ in self.channels:
+                firman_count = brand_channel_counts[target].get(ch_name, 0)
+                competitor_counts = {
+                    b: brand_channel_counts[b].get(ch_name, 0)
+                    for b in self.brands
+                    if b != target and brand_channel_counts[b].get(ch_name, 0) > 0
+                }
+                if competitor_counts:
+                    top_competitor = max(competitor_counts, key=competitor_counts.get)
+                    top_count = competitor_counts[top_competitor]
+                    if top_count > firman_count:
+                        firman_channel_gap.append({
+                            "channel": ch_name,
+                            "firman_count": firman_count,
+                            "top_competitor": top_competitor,
+                            "top_competitor_count": top_count,
+                            "total_competitor_mentions": sum(competitor_counts.values()),
+                        })
+            firman_channel_gap.sort(key=lambda x: -x["total_competitor_mentions"])
+
         return {
             "total_responses": total_responses,
             "target_brand": target,
@@ -148,7 +188,27 @@ class VisibilityAnalytics:
                 provider: dict(counts)
                 for provider, counts in provider_brand_counts.items()
             },
+            "channel_counts": dict(channel_counts),
+            "brand_channel_counts": {b: dict(c) for b, c in brand_channel_counts.items()},
+            "channel_brand_counts": {ch: dict(b) for ch, b in channel_brand_counts.items()},
+            "firman_channel_gap": firman_channel_gap,
         }
+
+    def _load_channels(self, path) -> list[tuple[str, list[str], str]]:
+        """Return list of (name, [search_terms], category) from channels.csv."""
+        file_path = Path(path)
+        if not file_path.exists():
+            return []
+        channels = []
+        with file_path.open(encoding="utf-8", newline="") as f:
+            for row in csv.DictReader(f):
+                name = row.get("name", "").strip()
+                raw_terms = row.get("terms", "").strip()
+                category = row.get("category", "").strip()
+                if name and raw_terms:
+                    terms = [t.strip().lower() for t in raw_terms.split(";") if t.strip()]
+                    channels.append((name, terms, category))
+        return channels
 
     def _load_terms(self, path, fallback):
         file_path = Path(path)
