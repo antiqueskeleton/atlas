@@ -9,10 +9,8 @@ class AnthropicProvider(AIProvider):
 
     def __init__(self):
         self.api_key = None
+        self.model = self.__class__.model
         self.parser = AIReasoningParser()
-
-    def set_api_key(self, api_key):
-        self.api_key = api_key
 
     def ask(self, prompt: str, context: str | None = None) -> AIReasoning:
         if not self.api_key:
@@ -49,7 +47,7 @@ class AnthropicProvider(AIProvider):
 
         except Exception as error:
             return AIReasoning(
-                executive_summary=f"Anthropic request failed: {error}",
+                executive_summary=f"Anthropic request failed ({self.model}): {error}",
                 confidence="Low",
                 risks=["The API key may be invalid or the request timed out."],
                 follow_up_questions=["Check the Anthropic API key in Settings."],

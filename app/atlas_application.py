@@ -26,9 +26,12 @@ class AtlasApplication:
 
     def _load_saved_keys(self):
         for key in self.provider_manager.list_providers():
-            saved = self.config_service.get_api_key(key)
-            if saved:
-                self.provider_manager.set_provider_api_key(key, saved)
+            saved_key = self.config_service.get_api_key(key)
+            if saved_key:
+                self.provider_manager.set_provider_api_key(key, saved_key)
+            saved_model = self.config_service.get_model(key)
+            if saved_model:
+                self.provider_manager.set_provider_model(key, saved_model)
 
     def get_target_brand(self) -> str:
         return self.config_service.get_target_brand()
