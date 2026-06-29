@@ -102,7 +102,7 @@ def _stat_card(title, value, subtitle=""):
         lay.addWidget(s)
 
     frame.setLayout(lay)
-    return frame, v
+    return frame, t, v
 
 
 def _section(title):
@@ -297,13 +297,13 @@ class VisibilityPage(QWidget):
         kpi_row = QHBoxLayout()
         kpi_row.setSpacing(10)
         brand_label = self.app.get_target_brand() or "Target Brand"
-        self._score_card, self._score_val = _stat_card(
+        self._score_card, self._score_title, self._score_val = _stat_card(
             f"{brand_label} Visibility Score", "—%", f"% of responses mentioning {brand_label}"
         )
-        self._total_card, self._total_val = _stat_card("Total Responses", "—", "across all runs")
-        self._top_card,   self._top_val   = _stat_card("Top Mentioned Brand", "—", "most frequent in responses")
-        self._runs_card,  self._runs_val  = _stat_card("Runs Completed", "—", "visibility collection runs")
-        for card in (self._score_card, self._total_card, self._top_card, self._runs_card):
+        self._total_card, _, self._total_val = _stat_card("Responses Analyzed", "—", "across all collected runs")
+        self._top_card,   self._top_title, self._top_val   = _stat_card("Brand Mention Rank", "—", "target brand vs competitors")
+        self._last_card,  _, self._last_val  = _stat_card("Last Collection", "—", "most recent visibility run")
+        for card in (self._score_card, self._total_card, self._top_card, self._last_card):
             kpi_row.addWidget(card)
 
         kpi_widget = QWidget()
@@ -494,15 +494,30 @@ class VisibilityPage(QWidget):
         summary = self.service.analytics_summary()
         runs = self.service.list_runs() or []
 
+        brand_label = self.app.get_target_brand() or "Target Brand"
         score = summary["target_visibility_score"]
         total = summary["total_responses"]
         brand_counts = summary.get("brand_counts", {})
-        top_brand = max(brand_counts, key=brand_counts.get) if brand_counts else "—"
 
+        # Score tile — title tracks Settings target brand
+        self._score_title.setText(f"{brand_label} Visibility Score")
         self._score_val.setText(f"{score}%")
+
+        # Responses analyzed
         self._total_val.setText(str(total))
-        self._top_val.setText(top_brand)
-        self._runs_val.setText(str(len(runs)))
+
+        # Brand Mention Rank — position of target brand by mention count
+        sorted_brands = sorted(brand_counts.items(), key=lambda x: -x[1])
+        rank = next((i + 1 for i, (b, _) in enumerate(sorted_brands) if b == brand_label), None)
+        if rank:
+            self._top_title.setText(f"{brand_label} Mention Rank")
+            self._top_val.setText(f"#{rank} of {len(sorted_brands)}")
+        else:
+            self._top_title.setText("Brand Mention Rank")
+            self._top_val.setText("Unranked")
+
+        # Last Collection
+        self._last_val.setText(runs[0][4][:16] if runs else "Never")
 
         # Brand Position Share
         pos_text = "Factual mention order — not a recommendation rank.\n\n"
