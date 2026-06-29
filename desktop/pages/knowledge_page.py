@@ -49,10 +49,7 @@ _STAGE_FIELDS = [
     ("Sort Order",  "sort_order",  "spin", 99),
 ]
 _FAMILY_FIELDS = [
-    ("Family Name *",   "family_name",   "text",  ""),
-    ("Search Intent",   "search_intent", "text",  ""),
-    ("Business Value",  "business_value","text",  ""),
-    ("Priority",        "priority",      "combo", ["High", "Medium", "Low"]),
+    ("Family Name *", "family_name", "text", ""),
 ]
 _PROMPT_FIELDS = [
     ("Prompt Style",          "style", "text", "question"),
@@ -732,7 +729,7 @@ class KnowledgePage(QWidget):
         prev = self._current_family_name()
 
         self._family_list.clear()
-        for _, fname, _, _, priority in families:
+        for _, fname, *_ in families:
             count = counts.get(fname, 0)
             item = QListWidgetItem(f"{fname}  ({count})")
             item.setData(Qt.UserRole, fname)
@@ -781,7 +778,7 @@ class KnowledgePage(QWidget):
         if not v["family_name"]:
             QMessageBox.warning(self, "Name Required", "Family name cannot be empty.")
             return
-        self.repo.add_prompt_family(v["family_name"], v.get("search_intent", ""), v.get("business_value", ""), v.get("priority", "Medium"))
+        self.repo.add_prompt_family(v["family_name"])
         self._refresh_families()
         self._select_family_by_name(v["family_name"])
 
