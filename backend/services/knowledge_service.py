@@ -1,47 +1,19 @@
-from typing import List
+from backend.knowledge.knowledge_repository import KnowledgeRepository
 
 
 class KnowledgeService:
     """
     Central access point for Atlas knowledge.
 
-    Analysts should ask this service for curated knowledge instead of
-    knowing whether data comes from Python lists, CSV files, SQLite, or APIs.
+    Reads live from the database so brand/feature additions in the Knowledge
+    page are immediately available to analysts and visibility runs.
     """
 
-    def get_brands(self) -> List[str]:
-        return [
-            "Firman",
-            "Champion",
-            "Honda",
-            "Westinghouse",
-            "Generac",
-            "Predator",
-            "DuroMax",
-            "Yamaha",
-            "EcoFlow",
-            "Jackery",
-            "Bluetti",
-            "Goal Zero",
-            "Anker",
-        ]
+    def __init__(self):
+        self._repo = KnowledgeRepository()
 
-    def get_features(self) -> List[str]:
-        return [
-            "Dual Fuel",
-            "Tri Fuel",
-            "Gasoline",
-            "Propane",
-            "Natural Gas",
-            "Inverter",
-            "Open Frame",
-            "Electric Start",
-            "Remote Start",
-            "CO Shutoff",
-            "Low THD",
-            "Parallel Capable",
-            "Quiet Operation",
-            "Long Runtime",
-            "RV Ready",
-            "Home Backup"
-        ]
+    def get_brands(self) -> list[str]:
+        return [name for _, name, *_ in self._repo.list_brands()]
+
+    def get_features(self) -> list[str]:
+        return [name for _, name, *_ in self._repo.list_features()]
