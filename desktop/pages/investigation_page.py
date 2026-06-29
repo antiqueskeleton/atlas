@@ -1,9 +1,9 @@
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QLabel,
     QVBoxLayout,
-    QHBoxLayout,
     QWidget,
-    QScrollArea,
+    QSplitter,
 )
 
 from backend.investigations.investigation_engine import InvestigationEngine
@@ -57,51 +57,36 @@ class InvestigationPage(QWidget):
         self.evidence_viewer = EvidenceViewer()
         self.prompt_panel = PromptPanel()
 
-        content_widget = QWidget()
-        content_layout = QHBoxLayout()
-        content_layout.setSpacing(16)
+        left_splitter = QSplitter(Qt.Vertical)
+        left_splitter.addWidget(self.intent)
+        left_splitter.addWidget(self.plan_panel)
+        left_splitter.addWidget(self.summary)
+        left_splitter.addWidget(self.ai_reasoning)
+        left_splitter.addWidget(self.task_results)
+        left_splitter.addWidget(self.recommendations)
+        left_splitter.addWidget(self.executive_consensus)
+        left_splitter.setSizes([80, 120, 180, 140, 200, 100, 200])
 
-        left = QVBoxLayout()
-        left.setSpacing(16)
-        left.addWidget(self.intent)
-        left.addWidget(self.plan_panel)
-        left.addWidget(self.summary)
+        right_splitter = QSplitter(Qt.Vertical)
+        right_splitter.addWidget(self.provider_card)
+        right_splitter.addWidget(self.relationships)
+        right_splitter.addWidget(self.evidence)
+        right_splitter.addWidget(self.evidence_viewer)
+        right_splitter.addWidget(self.prompt_panel)
+        right_splitter.setSizes([80, 160, 200, 160, 120])
 
-        left.addWidget(self.ai_reasoning)
-        left.addWidget(self.task_results)
-        left.addWidget(self.recommendations)
-        left.addStretch()
-        left.addWidget(self.executive_consensus)
-        right = QVBoxLayout()
-        right.setSpacing(16)
-        right.addWidget(self.provider_card)
-        right.addWidget(self.relationships)
-        right.addWidget(self.evidence)
-        right.addWidget(self.evidence_viewer)
-        right.addWidget(self.prompt_panel)
-        right.addStretch()
-
-        left_container = QWidget()
-        left_container.setLayout(left)
-
-        right_container = QWidget()
-        right_container.setLayout(right)
-
-        content_layout.addWidget(left_container, 3)
-        content_layout.addWidget(right_container, 2)
-
-        content_widget.setLayout(content_layout)
-
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setWidget(content_widget)
+        h_splitter = QSplitter(Qt.Horizontal)
+        h_splitter.addWidget(left_splitter)
+        h_splitter.addWidget(right_splitter)
+        h_splitter.setSizes([600, 400])
+        h_splitter.setHandleWidth(6)
 
         root_layout.addWidget(title)
         root_layout.addWidget(subtitle)
         root_layout.addSpacing(12)
         root_layout.addWidget(self.search)
-        root_layout.addSpacing(12)
-        root_layout.addWidget(scroll)
+        root_layout.addSpacing(8)
+        root_layout.addWidget(h_splitter)
 
         self.setLayout(root_layout)
 

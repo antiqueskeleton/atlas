@@ -14,7 +14,6 @@ class TaskResultsPanel(QFrame):
 
         self.body = QTextEdit()
         self.body.setReadOnly(True)
-        self.body.setMinimumHeight(180)
 
         layout.addWidget(title)
         layout.addWidget(self.body)

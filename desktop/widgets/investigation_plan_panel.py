@@ -14,7 +14,6 @@ class InvestigationPlanPanel(QFrame):
 
         self.body = QTextEdit()
         self.body.setReadOnly(True)
-        self.body.setMinimumHeight(140)
 
         layout.addWidget(title)
         layout.addWidget(self.body)
