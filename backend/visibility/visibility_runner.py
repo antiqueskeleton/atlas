@@ -18,6 +18,7 @@ class VisibilityRunner:
         prompt_set: str = "Default",
         progress_callback: Callable[[int, int], None] | None = None,
         cancelled: Callable[[], bool] | None = None,
+        paused: Callable[[], bool] | None = None,
     ) -> dict:
         """
         Run every prompt against one provider and return a run + responses dict.
@@ -47,6 +48,12 @@ class VisibilityRunner:
         responses = []
 
         for i, prompt in enumerate(prompts):
+            # Block here while paused, unblocks on resume or cancel
+            if paused:
+                import time
+                while paused():
+                    time.sleep(0.05)
+
             if cancelled and cancelled():
                 break
 

@@ -21,14 +21,18 @@ class VisibilityService:
         provider_name: str | None = None,
         progress_callback: Callable[[int, int], None] | None = None,
         cancelled: Callable[[], bool] | None = None,
+        paused: Callable[[], bool] | None = None,
+        prompts: list[str] | None = None,
     ) -> dict:
-        prompts = self.prompt_library.get(prompt_set)
+        if prompts is None:
+            prompts = self.prompt_library.get(prompt_set)
         result = self.runner.run_prompt_set(
             prompts=prompts,
             provider_name=provider_name,
             prompt_set=prompt_set,
             progress_callback=progress_callback,
             cancelled=cancelled,
+            paused=paused,
         )
         self.repository.save_run(result["run"])
         self.repository.save_responses(result["responses"])
