@@ -32,7 +32,10 @@ class AnthropicProvider(AIProvider):
                 max_tokens=1024,
                 messages=[{"role": "user", "content": prompt}],
             )
-            text = message.content[0].text
+            text = next(
+                (block.text for block in message.content if block.type == "text"),
+                "",
+            )
             return self.parser.parse(text=text, provider=self.provider_name)
 
         except ImportError:
