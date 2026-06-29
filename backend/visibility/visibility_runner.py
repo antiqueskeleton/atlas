@@ -15,6 +15,7 @@ class VisibilityRunner:
         self,
         prompts: list[str],
         provider_name: str | None = None,
+        provider=None,
         prompt_set: str = "Default",
         progress_callback: Callable[[int, int], None] | None = None,
         cancelled: Callable[[], bool] | None = None,
@@ -26,6 +27,7 @@ class VisibilityRunner:
         Args:
             prompts: list of prompt strings to send
             provider_name: provider key; falls back to active provider
+            provider: pre-resolved provider object (skips set_active_provider when given)
             prompt_set: label stored with the run record
             progress_callback: called after each prompt with (completed, total)
             cancelled: called before each prompt; if True, stops the run early
@@ -33,9 +35,9 @@ class VisibilityRunner:
         Returns:
             {"run": VisibilityRun, "responses": list[VisibilityResponse]}
         """
-        provider_name = provider_name or self.provider_manager.active_provider_name
-        self.provider_manager.set_active_provider(provider_name)
-        provider = self.provider_manager.get_active_provider()
+        if provider is None:
+            provider_name = provider_name or self.provider_manager.active_provider_name
+            provider = self.provider_manager.get_provider(provider_name)
 
         run = VisibilityRun(
             run_id=str(uuid4()),
