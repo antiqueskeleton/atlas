@@ -275,8 +275,9 @@ class VisibilityPage(QWidget):
         self._channel_frame, self._channel_body = _section("Channel Intelligence")
         self._channel_frame.setMinimumWidth(0)
 
+        target_label = self.app.get_target_brand() or "Target Brand"
         self._gap_frame, self._gap_body = _section(
-            f"Firman Channel Gaps  —  channels where competitors have stronger reach"
+            f"{target_label} Channel Gaps  —  channels where competitors have stronger reach"
         )
         self._gap_frame.setMinimumWidth(0)
         self._gap_body.setStyleSheet(
