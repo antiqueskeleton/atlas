@@ -1,61 +1,130 @@
-from PySide6.QtCore import Qt
-from PySide6.QtWidgets import (
-    QLabel,
-    QVBoxLayout,
-    QWidget,
-    QSplitter,
-)
-
+from backend.models.ai_reasoning import AIReasoning
 from backend.investigations.investigation_engine import InvestigationEngine
-from desktop.widgets.result_panel import ResultPanel
-from desktop.widgets.search_bar import SearchBar
+from desktop.widgets.ai_reasoning_panel import AIReasoningPanel
+from desktop.widgets.evidence_viewer import EvidenceViewer
+from desktop.widgets.executive_consensus_panel import ExecutiveConsensusPanel
+from desktop.widgets.intent_panel import IntentPanel
+from desktop.widgets.investigation_plan_panel import InvestigationPlanPanel
+from desktop.widgets.prompt_panel import PromptPanel
+from desktop.widgets.provider_card import ProviderCard
 from desktop.widgets.recommendation_card import RecommendationCard
 from desktop.widgets.relationship_explorer import RelationshipExplorer
-from desktop.widgets.intent_panel import IntentPanel
-from desktop.widgets.ai_reasoning_panel import AIReasoningPanel
-from desktop.widgets.provider_card import ProviderCard
 from desktop.widgets.scrollable_card import ScrollableCard
-from desktop.widgets.prompt_panel import PromptPanel
-from desktop.widgets.evidence_viewer import EvidenceViewer
+from desktop.widgets.search_bar import SearchBar
 from desktop.widgets.task_results_panel import TaskResultsPanel
-from desktop.widgets.investigation_plan_panel import InvestigationPlanPanel
-from desktop.widgets.executive_consensus_panel import ExecutiveConsensusPanel
+
+from PySide6.QtCore import Qt, QThread, Signal
+from PySide6.QtWidgets import (
+    QComboBox,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QSizePolicy,
+    QSplitter,
+    QVBoxLayout,
+    QWidget,
+)
+
+
+class _InvestigationWorker(QThread):
+    progress = Signal(str, int, int)
+    finished = Signal(dict)
+    error = Signal(str)
+
+    def __init__(self, engine, question, provider_name=None):
+        super().__init__()
+        self.engine = engine
+        self.question = question
+        self.provider_name = provider_name
+
+    def run(self):
+        try:
+            if self.provider_name:
+                pm = self.engine.provider_manager
+                if self.provider_name != getattr(pm, "active_provider_name", None):
+                    pm.set_active_provider(self.provider_name)
+            result = self.engine.investigate(
+                self.question,
+                progress_callback=lambda step, cur, total: self.progress.emit(step, cur, total),
+            )
+            self.finished.emit(result)
+        except Exception as exc:
+            self.error.emit(str(exc))
+
+
+def _stub_reasoning(msg: str) -> AIReasoning:
+    return AIReasoning(executive_summary=msg, confidence="Low", provider="—")
 
 
 class InvestigationPage(QWidget):
     def __init__(self, app):
         super().__init__()
-
         self.app = app
         self.engine = InvestigationEngine(self.app)
+        self._worker = None
+        self._ranked_evidence = []
+        self._evidence_idx = 0
+        self._build_ui()
 
-        root_layout = QVBoxLayout()
+    def _build_ui(self):
+        root = QVBoxLayout()
+        root.setContentsMargins(24, 14, 24, 12)
+        root.setSpacing(6)
 
         title = QLabel("Investigation Workspace")
-        title.setStyleSheet("font-size:30px;font-weight:bold;")
+        title.setStyleSheet("font-size:24px;font-weight:bold;")
+        title.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
-        subtitle = QLabel("Ask Atlas a business question and review the evidence.")
-        subtitle.setStyleSheet("font-size:15px;color:#6B7280;")
+        subtitle = QLabel(
+            "Ask Atlas a business question. Specialist AI agents analyze your "
+            "visibility data and return a strategic synthesis."
+        )
+        subtitle.setStyleSheet("font-size:13px;color:#6B7280;")
+        subtitle.setWordWrap(True)
+        subtitle.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         self.search = SearchBar(
             placeholder="Example: Why did Firman lose to Champion for home backup?",
-            button_text="Investigate"
+            button_text="Investigate",
         )
         self.search.connect(self.run)
+        self.search.input.returnPressed.connect(self.run)
 
+        # ── Controls bar ──────────────────────────────────────────────────────
+        ctrl = QHBoxLayout()
+        ctrl.setContentsMargins(0, 2, 0, 2)
+        ctrl.setSpacing(10)
+
+        prov_lbl = QLabel("Provider:")
+        prov_lbl.setStyleSheet("font-size:12px; color:#6B7280;")
+        prov_lbl.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+
+        self._provider_combo = QComboBox()
+        self._provider_combo.setFixedWidth(160)
+        self._provider_combo.setStyleSheet("font-size:12px;")
+        self._populate_providers()
+
+        self._status_lbl = QLabel("Enter a question above to begin.")
+        self._status_lbl.setStyleSheet("font-size:12px; color:#6B7280;")
+        self._status_lbl.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+
+        ctrl.addWidget(prov_lbl)
+        ctrl.addWidget(self._provider_combo)
+        ctrl.addSpacing(12)
+        ctrl.addWidget(self._status_lbl)
+
+        ctrl_widget = QWidget()
+        ctrl_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        ctrl_widget.setLayout(ctrl)
+
+        # ── Left panels ───────────────────────────────────────────────────────
         self.intent = IntentPanel()
         self.plan_panel = InvestigationPlanPanel()
         self.summary = ScrollableCard("Executive Summary")
-        self.executive_consensus = ExecutiveConsensusPanel()
         self.ai_reasoning = AIReasoningPanel()
         self.task_results = TaskResultsPanel()
         self.recommendations = RecommendationCard()
-
-        self.provider_card = ProviderCard()
-        self.relationships = RelationshipExplorer()
-        self.evidence = ScrollableCard("Evidence Summary")
-        self.evidence_viewer = EvidenceViewer()
-        self.prompt_panel = PromptPanel()
+        self.executive_consensus = ExecutiveConsensusPanel()
 
         left_splitter = QSplitter(Qt.Vertical)
         left_splitter.addWidget(self.intent)
@@ -67,13 +136,52 @@ class InvestigationPage(QWidget):
         left_splitter.addWidget(self.executive_consensus)
         left_splitter.setSizes([80, 120, 180, 140, 200, 100, 200])
 
+        # ── Right panels ──────────────────────────────────────────────────────
+        self.provider_card = ProviderCard()
+        self.relationships = RelationshipExplorer()
+        self.evidence = ScrollableCard("Evidence Summary")
+        self.evidence_viewer = EvidenceViewer()
+        self.prompt_panel = PromptPanel()
+
+        # Evidence navigation row
+        ev_nav = QHBoxLayout()
+        ev_nav.setContentsMargins(0, 4, 0, 0)
+        ev_nav.setSpacing(6)
+        self._ev_prev_btn = QPushButton("← Prev")
+        self._ev_prev_btn.setFixedWidth(70)
+        self._ev_prev_btn.setEnabled(False)
+        self._ev_prev_btn.clicked.connect(self._prev_evidence)
+        self._ev_next_btn = QPushButton("Next →")
+        self._ev_next_btn.setFixedWidth(70)
+        self._ev_next_btn.setEnabled(False)
+        self._ev_next_btn.clicked.connect(self._next_evidence)
+        self._ev_idx_lbl = QLabel("")
+        self._ev_idx_lbl.setStyleSheet("font-size:11px; color:#6B7280;")
+        self._ev_idx_lbl.setAlignment(Qt.AlignCenter)
+        ev_nav.addWidget(self._ev_prev_btn)
+        ev_nav.addWidget(self._ev_idx_lbl, stretch=1)
+        ev_nav.addWidget(self._ev_next_btn)
+
+        ev_nav_widget = QWidget()
+        ev_nav_widget.setLayout(ev_nav)
+        ev_nav_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+
+        ev_wrapper = QWidget()
+        ev_wrapper_layout = QVBoxLayout()
+        ev_wrapper_layout.setContentsMargins(0, 0, 0, 0)
+        ev_wrapper_layout.setSpacing(0)
+        ev_wrapper_layout.addWidget(self.evidence_viewer)
+        ev_wrapper_layout.addWidget(ev_nav_widget)
+        ev_wrapper.setLayout(ev_wrapper_layout)
+        ev_wrapper.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+
         right_splitter = QSplitter(Qt.Vertical)
         right_splitter.addWidget(self.provider_card)
         right_splitter.addWidget(self.relationships)
         right_splitter.addWidget(self.evidence)
-        right_splitter.addWidget(self.evidence_viewer)
+        right_splitter.addWidget(ev_wrapper)
         right_splitter.addWidget(self.prompt_panel)
-        right_splitter.setSizes([80, 160, 200, 160, 120])
+        right_splitter.setSizes([80, 160, 200, 200, 120])
 
         h_splitter = QSplitter(Qt.Horizontal)
         h_splitter.addWidget(left_splitter)
@@ -81,71 +189,138 @@ class InvestigationPage(QWidget):
         h_splitter.setSizes([600, 400])
         h_splitter.setHandleWidth(6)
 
-        root_layout.addWidget(title)
-        root_layout.addWidget(subtitle)
-        root_layout.addSpacing(12)
-        root_layout.addWidget(self.search)
-        root_layout.addSpacing(8)
-        root_layout.addWidget(h_splitter)
+        root.addWidget(title)
+        root.addWidget(subtitle)
+        root.addSpacing(4)
+        root.addWidget(self.search)
+        root.addWidget(ctrl_widget)
+        root.addWidget(h_splitter, stretch=1)
+        self.setLayout(root)
 
-        self.setLayout(root_layout)
+    # ── Providers ─────────────────────────────────────────────────────────────
+
+    def _populate_providers(self):
+        self._provider_combo.clear()
+        self._provider_combo.addItem("— Active Provider —", None)
+        for name in self.app.provider_manager.list_providers():
+            if name == "mock":
+                continue
+            self._provider_combo.addItem(name, name)
+
+    # ── Run ───────────────────────────────────────────────────────────────────
 
     def run(self):
-        question = self.search.text()
+        question = self.search.text().strip()
+        if not question:
+            return
+        if self._worker and self._worker.isRunning():
+            return
 
-        investigation = self.engine.investigate(question)
+        self.search.button.setEnabled(False)
+        self._status_lbl.setText("Starting investigation…")
+        self._ev_prev_btn.setEnabled(False)
+        self._ev_next_btn.setEnabled(False)
+        self._ev_idx_lbl.setText("")
+        self._ranked_evidence = []
+        self._evidence_idx = 0
+
+        provider_name = self._provider_combo.currentData()
+
+        self._worker = _InvestigationWorker(self.engine, question, provider_name)
+        self._worker.progress.connect(self._on_progress)
+        self._worker.finished.connect(self._on_finished)
+        self._worker.error.connect(self._on_error)
+        self._worker.start()
+
+    def _on_progress(self, step: str, current: int, total: int):
+        self._status_lbl.setText(f"{step}  ({current}/{total})")
+
+    def _on_error(self, message: str):
+        self.search.button.setEnabled(True)
+        self._status_lbl.setText(f"Error: {message}")
+
+    def _on_finished(self, investigation: dict):
+        self.search.button.setEnabled(True)
+        provider = investigation.get("provider", "")
+        n_tasks = len(investigation.get("task_results", []))
+        self._status_lbl.setText(f"Complete · {provider} · {n_tasks} agents ran")
 
         self.intent.set_request(investigation["request"])
         self.plan_panel.set_plan(investigation["plan"])
-        self.provider_card.set_provider(investigation["provider"])
+        self.provider_card.set_provider(provider)
 
         analysis = investigation["analysis"]
 
         if analysis is None:
-            self.summary.set_text("No active dataset is available. Import a dataset first.")
+            msg = (
+                "No visibility data found in the database. "
+                "Run a Visibility collection first to populate Atlas with AI responses."
+            )
+            self.summary.set_text(msg)
+            self.ai_reasoning.set_reasoning(_stub_reasoning(msg))
+            self.task_results.set_results([])
+            self.executive_consensus.set_consensus(None)
+            self.evidence_viewer.clear()
             return
-
-        summary = analysis["summary"]
-        relationships = analysis["relationships"]
 
         self.summary.set_text(investigation["summary"])
         self.ai_reasoning.set_reasoning(investigation["ai_reasoning"])
         self.task_results.set_results(investigation["task_results"])
-        
-        consensus = investigation["executive_consensus"]
-
-        self.summary.set_text(investigation["summary"])
-        self.executive_consensus.set_consensus(investigation["executive_consensus"])
-
         self.executive_consensus.set_consensus(investigation["executive_consensus"])
 
         self.prompt_panel.set_prompt(self.engine.ai_service.last_prompt)
-        self.relationships.set_relationships(relationships)
+        self.relationships.set_relationships(analysis["relationships"])
 
         recommendation = investigation["recommendation"]
         self.recommendations.set_recommendation(
             recommendation["text"],
-            f"Confidence: {recommendation['confidence']}"
+            f"Confidence: {recommendation['confidence']}",
         )
 
-        ranked_evidence = investigation["ranked_evidence"]
+        # Evidence navigation
+        self._ranked_evidence = investigation["ranked_evidence"]
+        self._evidence_idx = 0
+        self._update_evidence_display()
 
-        if ranked_evidence:
-            self.evidence_viewer.set_evidence(ranked_evidence[0])
-        else:
-            self.evidence_viewer.clear()
-
-        evidence_text = "\n\n".join(
-            f"{item.source.upper()} | {item.prompt}\n{item.text[:300]}..."
-            for item in ranked_evidence
-        )
-
-        if not evidence_text:
-            evidence_text = (
-                f"Responses analyzed: {summary.evidence_count}\n"
-                f"Brands found: {summary.finding_counts_by_type.get('brand', 0)}\n"
-                f"Features found: {summary.finding_counts_by_type.get('feature', 0)}\n"
-                f"Relationships found: {len(relationships)}"
+        # Evidence summary panel (full ranked list as text)
+        summary_obj = analysis["summary"]
+        ranked = self._ranked_evidence
+        if ranked:
+            evidence_text = "\n\n".join(
+                f"{item.source.upper()} | {item.prompt}\n{item.text[:300]}…"
+                for item in ranked
             )
-
+        else:
+            evidence_text = (
+                f"Responses analyzed: {summary_obj.evidence_count}\n"
+                f"Brands found: {summary_obj.finding_counts_by_type.get('brand', 0)}\n"
+                f"Features found: {summary_obj.finding_counts_by_type.get('feature', 0)}\n"
+                f"Relationships found: {len(analysis['relationships'])}"
+            )
         self.evidence.set_text(evidence_text)
+
+    # ── Evidence navigation ────────────────────────────────────────────────────
+
+    def _update_evidence_display(self):
+        items = self._ranked_evidence
+        n = len(items)
+        if not items:
+            self.evidence_viewer.clear()
+            self._ev_idx_lbl.setText("No matching evidence")
+            self._ev_prev_btn.setEnabled(False)
+            self._ev_next_btn.setEnabled(False)
+            return
+        self.evidence_viewer.set_evidence(items[self._evidence_idx])
+        self._ev_idx_lbl.setText(f"{self._evidence_idx + 1} of {n}")
+        self._ev_prev_btn.setEnabled(self._evidence_idx > 0)
+        self._ev_next_btn.setEnabled(self._evidence_idx < n - 1)
+
+    def _prev_evidence(self):
+        if self._evidence_idx > 0:
+            self._evidence_idx -= 1
+            self._update_evidence_display()
+
+    def _next_evidence(self):
+        if self._evidence_idx < len(self._ranked_evidence) - 1:
+            self._evidence_idx += 1
+            self._update_evidence_display()

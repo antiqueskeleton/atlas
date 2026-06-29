@@ -107,6 +107,71 @@ class AtlasApplication:
             "datasets": self.dataset_manager.list_datasets(),
         }
 
+    def analyze_from_visibility_db(self) -> dict | None:
+        """
+        Build the same analysis dict as analyze_active_dataset() but sourced
+        entirely from the SQLite visibility_responses table.  No JSON import
+        needed — works whenever Visibility has collected data.
+        """
+        from backend.visibility.visibility_repository import VisibilityRepository
+        from backend.models.evidence import Evidence as EvidenceModel
+
+        raw_responses = VisibilityRepository().list_responses()
+        if not raw_responses:
+            return None
+
+        knowledge_service = KnowledgeService()
+        knowledge = {
+            "brands": knowledge_service.get_brands(),
+            "features": knowledge_service.get_features(),
+        }
+
+        # Row: (id, run_id, provider, model, prompt, response, collected_at, prompt_set)
+        evidence_list = [
+            EvidenceModel(
+                evidence_id=str(row[0]),
+                source=row[2],
+                text=row[5],
+                prompt=row[4],
+            )
+            for row in raw_responses
+        ]
+
+        dataset = Dataset(
+            name="Visibility Database",
+            source="SQLite",
+            imported_at=datetime.now(),
+            evidence=evidence_list,
+        )
+
+        analysts = AnalystRegistry.get_analysts(knowledge)
+        results = []
+        for item in evidence_list:
+            for analyst in analysts:
+                results.append(analyst.analyze(item))
+
+        summary = RunSummary(
+            evidence_count=len(evidence_list),
+            analyst_count=len(analysts),
+            results=results,
+        ).build()
+
+        insight_engine = InsightEngine()
+        insights = insight_engine.generate(results)
+
+        relationship_engine = RelationshipEngine()
+        relationships = relationship_engine.generate(results)
+
+        return {
+            "dataset": dataset,
+            "summary": summary,
+            "insights": insights,
+            "relationships": relationships,
+            "results": results,
+            "evidence": evidence_list,
+            "datasets": self.dataset_manager.list_datasets(),
+        }
+
     def has_analysis(self):
         return self.current_summary is not None
 
