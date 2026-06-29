@@ -150,3 +150,8 @@ class VisibilityRepository:
             """, (run_id,))
 
             return cursor.fetchall()
+
+    def count_responses(self) -> int:
+        with self.connect() as conn:
+            cursor = conn.execute("SELECT COUNT(*) FROM visibility_responses")
+            return cursor.fetchone()[0]

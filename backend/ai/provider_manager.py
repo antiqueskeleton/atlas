@@ -4,7 +4,7 @@ from backend.ai.provider_registry import ProviderRegistry
 class ProviderManager:
     def __init__(self):
         self.registry = ProviderRegistry()
-        self.active_provider_name = "mock"
+        self.active_provider_name = "openai"
         self.api_keys: dict[str, str] = {}
         self.models: dict[str, str] = {}
 
@@ -27,7 +27,7 @@ class ProviderManager:
         self.active_provider_name = provider_name
 
     def list_providers(self):
-        return self.registry.list_provider_keys()
+        return self.registry.list_ui_provider_keys()
 
     def set_provider_api_key(self, provider_name: str, api_key: str):
         self.api_keys[provider_name] = api_key

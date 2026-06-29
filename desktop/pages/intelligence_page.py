@@ -1,6 +1,5 @@
 from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtWidgets import (
-    QComboBox,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -95,15 +94,15 @@ class IntelligencePage(QWidget):
 
     def _build_ui(self):
         root = QVBoxLayout()
-        root.setSpacing(12)
+        root.setSpacing(6)
 
         # Header
         title = QLabel("Intelligence Engine")
         title.setStyleSheet("font-size:30px;font-weight:bold;")
 
         subtitle = QLabel(
-            "Runs structured market research across AI providers and synthesizes brand "
-            "positioning, consumer insights, and strategic opportunities."
+            "Synthesizes stored AI responses into brand positioning, consumer insights, "
+            "and strategic opportunities."
         )
         subtitle.setStyleSheet("font-size:15px;color:#6B7280;")
         subtitle.setWordWrap(True)
@@ -112,12 +111,7 @@ class IntelligencePage(QWidget):
         ctrl = QHBoxLayout()
         ctrl.setSpacing(10)
 
-        self.provider_select = QComboBox()
-        self.provider_select.setFixedWidth(160)
-        for key in self.app.provider_manager.list_providers():
-            self.provider_select.addItem(key)
-
-        self.run_btn = QPushButton("Run Intelligence Engine")
+        self.run_btn = QPushButton("Run Intelligence Analysis")
         self.run_btn.setFixedWidth(210)
         self.run_btn.clicked.connect(self._start_run)
 
@@ -128,8 +122,6 @@ class IntelligencePage(QWidget):
         self._mode_lbl.setStyleSheet("font-size:12px;")
         self._update_mode_label()
 
-        ctrl.addWidget(QLabel("Provider:"))
-        ctrl.addWidget(self.provider_select)
         ctrl.addWidget(self.run_btn)
         ctrl.addWidget(self.last_run_lbl)
         ctrl.addStretch()
@@ -150,19 +142,15 @@ class IntelligencePage(QWidget):
             f"{brand} Mention Rate", "—%", "% of research responses"
         )
         self._kpi_top_card, self._kpi_top_val = _kpi(
-            "Top Brand in Research", "—", "most mentioned across all responses"
+            "Brand Mention Rank", "—", "target brand vs competitors"
         )
         self._kpi_prompts_card, self._kpi_prompts_val = _kpi(
-            "Responses Used", "—", "for last synthesis run"
-        )
-        self._kpi_runs_card, self._kpi_runs_val = _kpi(
-            "Runs Completed", "—", "intelligence engine runs"
+            "Responses Analyzed", "—", "total stored in database"
         )
 
         kpi_row.addWidget(self._kpi_brand_card)
         kpi_row.addWidget(self._kpi_top_card)
         kpi_row.addWidget(self._kpi_prompts_card)
-        kpi_row.addWidget(self._kpi_runs_card)
 
         kpi_widget = QWidget()
         kpi_widget.setLayout(kpi_row)
@@ -204,11 +192,15 @@ class IntelligencePage(QWidget):
     def _start_run(self):
         self.run_btn.setEnabled(False)
         self.status_lbl.setText(
-            "Running Intelligence Engine — this takes 1-3 minutes depending on provider…"
+            "Running analysis — classifying stored responses and generating briefing…"
         )
+        # Clear panels so user sees fresh generation, not stale data
+        for body in (self._product_body, self._persona_body, self._journey_body):
+            body.setPlainText("Analyzing stored responses…")
+        self._opp_body.setPlainText("Identifying strategic opportunities…")
+        self._brief_body.setPlainText("Generating executive briefing from current analysis…")
 
-        provider_name = self.provider_select.currentText()
-        self._worker = _RunWorker(self.service, provider_name)
+        self._worker = _RunWorker(self.service, None)  # uses active provider from Settings
         self._worker.finished.connect(self._on_run_finished)
         self._worker.error.connect(self._on_run_error)
         self._worker.start()
@@ -252,11 +244,11 @@ class IntelligencePage(QWidget):
 
     def _load_latest(self):
         runs = self.service.list_runs()
-        self._kpi_runs_val.setText(str(len(runs)))
+        self._kpi_prompts_val.setText(str(self.service.total_response_count()))
 
         latest = self.service.get_latest_briefing()
         if not latest:
-            placeholder = "No intelligence runs yet. Click 'Run Intelligence Engine' to start."
+            placeholder = "No intelligence runs yet. Click 'Run Intelligence Analysis' to start."
             for body in (
                 self._product_body, self._persona_body,
                 self._journey_body, self._opp_body, self._brief_body,
@@ -268,12 +260,14 @@ class IntelligencePage(QWidget):
         briefing = latest["briefing"]
         results = latest["results"]
 
-        # Last run label
+        # Last run label — also shows runs completed count
         provider = run[1]
         started = run[4][:19].replace("T", " ")
         dur = f"{run[7]:.0f}s" if run[7] else ""
-        self.last_run_lbl.setText(f"Last run: {started} · {provider} {dur}")
-        self._kpi_prompts_val.setText(str(len(results)))
+        n_runs = len(runs)
+        self.last_run_lbl.setText(
+            f"Runs Completed: {n_runs}  ·  Last run: {started} · {provider} {dur}"
+        )
 
         # Group results by analyst
         by_analyst: dict[str, list[tuple[str, str]]] = {}
@@ -312,8 +306,12 @@ class IntelligencePage(QWidget):
         target_rate = round(target_count / total * 100) if total and target else 0
         self._kpi_brand_val.setText(f"{target_rate}%")
 
-        top_brand = max(counts, key=counts.get) if counts else "—"
-        self._kpi_top_val.setText(top_brand)
+        sorted_brands = sorted(counts.items(), key=lambda x: -x[1])
+        rank = next((i + 1 for i, (b, _) in enumerate(sorted_brands) if b == target), None)
+        if rank and target:
+            self._kpi_top_val.setText(f"#{rank}  {target.upper()}")
+        else:
+            self._kpi_top_val.setText("Unranked")
 
     def _compute_brand_stats(self, results):
         from collections import Counter

@@ -26,3 +26,7 @@ class ProviderRegistry:
 
     def list_provider_keys(self):
         return list(self.providers.keys())
+
+    def list_ui_provider_keys(self):
+        """Provider keys shown in the live UI — excludes mock (kept for dev/testing only)."""
+        return [k for k in self.providers if k != "mock"]
