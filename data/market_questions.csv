@@ -444,3 +444,15 @@ AI Knowledge Sources,question,"What online sources, websites, and publications a
 AI Knowledge Sources,question,"Which YouTube channels, subreddits, and online communities cover portable generators most thoroughly?",8
 AI Knowledge Sources,question,What review platforms and websites do consumers trust most when researching generator purchases?,8
 AI Knowledge Sources,question,"Where do generator experts, enthusiasts, and professionals share knowledge and recommendations online?",8
+Generator Purchase Trigger,search,what do I need to consider when buying a generator,85
+Generator Purchase Trigger,natural,What should I consider when I plan to purchase a portable generators?,83
+Generator Purchase Trigger,conversational,"I've been thinking about buying a generator for years but keep putting it off. What usually makes people finally commit to buying one — is it a bad storm, a long outage, or something else?",86
+Generator Brand Loyalty,search,should I buy the same generator brand again,80
+Generator Brand Loyalty,natural,How loyal are generator owners to their original brand when buying a second or replacement generator?,78
+Generator Brand Loyalty,conversational,My Firman generator has served me well for five years and I'm ready to upgrade. Should I stick with Firman or is it worth switching brands for my next purchase?,82
+Contractor Generator,search,best generator for contractors,84
+Contractor Generator,natural,What portable generators do contractors and construction professionals prefer for daily jobsite use?,82
+Contractor Generator,conversational,I'm a contractor running power tools on active jobsites every day. I need a generator that starts reliably in any weather and handles heavy loads for 8 to 10 hours straight. What should I buy?,85
+Generator for Small Business,search,best generator for small business backup power,79
+Generator for Small Business,natural,What portable generators are best suited for small business or commercial backup power?,77
+Generator for Small Business,conversational,I run a small business and need a generator to keep us operational during outages. It doesn't run daily but needs to be ready and reliable when we need it. What commercial-grade portable generator would you recommend?,80
