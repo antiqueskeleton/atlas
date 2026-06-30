@@ -151,6 +151,34 @@ class IntelligenceRepository:
                 FROM opportunities WHERE run_id=? ORDER BY opportunity_id ASC
             """, (run_id,)).fetchall()
 
+    def get_stuck_runs(self, older_than_minutes: int = 30) -> list:
+        """Return intelligence runs stuck in 'running' status beyond the threshold."""
+        with self.connect() as conn:
+            return conn.execute("""
+                SELECT run_id, provider, started_at
+                FROM intelligence_runs
+                WHERE status = 'running'
+                  AND started_at < datetime('now', ?, 'utc')
+            """, (f"-{older_than_minutes} minutes",)).fetchall()
+
+    def mark_run_failed(self, run_id: str):
+        with self.connect() as conn:
+            conn.execute(
+                "UPDATE intelligence_runs SET status='failed', completed_at=datetime('now') WHERE run_id=?",
+                (run_id,),
+            )
+
+    def get_unparsed_briefing_runs(self) -> list:
+        """Return (run_id, opportunities_text) for briefings with no parsed opportunity rows."""
+        with self.connect() as conn:
+            return conn.execute("""
+                SELECT ib.run_id, ib.opportunities
+                FROM intelligence_briefings ib
+                WHERE ib.opportunities IS NOT NULL
+                  AND ib.opportunities != ''
+                  AND ib.run_id NOT IN (SELECT DISTINCT run_id FROM opportunities WHERE run_id IS NOT NULL)
+            """).fetchall()
+
     def update_opportunity_status(self, opp_id: int, status: str):
         with self.connect() as conn:
             conn.execute(
