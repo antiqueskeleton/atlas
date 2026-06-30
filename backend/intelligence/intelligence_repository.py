@@ -137,8 +137,8 @@ class IntelligenceRepository:
         now = datetime.now().isoformat()
         with self.connect() as conn:
             conn.executemany("""
-                INSERT INTO opportunities (run_id, created_date, title, description, evidence, status)
-                VALUES (?, ?, ?, ?, ?, 'new')
+                INSERT INTO opportunities (market_id, run_id, created_date, title, description, evidence, status)
+                VALUES (1, ?, ?, ?, ?, ?, 'new')
             """, [
                 (run_id, now, o["title"], o["description"], o["evidence"])
                 for o in opp_list
