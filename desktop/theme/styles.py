@@ -93,10 +93,10 @@ QListWidget#AtlasNav {{
 }}
 QListWidget#AtlasNav::item {{
     color: {SILVER};
-    padding: 10px 16px;
+    padding: 11px 16px;
     border-radius: 6px;
-    margin: 1px 8px;
-    font-size: 13px;
+    margin: 2px 8px;
+    font-size: 14px;
 }}
 QListWidget#AtlasNav::item:hover {{
     background: {SLATE};
