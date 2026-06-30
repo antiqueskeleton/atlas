@@ -54,6 +54,12 @@ class VisibilityRepository:
                 except Exception:
                     pass  # column already exists
 
+            # Indexes — additive, safe, reversible with DROP INDEX
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_vresp_run_id      ON visibility_responses(run_id)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_vresp_provider     ON visibility_responses(provider)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_vresp_collected_at ON visibility_responses(collected_at DESC)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_vresp_family       ON visibility_responses(family_name)")
+
     def save_run(self, run):
         with self.connect() as conn:
             conn.execute("""
@@ -109,9 +115,27 @@ class VisibilityRepository:
             """)
             return cursor.fetchall()
 
-    def list_responses(self):
+    def list_responses(self, limit: int = 0, offset: int = 0,
+                       search: str = "", provider: str = ""):
+        """Fetch responses with optional DB-side filtering and pagination.
+        Pass limit=0 (default) to fetch all rows — used by analytics.
+        Pass limit>0 for the Raw Data tab display.
+        """
+        clauses, params = [], []
+        if provider:
+            clauses.append("vresp.provider = ?")
+            params.append(provider)
+        if search:
+            clauses.append(
+                "(INSTR(LOWER(COALESCE(vresp.family_name,'')), LOWER(?)) > 0"
+                " OR INSTR(LOWER(vresp.prompt), LOWER(?)) > 0"
+                " OR INSTR(LOWER(vresp.response), LOWER(?)) > 0)"
+            )
+            params.extend([search, search, search])
+        where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
+        pagination = f"LIMIT {int(limit)} OFFSET {int(offset)}" if limit > 0 else ""
         with self.connect() as conn:
-            cursor = conn.execute("""
+            cursor = conn.execute(f"""
                 SELECT
                     vresp.id,
                     vresp.run_id,
@@ -123,9 +147,29 @@ class VisibilityRepository:
                     COALESCE(NULLIF(vresp.family_name, ''), vrun.prompt_set) AS family_display
                 FROM visibility_responses vresp
                 LEFT JOIN visibility_runs vrun ON vresp.run_id = vrun.run_id
+                {where}
                 ORDER BY vresp.collected_at DESC
-            """)
+                {pagination}
+            """, params)
             return cursor.fetchall()
+
+    def count_responses_filtered(self, search: str = "", provider: str = "") -> int:
+        clauses, params = [], []
+        if provider:
+            clauses.append("provider = ?")
+            params.append(provider)
+        if search:
+            clauses.append(
+                "(INSTR(LOWER(COALESCE(family_name,'')), LOWER(?)) > 0"
+                " OR INSTR(LOWER(prompt), LOWER(?)) > 0"
+                " OR INSTR(LOWER(response), LOWER(?)) > 0)"
+            )
+            params.extend([search, search, search])
+        where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
+        with self.connect() as conn:
+            return conn.execute(
+                f"SELECT COUNT(*) FROM visibility_responses {where}", params
+            ).fetchone()[0]
 
     def get_responses_for_run(self, run_id):
         with self.connect() as conn:

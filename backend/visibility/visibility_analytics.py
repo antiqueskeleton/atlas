@@ -49,6 +49,18 @@ class VisibilityAnalytics:
 
         self.channels = self._load_channels(channels_path)
 
+        # Flat (term, brand) list — built once, used on every response.
+        # Eliminates the double text.find() call and the nested brand/term loops.
+        seen: set[str] = set()
+        self._flat_brand_terms: list[tuple[str, str]] = []
+        for brand in self.brands:
+            for term in self.brand_terms.get(brand, [brand.lower()]):
+                if term not in seen:
+                    self._flat_brand_terms.append((term, brand))
+                    seen.add(term)
+
+        self._feature_set = [(f, f.lower()) for f in self.features]
+
     def summarize_responses(self, responses):
         brand_counts = Counter()
         feature_counts = Counter()
@@ -71,17 +83,19 @@ class VisibilityAnalytics:
             provider_response_counts[provider] += 1
             prompt_set_response_counts[prompt_set] += 1
 
-            mentioned_brands = []
+            # Single pass: find earliest position for each brand across all its terms
+            brand_first_pos: dict[str, int] = {}
+            for term, brand in self._flat_brand_terms:
+                pos = text.find(term)
+                if pos >= 0 and (brand not in brand_first_pos or pos < brand_first_pos[brand]):
+                    brand_first_pos[brand] = pos
 
-            for brand in self.brands:
-                search_terms = self.brand_terms.get(brand, [brand.lower()])
-                positions = [text.find(t) for t in search_terms if text.find(t) >= 0]
-                if positions:
-                    match_pos = min(positions)
-                    brand_counts[brand] += 1
-                    provider_brand_counts[provider][brand] += 1
-                    prompt_set_brand_counts[prompt_set][brand] += 1
-                    mentioned_brands.append((match_pos, brand))
+            mentioned_brands = []
+            for brand, match_pos in brand_first_pos.items():
+                brand_counts[brand] += 1
+                provider_brand_counts[provider][brand] += 1
+                prompt_set_brand_counts[prompt_set][brand] += 1
+                mentioned_brands.append((match_pos, brand))
 
             if mentioned_brands:
                 mentioned_brands.sort(key=lambda item: item[0])
@@ -92,8 +106,8 @@ class VisibilityAnalytics:
 
             brand_names_in_response = [b for _, b in mentioned_brands]
 
-            for feature in self.features:
-                if feature.lower() in text:
+            for feature, feature_lower in self._feature_set:
+                if feature_lower in text:
                     feature_counts[feature] += 1
                     for brand in brand_names_in_response:
                         feature_brand_counts[feature][brand] += 1

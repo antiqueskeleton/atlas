@@ -14,6 +14,8 @@ class VisibilityService:
         self.runner = VisibilityRunner(provider_manager)
         self.analytics = VisibilityAnalytics(target_brand=target_brand)
         self.repository = VisibilityRepository()
+        self._analytics_cache: dict | None = None
+        self._analytics_cache_count: int = -1
 
     def run(
         self,
@@ -40,14 +42,21 @@ class VisibilityService:
         )
         self.repository.save_run(result["run"])
         self.repository.save_responses(result["responses"])
+        self._analytics_cache = None  # invalidate on new data
         return result
 
     def list_runs(self):
         return self.repository.list_runs()
 
     def analytics_summary(self):
-        responses = self.repository.list_responses()
-        return self.analytics.summarize_responses(responses)
+        count = self.repository.count_responses()
+        if self._analytics_cache is not None and count == self._analytics_cache_count:
+            return self._analytics_cache
+        responses = self.repository.list_responses()  # all rows, no limit
+        result = self.analytics.summarize_responses(responses)
+        self._analytics_cache = result
+        self._analytics_cache_count = count
+        return result
 
     def get_responses_for_run(self, run_id):
         return self.repository.get_responses_for_run(run_id)
