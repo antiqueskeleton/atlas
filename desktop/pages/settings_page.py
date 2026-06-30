@@ -1,4 +1,4 @@
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtWidgets import (
     QComboBox,
     QFrame,
@@ -83,6 +83,7 @@ class SettingsPage(QWidget):
         root.addWidget(self._brand_card())
         root.addWidget(self._provider_card())
         root.addWidget(self._keys_card())
+        root.addWidget(self._health_card())
         root.addStretch()
 
         content.setLayout(root)
@@ -265,6 +266,210 @@ class SettingsPage(QWidget):
         lay.addLayout(save_row)
 
         return card
+
+    # ── Health card ───────────────────────────────────────────────────────────
+
+    def _health_card(self) -> QFrame:
+        card, lay = self._card("Health Check")
+        lay.addWidget(self._note(
+            "Sanity checks on your local database. No API calls are made."
+        ))
+        lay.addSpacing(6)
+
+        refresh_btn = QPushButton("Run Health Check")
+        refresh_btn.setFixedWidth(160)
+        refresh_btn.clicked.connect(self._run_health_checks)
+        btn_row = QHBoxLayout()
+        btn_row.addWidget(refresh_btn)
+        btn_row.addStretch()
+        lay.addLayout(btn_row)
+        lay.addSpacing(4)
+
+        self._health_rows_widget = QWidget()
+        self._health_rows_layout = QVBoxLayout()
+        self._health_rows_layout.setSpacing(4)
+        self._health_rows_layout.setContentsMargins(0, 0, 0, 0)
+        self._health_rows_widget.setLayout(self._health_rows_layout)
+        lay.addWidget(self._health_rows_widget)
+
+        # Run on first paint
+        self._run_health_checks()
+        return card
+
+    def _run_health_checks(self):
+        from backend.intelligence.intelligence_repository import IntelligenceRepository
+        from backend.knowledge.knowledge_repository import KnowledgeRepository
+        from backend.visibility.visibility_repository import VisibilityRepository
+
+        ir = IntelligenceRepository()
+        kr = KnowledgeRepository()
+        vr = VisibilityRepository()
+
+        checks: list[tuple[str, str, str, str | None, str | None]] = []
+        # (status, label, detail, action_label, action_key)
+
+        # 1 — Stuck intelligence runs
+        stuck = ir.get_stuck_runs(older_than_minutes=30)
+        if stuck:
+            checks.append((
+                "red", "Stuck Runs",
+                f"{len(stuck)} run(s) frozen in 'running' status — process crashed mid-run.",
+                "Mark Failed", "mark_failed",
+            ))
+        else:
+            checks.append(("green", "Intelligence Runs", "No stuck runs.", None, None))
+
+        # 2 — Unparsed briefings
+        unparsed = ir.get_unparsed_briefing_runs()
+        if unparsed:
+            checks.append((
+                "amber", "Unparsed Opportunities",
+                f"{len(unparsed)} briefing(s) have no structured opportunity rows (pre-date parser). "
+                "Click Re-parse to extract them now — no API calls needed.",
+                "Re-parse", "reparse_opps",
+            ))
+        else:
+            checks.append(("green", "Opportunity Rows", "All briefings have parsed opportunity rows.", None, None))
+
+        # 3 — Brands missing website
+        import sqlite3
+        from backend.services.paths import get_db_path
+        with sqlite3.connect(get_db_path()) as conn:
+            total_brands = conn.execute("SELECT COUNT(*) FROM brands").fetchone()[0]
+            no_site = conn.execute(
+                "SELECT COUNT(*) FROM brands WHERE website IS NULL OR website = ''"
+            ).fetchone()[0]
+        if no_site:
+            checks.append((
+                "amber", "Brands Missing Website",
+                f"{no_site} of {total_brands} brands have no website — they will be skipped by web scraping.",
+                None, None,
+            ))
+        else:
+            checks.append(("green", "Brand Websites", f"All {total_brands} brands have a website.", None, None))
+
+        # 4 — Web intelligence coverage
+        with sqlite3.connect(get_db_path()) as conn:
+            web_entries = conn.execute("SELECT COUNT(*) FROM web_intelligence").fetchone()[0]
+            scraped = conn.execute(
+                "SELECT COUNT(*) FROM web_intelligence WHERE scraped_at IS NOT NULL"
+            ).fetchone()[0]
+        if web_entries == 0:
+            checks.append((
+                "amber", "Web Intelligence",
+                "No entries yet. Add brand domains on Knowledge → Web Intelligence, then Scrape All.",
+                None, None,
+            ))
+        else:
+            checks.append((
+                "green" if scraped == web_entries else "amber",
+                "Web Intelligence",
+                f"{scraped} of {web_entries} entries scraped.",
+                None, None,
+            ))
+
+        # 5 — Visibility data volume
+        vis_stats = vr.count_stats()
+        checks.append((
+            "green" if vis_stats["total"] > 0 else "amber",
+            "Visibility Data",
+            f"{vis_stats['total']} responses · {vis_stats['runs']} runs · "
+            f"{vis_stats['providers']} provider(s) · {vis_stats['families']} families.",
+            None, None,
+        ))
+
+        # 6 — Intelligence briefings
+        with sqlite3.connect(get_db_path()) as conn:
+            briefing_count = conn.execute("SELECT COUNT(*) FROM intelligence_briefings").fetchone()[0]
+            run_count      = conn.execute("SELECT COUNT(*) FROM intelligence_runs").fetchone()[0]
+        checks.append((
+            "green" if briefing_count > 0 else "amber",
+            "Intelligence Briefings",
+            f"{briefing_count} briefing(s) from {run_count} total run(s).",
+            None, None,
+        ))
+
+        # 7 — Prompt library (CSV vs stale DB table)
+        from backend.knowledge.knowledge_repository import KnowledgeRepository
+        families = kr.list_prompt_families()
+        with sqlite3.connect(get_db_path()) as conn:
+            db_fam = conn.execute("SELECT COUNT(*) FROM prompt_families").fetchone()[0]
+        if db_fam > 0:
+            checks.append((
+                "amber", "Prompt Library",
+                f"{len(families)} families in CSV (canonical). "
+                f"{db_fam} stale rows remain in legacy prompt_families table — informational only.",
+                None, None,
+            ))
+        else:
+            checks.append(("green", "Prompt Library", f"{len(families)} families in CSV.", None, None))
+
+        self._health_check_data = {"stuck": stuck, "unparsed": unparsed}
+        self._render_health_rows(checks)
+
+    def _render_health_rows(self, checks):
+        # Clear existing rows
+        while self._health_rows_layout.count():
+            item = self._health_rows_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+        _COLORS = {"green": "#16A34A", "amber": "#D97706", "red": "#DC2626"}
+        _DOTS   = {"green": "●", "amber": "●", "red": "●"}
+
+        for status, label, detail, action_label, action_key in checks:
+            row = QWidget()
+            rl = QHBoxLayout(row)
+            rl.setContentsMargins(0, 2, 0, 2)
+            rl.setSpacing(10)
+
+            dot = QLabel(_DOTS[status])
+            dot.setFixedWidth(14)
+            dot.setStyleSheet(f"color: {_COLORS[status]}; font-size: 14px;")
+
+            name = QLabel(label)
+            name.setFixedWidth(180)
+            name.setStyleSheet("font-size: 12px; font-weight: bold; color: #111827;")
+
+            desc = QLabel(detail)
+            desc.setWordWrap(True)
+            desc.setStyleSheet("font-size: 12px; color: #374151;")
+            desc.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+
+            rl.addWidget(dot)
+            rl.addWidget(name)
+            rl.addWidget(desc)
+
+            if action_label and action_key:
+                btn = QPushButton(action_label)
+                btn.setFixedWidth(90)
+                btn.clicked.connect(lambda checked, k=action_key: self._health_action(k))
+                rl.addWidget(btn)
+
+            self._health_rows_layout.addWidget(row)
+
+    def _health_action(self, key: str):
+        from backend.intelligence.intelligence_repository import IntelligenceRepository
+        from backend.intelligence.intelligence_service import IntelligenceService
+        ir = IntelligenceRepository()
+
+        if key == "mark_failed":
+            stuck = self._health_check_data.get("stuck", [])
+            for run_id, *_ in stuck:
+                ir.mark_run_failed(run_id)
+            self._run_health_checks()
+
+        elif key == "reparse_opps":
+            unparsed = self._health_check_data.get("unparsed", [])
+            count = 0
+            for run_id, opp_text in unparsed:
+                if not opp_text:
+                    continue
+                parsed = IntelligenceService._parse_opportunities(opp_text)
+                if parsed:
+                    ir.save_opportunities(run_id, parsed)
+                    count += len(parsed)
+            self._run_health_checks()
 
     # ── Helpers ───────────────────────────────────────────────────────────────
 
