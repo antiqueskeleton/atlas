@@ -480,8 +480,8 @@ class VisibilityPage(QWidget):
                 border: none; border-bottom: 2px solid transparent;
                 background: transparent; color: #6B7280; margin-right: 4px;
             }
+            QTabBar::tab:hover { color: #111827; }
             QTabBar::tab:selected { color: #0B84FF; border-bottom: 2px solid #0B84FF; }
-            QTabBar::tab:hover:!selected { color: #111827; }
         """)
 
         # Tab 1 — Overview: recent runs + latest responses — side by side

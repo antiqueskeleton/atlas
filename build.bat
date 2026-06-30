@@ -2,34 +2,59 @@
 setlocal
 
 echo ============================================================
-echo   Atlas AI  ^|  Build Script
-echo   Firman Power Equipment
+echo   Atlas AI  ^|  Build Script  ^|  v0.7
+echo   dweeb.co
 echo ============================================================
 echo.
 
 REM ── Prerequisites check ───────────────────────────────────────────────────
-where pyinstaller >nul 2>&1
+where python >nul 2>&1
 if errorlevel 1 (
-    echo ERROR: pyinstaller not found.
+    echo ERROR: python not found on PATH.
+    exit /b 1
+)
+
+python -m PyInstaller --version >nul 2>&1
+if errorlevel 1 (
+    echo ERROR: PyInstaller not found.
     echo        Install with:  pip install pyinstaller
     exit /b 1
 )
 
-REM ── Step 1: PyInstaller ───────────────────────────────────────────────────
-echo [1/2]  Building distributable with PyInstaller...
+REM ── Step 1: Generate atlas.ico ────────────────────────────────────────────
+echo [1/3]  Generating atlas.ico...
 echo.
-pyinstaller atlas.spec --clean --noconfirm
+python scripts\make_ico.py
+if errorlevel 1 (
+    echo WARNING: ICO generation failed. Continuing without custom icon.
+    echo          Install Pillow if missing:  pip install Pillow
+)
+echo.
+
+REM ── Step 2: PyInstaller ───────────────────────────────────────────────────
+echo [2/3]  Building distributable with PyInstaller...
+echo.
+
+REM Pre-clean build and dist dirs; use PowerShell -LiteralPath to avoid prefix issues
+if exist "build\atlas" (
+    powershell -NoProfile -Command "Remove-Item -Recurse -Force -LiteralPath '.\build\atlas'" >nul 2>&1
+)
+if exist "dist\Atlas AI" (
+    powershell -NoProfile -Command "Remove-Item -Recurse -Force -LiteralPath '.\dist\Atlas AI'" >nul 2>&1
+)
+
+python -m PyInstaller atlas.spec --noconfirm
 if errorlevel 1 (
     echo.
     echo ERROR: PyInstaller build failed. Fix errors above and retry.
     exit /b 1
 )
 echo.
-echo        PyInstaller OK  ->  dist\Atlas AI\
+echo        PyInstaller OK  -^>  dist\Atlas AI\
 
-REM ── Step 2: Inno Setup ────────────────────────────────────────────────────
+REM ── Step 3: Inno Setup ────────────────────────────────────────────────────
 echo.
-echo [2/2]  Building installer with Inno Setup...
+echo [3/3]  Building installer with Inno Setup...
 echo.
 
 set ISCC_64="C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
@@ -55,7 +80,7 @@ if errorlevel 1 (
 echo.
 echo ============================================================
 echo   BUILD COMPLETE
-echo   Installer:  dist\installer\AtlasAI-v0.2-Setup.exe
+echo   Installer:  dist\installer\AtlasAI-v0.7-Setup.exe
 echo ============================================================
 
 :done

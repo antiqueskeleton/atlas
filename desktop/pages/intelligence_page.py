@@ -426,7 +426,7 @@ class IntelligencePage(QWidget):
         from backend.knowledge.knowledge_repository import KnowledgeRepository
         brand_terms = KnowledgeRepository().get_brand_detection_terms()
         if not brand_terms:
-            defaults = ["Firman", "Champion", "Westinghouse", "Honda", "Generac", "Yamaha"]
+            defaults = ["Firman", "Westinghouse", "Honda", "Generac", "Yamaha", "DuroMax"]
             brand_terms = {b: [b.lower()] for b in defaults}
 
         counts: Counter = Counter()

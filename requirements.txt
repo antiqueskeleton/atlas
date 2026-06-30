@@ -4,3 +4,5 @@ anthropic==0.112.0
 google-genai==2.10.0
 matplotlib==3.11.0
 beautifulsoup4>=4.12
+requests>=2.31
+Pillow>=10.0

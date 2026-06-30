@@ -51,6 +51,21 @@ QFrame#SettingsCard QPushButton:pressed { background: #E5E7EB; }
 """
 
 
+class _TestWorker(QThread):
+    result = Signal(str)
+
+    def __init__(self, provider):
+        super().__init__()
+        self.provider = provider
+
+    def run(self):
+        try:
+            resp = self.provider.ask("Reply with one sentence: confirm you are working.")
+            self.result.emit(resp.executive_summary[:220])
+        except Exception as exc:
+            self.result.emit(f"Error: {exc}")
+
+
 class SettingsPage(QWidget):
     def __init__(self, app):
         super().__init__()
@@ -58,6 +73,7 @@ class SettingsPage(QWidget):
         self._key_inputs: dict[str, QLineEdit] = {}
         self._model_inputs: dict[str, QLineEdit] = {}
         self._show_btns: dict[str, QPushButton] = {}
+        self._test_workers: list = []
         self._build_ui()
 
     def _build_ui(self):
@@ -305,8 +321,23 @@ class SettingsPage(QWidget):
         kr = KnowledgeRepository()
         vr = VisibilityRepository()
 
+        import os
         checks: list[tuple[str, str, str, str | None, str | None]] = []
         # (status, label, detail, action_label, action_key)
+
+        # 0a — Target brand configured
+        brand = self.app.config_service.get_target_brand()
+        if not brand:
+            checks.append(("red", "Target Brand", "No target brand set — configure it in the Target Brand card above.", None, None))
+        else:
+            checks.append(("green", "Target Brand", f"Tracking: {brand}", None, None))
+
+        # 0b — At least one API key configured
+        keys_set = sum(1 for k in _PROVIDERS if self.app.config_service.get_api_key(k))
+        if keys_set == 0:
+            checks.append(("red", "API Keys", "No API keys configured — add at least one provider key above.", None, None))
+        else:
+            checks.append(("green", "API Keys", f"{keys_set} of {len(_PROVIDERS)} providers configured.", None, None))
 
         # 1 — Stuck intelligence runs
         stuck = ir.get_stuck_runs(older_than_minutes=30)
@@ -403,6 +434,21 @@ class SettingsPage(QWidget):
             ))
         else:
             checks.append(("green", "Prompt Library", f"{len(families)} families in CSV.", None, None))
+
+        # 8 — Failed intelligence runs
+        with sqlite3.connect(get_db_path()) as conn:
+            failed_count = conn.execute(
+                "SELECT COUNT(*) FROM intelligence_runs WHERE status = 'failed'"
+            ).fetchone()[0]
+        if failed_count > 0:
+            checks.append(("amber", "Failed Runs", f"{failed_count} intelligence run(s) ended in failure — informational.", None, None))
+        else:
+            checks.append(("green", "Failed Runs", "No failed intelligence runs.", None, None))
+
+        # 9 — Database file size
+        db_path = get_db_path()
+        db_mb = os.path.getsize(db_path) / (1024 * 1024) if os.path.exists(db_path) else 0
+        checks.append(("green", "Database", f"{db_mb:.1f} MB on disk.", None, None))
 
         self._health_check_data = {"stuck": stuck, "unparsed": unparsed}
         self._render_health_rows(checks)
@@ -555,7 +601,13 @@ class SettingsPage(QWidget):
 
         label = _PROVIDERS.get(provider_key, (provider_key,))[0]
         self.status.setText(f"Testing {label} ({provider.model})…")
-        self.status.repaint()
 
-        response = provider.ask("Reply with one sentence: confirm you are working.")
-        self.status.setText(f"{label} [{provider.model}]: {response.executive_summary[:220]}")
+        worker = _TestWorker(provider)
+        self._test_workers.append(worker)
+        worker.result.connect(
+            lambda text, lbl=label, mdl=provider.model: self.status.setText(f"{lbl} [{mdl}]: {text}")
+        )
+        worker.finished.connect(
+            lambda w=worker: self._test_workers.remove(w) if w in self._test_workers else None
+        )
+        worker.start()

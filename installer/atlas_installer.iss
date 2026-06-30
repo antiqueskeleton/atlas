@@ -1,13 +1,13 @@
 ; Atlas AI - Inno Setup Installer Script
-; Firman Power Equipment
+; dweeb.co
 ;
 ; Requires Inno Setup 6+  https://jrsoftware.org/isdl.php
 ; Build with:  ISCC.exe installer\atlas_installer.iss
-; (or use build.bat which runs both PyInstaller and ISCC)
+; (or use build.bat which runs ICO generation, PyInstaller, and ISCC)
 
 #define AppName      "Atlas AI"
-#define AppVersion   "0.2"
-#define AppPublisher "Firman Power Equipment"
+#define AppVersion   "0.7"
+#define AppPublisher "dweeb.co"
 #define AppExeName   "Atlas AI.exe"
 #define BuildDir     "..\dist\Atlas AI"
 #define OutDir       "..\dist\installer"
@@ -17,19 +17,20 @@ AppId={{E7C3B1A4-9F2D-4E87-B6AC-FPE20260629}}
 AppName={#AppName}
 AppVersion={#AppVersion}
 AppPublisher={#AppPublisher}
-AppPublisherURL=https://www.firmanpowerequipment.com
-AppSupportURL=https://www.firmanpowerequipment.com
-AppUpdatesURL=https://www.firmanpowerequipment.com
-DefaultDirName={autopf}\{#AppPublisher}\{#AppName}
-DefaultGroupName={#AppPublisher}\{#AppName}
+AppPublisherURL=https://dweeb.co
+AppSupportURL=https://dweeb.co
+AppUpdatesURL=https://dweeb.co
+DefaultDirName={autopf}\{#AppName}
+DefaultGroupName={#AppName}
 DisableProgramGroupPage=auto
 OutputDir={#OutDir}
 OutputBaseFilename=AtlasAI-v{#AppVersion}-Setup
+SetupIconFile=atlas.ico
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
 PrivilegesRequired=admin
-ArchitecturesInstallIn64BitMode=x64
+ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0
 UninstallDisplayIcon={app}\{#AppExeName}
 
@@ -44,9 +45,9 @@ Name: "desktopicon"; Description: "Create a &desktop shortcut"; GroupDescription
 Source: "{#BuildDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{group}\{#AppName}";         Filename: "{app}\{#AppExeName}"
+Name: "{group}\{#AppName}";           Filename: "{app}\{#AppExeName}"
 Name: "{group}\Uninstall {#AppName}"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\{#AppName}";   Filename: "{app}\{#AppExeName}"; Tasks: desktopicon
+Name: "{autodesktop}\{#AppName}";     Filename: "{app}\{#AppExeName}"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\{#AppExeName}"; \
@@ -54,14 +55,12 @@ Filename: "{app}\{#AppExeName}"; \
   Flags: nowait postinstall skipifsilent
 
 [UninstallDelete]
-; Remove AppData config and database on uninstall (user prompted via Code section)
-; We do NOT delete %APPDATA%\Atlas automatically — user data is preserved
+; User data in %APPDATA%\Atlas is preserved on uninstall
 
 [Code]
 procedure InitializeWizard;
 begin
-  // Database and user config are created on first app launch in
-  // %APPDATA%\Atlas\ — the installer does not need to set them up.
+  // Database and user config are created on first launch in %APPDATA%\Atlas\
 end;
 
 function PrepareToInstall(var NeedsRestart: Boolean): String;

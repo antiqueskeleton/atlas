@@ -114,9 +114,123 @@ class KnowledgeRepository:
     def __init__(self):
         self._db = get_db_path()
         self._data = get_data_dir()
+        self._ensure_core_tables()
 
     def _conn(self):
         return sqlite3.connect(str(self._db))
+
+    # ─── Core schema bootstrap ────────────────────────────────────────────────
+
+    def _ensure_core_tables(self):
+        """Create all core tables on a fresh DB; idempotent via IF NOT EXISTS."""
+        with self._conn() as c:
+            c.execute("""
+                CREATE TABLE IF NOT EXISTS markets (
+                    market_id   INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name        TEXT NOT NULL UNIQUE,
+                    description TEXT,
+                    status      TEXT DEFAULT 'active'
+                )
+            """)
+            c.execute(
+                "INSERT OR IGNORE INTO markets (market_id, name, description) VALUES (1, 'Portable Generators', 'US portable generator market')"
+            )
+            c.execute("""
+                CREATE TABLE IF NOT EXISTS brands (
+                    brand_id       INTEGER PRIMARY KEY AUTOINCREMENT,
+                    market_id      INTEGER NOT NULL DEFAULT 1,
+                    name           TEXT NOT NULL,
+                    website        TEXT DEFAULT '',
+                    description    TEXT DEFAULT '',
+                    active         INTEGER DEFAULT 1,
+                    aliases        TEXT DEFAULT '',
+                    tier           INTEGER DEFAULT 0,
+                    product_types  TEXT DEFAULT '',
+                    country        TEXT DEFAULT 'US',
+                    parent_company TEXT DEFAULT '',
+                    UNIQUE(market_id, name)
+                )
+            """)
+            c.execute("""
+                CREATE TABLE IF NOT EXISTS features (
+                    feature_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    market_id  INTEGER NOT NULL DEFAULT 1,
+                    name       TEXT NOT NULL,
+                    category   TEXT DEFAULT '',
+                    UNIQUE(market_id, name)
+                )
+            """)
+            c.execute("""
+                CREATE TABLE IF NOT EXISTS personas (
+                    persona_id   INTEGER PRIMARY KEY AUTOINCREMENT,
+                    market_id    INTEGER NOT NULL DEFAULT 1,
+                    name         TEXT NOT NULL,
+                    description  TEXT DEFAULT '',
+                    primary_goal TEXT DEFAULT '',
+                    concerns     TEXT DEFAULT '',
+                    priority     TEXT DEFAULT 'Medium',
+                    UNIQUE(market_id, name)
+                )
+            """)
+            c.execute("""
+                CREATE TABLE IF NOT EXISTS buying_scenarios (
+                    scenario_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    market_id   INTEGER NOT NULL DEFAULT 1,
+                    name        TEXT NOT NULL,
+                    description TEXT DEFAULT '',
+                    UNIQUE(market_id, name)
+                )
+            """)
+            c.execute("""
+                CREATE TABLE IF NOT EXISTS buying_stages (
+                    stage_id   INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name       TEXT NOT NULL UNIQUE,
+                    description TEXT DEFAULT '',
+                    sort_order INTEGER DEFAULT 0
+                )
+            """)
+            c.execute("""
+                CREATE TABLE IF NOT EXISTS opportunities (
+                    opportunity_id  INTEGER PRIMARY KEY AUTOINCREMENT,
+                    market_id       INTEGER NOT NULL DEFAULT 1,
+                    run_id          TEXT,
+                    created_date    TEXT NOT NULL,
+                    title           TEXT NOT NULL,
+                    description     TEXT DEFAULT '',
+                    evidence        TEXT DEFAULT '',
+                    confidence      REAL DEFAULT 0,
+                    priority        TEXT DEFAULT 'Medium',
+                    estimated_impact TEXT DEFAULT '',
+                    status          TEXT DEFAULT 'open'
+                )
+            """)
+            c.execute("""
+                CREATE TABLE IF NOT EXISTS prompt_families (
+                    family_id      INTEGER PRIMARY KEY AUTOINCREMENT,
+                    market_id      INTEGER NOT NULL DEFAULT 1,
+                    topic_id       INTEGER,
+                    scenario_id    INTEGER,
+                    persona_id     INTEGER,
+                    stage_id       INTEGER,
+                    family_name    TEXT NOT NULL,
+                    search_intent  TEXT DEFAULT '',
+                    business_value INTEGER DEFAULT 50,
+                    seasonality    TEXT DEFAULT '',
+                    priority       INTEGER DEFAULT 3,
+                    UNIQUE(market_id, family_name, persona_id, scenario_id)
+                )
+            """)
+            c.execute("""
+                CREATE TABLE IF NOT EXISTS market_questions (
+                    question_id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                    family_id            INTEGER NOT NULL,
+                    prompt_style         TEXT NOT NULL,
+                    prompt_text          TEXT NOT NULL,
+                    prompt_influence_score INTEGER DEFAULT 50,
+                    active               INTEGER DEFAULT 1,
+                    UNIQUE(family_id, prompt_style)
+                )
+            """)
 
     # ─── Brands ───────────────────────────────────────────────────────────────
 
@@ -128,6 +242,7 @@ class KnowledgeRepository:
             return
         self._in_migration = True
         try:
+            self._ensure_core_tables()
             with self._conn() as c:
                 for col, defn in [
                     ("aliases",        "TEXT    DEFAULT ''"),

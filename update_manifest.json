@@ -1,5 +1,5 @@
-{
+﻿{
   "version": "0.7",
-  "download_url": "",
-  "release_notes": "Version 0.7 — multi-provider visibility collection, Intelligence Engine, Knowledge management with brand auto-discovery, Trends, Investigation analysts, and Health Check."
+  "download_url": "https://github.com/antiqueskeleton/atlas/releases/download/v0.7/AtlasAI-v0.7-Setup.exe",
+  "release_notes": "v0.7 — Tabbed investigation workspace, parallel intelligence synthesis, brand auto-discovery, collapsible navigation, improved packaging."
 }

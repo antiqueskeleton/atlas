@@ -1,6 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 # PyInstaller spec for Atlas AI
 # Run:  pyinstaller atlas.spec --clean --noconfirm
+# (or use build.bat which handles ICO generation + PyInstaller + Inno Setup)
 
 from PyInstaller.utils.hooks import collect_submodules, collect_data_files
 
@@ -14,7 +15,16 @@ hidden = (
     + [
         "anthropic",
         "openai",
+        "httpx",
         "google.genai",
+        "numpy",
+        "numpy.core",
+        "numpy.lib",
+        "requests",
+        "bs4",
+        "certifi",
+        "charset_normalizer",
+        "urllib3",
         "matplotlib.backends.backend_qtagg",
         "matplotlib.figure",
         "matplotlib.ticker",
@@ -22,6 +32,7 @@ hidden = (
         "sqlite3",
         "csv",
         "uuid",
+        "concurrent.futures",
     ]
 )
 
@@ -32,6 +43,7 @@ a = Analysis(
     datas=[
         ("data",   "data"),
         ("config", "config"),
+        ("images", "images"),
     ],
     hiddenimports=hidden,
     hookspath=[],
@@ -56,13 +68,13 @@ exe = EXE(
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    console=False,                  # windowless GUI app
+    console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    # icon="installer/atlas.ico",   # uncomment when icon is ready
+    icon="installer/atlas.ico",
 )
 
 coll = COLLECT(

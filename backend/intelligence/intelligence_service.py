@@ -2,6 +2,7 @@ import csv
 import re
 import uuid
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 
 from backend.intelligence.analysts import BuyingJourneyAnalyst, PersonaAnalyst, ProductAnalyst
@@ -156,11 +157,14 @@ class IntelligenceService:
                 )
 
         brand_stats = self._count_brands(collected)
-        opportunities = self._run_opportunity_pass(provider, collected)
+        with ThreadPoolExecutor(max_workers=2) as ex:
+            f_opp = ex.submit(self._run_opportunity_pass, provider, collected)
+            f_brief = ex.submit(self._run_briefing_pass, provider, collected, brand_stats)
+            opportunities = f_opp.result()
+            briefing = f_brief.result()
         parsed_opps = self._parse_opportunities(opportunities)
         if parsed_opps:
             self.repository.save_opportunities(run_id, parsed_opps)
-        briefing = self._run_briefing_pass(provider, collected, brand_stats)
 
         completed_at = datetime.now()
         duration = (completed_at - started_at).total_seconds()
@@ -229,11 +233,14 @@ class IntelligenceService:
                 )
 
         brand_stats = self._count_brands(collected)
-        opportunities = self._run_opportunity_pass(provider, collected)
+        with ThreadPoolExecutor(max_workers=2) as ex:
+            f_opp = ex.submit(self._run_opportunity_pass, provider, collected)
+            f_brief = ex.submit(self._run_briefing_pass, provider, collected, brand_stats)
+            opportunities = f_opp.result()
+            briefing = f_brief.result()
         parsed_opps = self._parse_opportunities(opportunities)
         if parsed_opps:
             self.repository.save_opportunities(run_id, parsed_opps)
-        briefing = self._run_briefing_pass(provider, collected, brand_stats)
 
         completed_at = datetime.now()
         duration = (completed_at - started_at).total_seconds()
@@ -461,7 +468,7 @@ class IntelligenceService:
         from backend.knowledge.knowledge_repository import KnowledgeRepository
         terms = KnowledgeRepository().get_brand_detection_terms()
         if not terms:
-            defaults = ["Firman", "Champion", "Westinghouse", "Honda", "Generac", "Yamaha", "Predator"]
+            defaults = ["Firman", "Westinghouse", "Honda", "Generac", "Yamaha", "Predator", "DuroMax"]
             return {b: [b.lower()] for b in defaults}
         return terms
 
