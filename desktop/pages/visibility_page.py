@@ -615,10 +615,14 @@ class VisibilityPage(QWidget):
         self._raw_prov_filter.setFixedWidth(160)
         self._raw_prov_filter.addItem("All Providers")
         self._raw_prov_filter.currentTextChanged.connect(self._filter_raw_data)
+        self._raw_count_lbl = QLabel("")
+        self._raw_count_lbl.setStyleSheet("color: #6B7280; font-size: 11px;")
+        self._raw_count_lbl.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         filter_row.addWidget(filter_lbl)
         filter_row.addWidget(self._raw_search, 1)
         filter_row.addWidget(prov_lbl)
         filter_row.addWidget(self._raw_prov_filter)
+        filter_row.addWidget(self._raw_count_lbl)
         filter_widget = QWidget()
         filter_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         filter_widget.setLayout(filter_row)
@@ -646,7 +650,8 @@ class VisibilityPage(QWidget):
         raw_lay.addWidget(filter_widget)
         raw_lay.addWidget(raw_split, 1)
 
-        self._raw_all_rows: list = []
+        self._raw_page_rows: list = []  # current page (≤ RAW_PAGE_SIZE rows) for row-click detail
+        self._RAW_PAGE_SIZE = 2000
 
         tabs.addTab(overview,      "Overview")
         tabs.addTab(brands_tab,    "Brands")
@@ -1005,26 +1010,16 @@ class VisibilityPage(QWidget):
         self._raw_runs_val.setText(str(stats["runs"]))
         self._raw_fam_val.setText(str(stats["families"]))
 
-        rows = self.service.repository.list_responses()
-        # Tuple: (id, run_id, provider, model, prompt, response, collected_at, family_display)
-        self._raw_all_rows = [
-            (
-                (r[6] or "")[:16],   # date
-                r[2] or "",          # provider
-                r[7] or "—",         # family (per-response, falls back to run label)
-                r[4] or "",          # prompt text
-                r[5] or "",          # full response
-            )
-            for r in rows
-        ]
-
+        # Rebuild provider filter dropdown without triggering a re-query
         current_prov = self._raw_prov_filter.currentText()
         self._raw_prov_filter.blockSignals(True)
         self._raw_prov_filter.clear()
         self._raw_prov_filter.addItem("All Providers")
-        providers = sorted({r[1] for r in self._raw_all_rows if r[1]})
-        for p in providers:
-            self._raw_prov_filter.addItem(p)
+        with self.service.repository.connect() as con:
+            for (p,) in con.execute(
+                "SELECT DISTINCT provider FROM visibility_responses WHERE provider != '' ORDER BY provider"
+            ).fetchall():
+                self._raw_prov_filter.addItem(p)
         idx = self._raw_prov_filter.findText(current_prov)
         self._raw_prov_filter.setCurrentIndex(idx if idx >= 0 else 0)
         self._raw_prov_filter.blockSignals(False)
@@ -1032,28 +1027,42 @@ class VisibilityPage(QWidget):
         self._filter_raw_data()
 
     def _filter_raw_data(self):
-        search = self._raw_search.text().lower().strip()
+        search = self._raw_search.text().strip()
         prov   = self._raw_prov_filter.currentText()
+        prov_filter = "" if prov == "All Providers" else prov
 
-        filtered = [
-            r for r in self._raw_all_rows
-            if (prov == "All Providers" or r[1] == prov)
-            and (not search or
-                 search in r[2].lower() or   # family
-                 search in r[3].lower() or   # prompt
-                 search in r[4].lower())      # response
+        total_matching = self.service.repository.count_responses_filtered(
+            search=search, provider=prov_filter
+        )
+        rows = self.service.repository.list_responses(
+            limit=self._RAW_PAGE_SIZE, offset=0,
+            search=search, provider=prov_filter,
+        )
+
+        # Tuple: (id, run_id, provider, model, prompt, response, collected_at, family_display)
+        self._raw_page_rows = [
+            (
+                (r[6] or "")[:16],
+                r[2] or "",
+                r[7] or "—",
+                r[4] or "",
+                r[5] or "",
+            )
+            for r in rows
         ]
 
+        showing = len(self._raw_page_rows)
+        if total_matching > showing:
+            self._raw_count_lbl.setText(f"Showing {showing:,} of {total_matching:,}")
+        elif total_matching > 0:
+            self._raw_count_lbl.setText(f"{total_matching:,} result{'s' if total_matching != 1 else ''}")
+        else:
+            self._raw_count_lbl.setText("No results")
+
         self._raw_tbl.setSortingEnabled(False)
-        self._raw_tbl.setRowCount(len(filtered))
-        for row_idx, (date, provider, family, prompt, response) in enumerate(filtered):
-            for col, val in enumerate((
-                date,
-                provider,
-                family,
-                prompt[:120],
-                response[:120],
-            )):
+        self._raw_tbl.setRowCount(showing)
+        for row_idx, (date, provider, family, prompt, response) in enumerate(self._raw_page_rows):
+            for col, val in enumerate((date, provider, family, prompt[:120], response[:120])):
                 item = QTableWidgetItem(str(val))
                 item.setFlags(item.flags() & ~Qt.ItemIsEditable)
                 self._raw_tbl.setItem(row_idx, col, item)
@@ -1061,21 +1070,9 @@ class VisibilityPage(QWidget):
         self._raw_detail_body.clear()
 
     def _on_raw_row_selected(self, row_idx: int):
-        if row_idx < 0:
+        if row_idx < 0 or row_idx >= len(self._raw_page_rows):
             return
-        search = self._raw_search.text().lower().strip()
-        prov   = self._raw_prov_filter.currentText()
-        filtered = [
-            r for r in self._raw_all_rows
-            if (prov == "All Providers" or r[1] == prov)
-            and (not search or
-                 search in r[2].lower() or
-                 search in r[3].lower() or
-                 search in r[4].lower())
-        ]
-        if row_idx >= len(filtered):
-            return
-        date, provider, family, prompt, response = filtered[row_idx]
+        date, provider, family, prompt, response = self._raw_page_rows[row_idx]
         self._raw_detail_body.setPlainText(
             f"Provider: {provider}  |  Family: {family}  |  Date: {date}\n"
             f"{'─' * 60}\n"
