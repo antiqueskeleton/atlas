@@ -1,12 +1,13 @@
 from pathlib import Path
 
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QPixmap
+from PySide6.QtCore import Qt, QSize
+from PySide6.QtGui import QIcon, QPixmap
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
     QListWidget,
+    QListWidgetItem,
     QMainWindow,
     QStatusBar,
     QTabWidget,
@@ -31,13 +32,13 @@ from desktop.updater import UpdateChecker, APP_VERSION
 
 
 _NAV_ITEMS = [
-    ("🏠", "Home"),
-    ("🔍", "Investigate"),
-    ("👁", "Visibility"),
-    ("💡", "Intelligence"),
-    ("📈", "Trends"),
-    ("🧠", "Knowledge"),
-    ("⚙", "Settings"),
+    ("🏠", "Home",         "nav_home.png"),
+    ("🔍", "Investigate",  "nav_investigate.png"),
+    ("👁",  "Visibility",  "nav_visibility.png"),
+    ("💡", "Intelligence", "nav_intelligence.png"),
+    ("📈", "Trends",       "nav_trends.png"),
+    ("🧠", "Knowledge",    "nav_knowledge.png"),
+    ("⚙",  "Settings",    "nav_settings.png"),
 ]
 
 
@@ -150,35 +151,33 @@ class AtlasMainWindow(QMainWindow):
         # ── Navigation list ───────────────────────────────────────────────────
         self.nav = QListWidget()
         self.nav.setObjectName("AtlasNav")
-        for icon, label in _NAV_ITEMS:
-            self.nav.addItem(f"  {icon}  {label}")
+        self.nav.setIconSize(QSize(20, 20))
+        self.nav.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        for emoji, label, icon_file in _NAV_ITEMS:
+            icon_path = _IMAGES_DIR / icon_file
+            if icon_path.exists():
+                item = QListWidgetItem(QIcon(str(icon_path)), f"  {label}")
+            else:
+                item = QListWidgetItem(f"  {emoji}  {label}")
+            self.nav.addItem(item)
         self.nav.setCurrentRow(0)
         self.nav.currentRowChanged.connect(self._on_nav_changed)
 
-        # ── Version footer ────────────────────────────────────────────────────
-        self._nav_version = QLabel("v 0.7  ·  Atlas AI")
-        self._nav_version.setStyleSheet(
-            f"color: {STEEL}; font-size: 10px; padding: 10px 16px; "
-            "border: none; background: transparent;"
-        )
-        self._nav_version.setAlignment(Qt.AlignLeft | Qt.AlignBottom)
-
         # ── Collapse toggle button ────────────────────────────────────────────
-        self._nav_toggle_btn = QPushButton("«  Collapse")
+        self._nav_toggle_btn = QPushButton("‹‹  Collapse")
         self._nav_toggle_btn.setCursor(Qt.PointingHandCursor)
         self._nav_toggle_btn.setToolTip("Collapse navigation")
-        self._nav_toggle_btn.setFixedHeight(34)
+        self._nav_toggle_btn.setFixedHeight(40)
         self._nav_toggle_btn.setStyleSheet(
-            f"QPushButton {{ background: transparent; color: {STEEL}; border: none; "
-            "font-size: 12px; padding: 4px 16px; text-align: left; }}"
-            f"QPushButton:hover {{ color: {PRIMARY}; background: {SLATE}; }}"
+            f"QPushButton {{ background: {SLATE}; color: {SILVER}; "
+            f"border: none; border-top: 1px solid {STEEL}; "
+            "font-size: 12px; font-weight: 600; padding: 4px 16px; text-align: left; }}"
+            f"QPushButton:hover {{ color: white; background: #2D3F55; }}"
         )
         self._nav_toggle_btn.clicked.connect(self._toggle_nav)
 
         layout.addWidget(self._nav_header)
-        layout.addWidget(self.nav)
-        layout.addStretch()
-        layout.addWidget(self._nav_version)
+        layout.addWidget(self.nav, 1)
         layout.addWidget(self._nav_toggle_btn)
         self._nav_panel.setLayout(layout)
         return self._nav_panel
@@ -191,13 +190,16 @@ class AtlasMainWindow(QMainWindow):
         self._logo_full.setVisible(not c)
         self._logo_icon.setVisible(c)
         self._nav_header.setFixedHeight(56 if c else self._nav_header_height)
-        self._nav_version.setVisible(not c)
 
         if c:
-            for i, (icon, _) in enumerate(_NAV_ITEMS):
+            for i, (emoji, _, icon_file) in enumerate(_NAV_ITEMS):
                 item = self.nav.item(i)
-                item.setText(icon)
+                if (_IMAGES_DIR / icon_file).exists():
+                    item.setText("")
+                else:
+                    item.setText(emoji)
                 item.setTextAlignment(Qt.AlignCenter)
+            self.nav.setIconSize(QSize(30, 30))
             self.nav.setStyleSheet(f"""
                 QListWidget#AtlasNav {{
                     background: {NAVY};
@@ -207,7 +209,7 @@ class AtlasMainWindow(QMainWindow):
                 }}
                 QListWidget#AtlasNav::item {{
                     color: {SILVER};
-                    padding: 14px 0px;
+                    padding: 12px 0px;
                     border-radius: 6px;
                     margin: 2px 4px;
                     font-size: 22px;
@@ -221,25 +223,31 @@ class AtlasMainWindow(QMainWindow):
                     color: white;
                 }}
             """)
-            self._nav_toggle_btn.setText("»")
+            self._nav_toggle_btn.setText("››")
             self._nav_toggle_btn.setToolTip("Expand navigation")
             self._nav_toggle_btn.setStyleSheet(
-                f"QPushButton {{ background: transparent; color: {STEEL}; border: none; "
+                f"QPushButton {{ background: {SLATE}; color: {SILVER}; "
+                f"border: none; border-top: 1px solid {STEEL}; "
                 "font-size: 16px; font-weight: bold; padding: 4px 0px; text-align: center; }}"
-                f"QPushButton:hover {{ color: {PRIMARY}; background: {SLATE}; }}"
+                f"QPushButton:hover {{ color: white; background: #2D3F55; }}"
             )
         else:
-            for i, (icon, label) in enumerate(_NAV_ITEMS):
+            for i, (emoji, label, icon_file) in enumerate(_NAV_ITEMS):
                 item = self.nav.item(i)
-                item.setText(f"  {icon}  {label}")
+                if (_IMAGES_DIR / icon_file).exists():
+                    item.setText(f"  {label}")
+                else:
+                    item.setText(f"  {emoji}  {label}")
                 item.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+            self.nav.setIconSize(QSize(20, 20))
             self.nav.setStyleSheet("")
-            self._nav_toggle_btn.setText("«  Collapse")
+            self._nav_toggle_btn.setText("‹‹  Collapse")
             self._nav_toggle_btn.setToolTip("Collapse navigation")
             self._nav_toggle_btn.setStyleSheet(
-                f"QPushButton {{ background: transparent; color: {STEEL}; border: none; "
-                "font-size: 12px; padding: 4px 16px; text-align: left; }}"
-                f"QPushButton:hover {{ color: {PRIMARY}; background: {SLATE}; }}"
+                f"QPushButton {{ background: {SLATE}; color: {SILVER}; "
+                f"border: none; border-top: 1px solid {STEEL}; "
+                "font-size: 12px; font-weight: 600; padding: 4px 16px; text-align: left; }}"
+                f"QPushButton:hover {{ color: white; background: #2D3F55; }}"
             )
 
     def _build_pages(self) -> QWidget:
