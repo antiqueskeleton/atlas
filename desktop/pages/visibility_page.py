@@ -516,7 +516,7 @@ class VisibilityPage(QWidget):
         self._raw_tbl.setColumnWidth(1, 100)
         self._raw_tbl.setColumnWidth(2, 160)
         self._raw_tbl.setColumnWidth(3, 220)
-        self._raw_tbl.currentRowChanged.connect(self._on_raw_row_selected)
+        self._raw_tbl.currentCellChanged.connect(lambda row, *_: self._on_raw_row_selected(row))
 
         # Detail pane — full prompt + response on row select
         self._raw_detail_frame, self._raw_detail_body = _section("Full Response")
