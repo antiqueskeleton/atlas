@@ -34,6 +34,16 @@ class PromptLibrary:
     def list_families(self) -> list[str]:
         return sorted(self._by_family.keys())
 
+    def list_families_by_influence(self) -> list[str]:
+        """Return family names sorted by max prompt influence score, descending."""
+        scored = [
+            (max((s for s, _ in prompts), default=0), name)
+            for name, prompts in self._by_family.items()
+            if prompts
+        ]
+        scored.sort(reverse=True)
+        return [name for _, name in scored]
+
     def get(self, prompt_set: str) -> list[str]:
         """Return prompt strings for the given set name."""
         if prompt_set == _ALL_KEY:

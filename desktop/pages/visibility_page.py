@@ -224,7 +224,7 @@ class VisibilityPage(QWidget):
         ctrl_lay.setContentsMargins(14, 12, 14, 12)
         ctrl_lay.setSpacing(8)
 
-        # ── Row 1: Prompt set multi-select ────────────────────────────────────
+        # ── Row 1: Prompt set selector (searchable) ───────────────────────────
         row1 = QHBoxLayout()
         row1.setSpacing(10)
 
@@ -232,54 +232,113 @@ class VisibilityPage(QWidget):
         lbl_ps.setFixedWidth(88)
         lbl_ps.setAlignment(Qt.AlignTop | Qt.AlignLeft)
 
+        # Search box
+        self._ps_search = QLineEdit()
+        self._ps_search.setPlaceholderText("Search families…")
+        self._ps_search.setFixedHeight(26)
+        self._ps_search.setStyleSheet(
+            "QLineEdit { border: 1px solid #D1D5DB; border-radius: 4px; "
+            "padding: 2px 8px; font-size: 12px; }"
+        )
+        self._ps_search.textChanged.connect(self._filter_family_list)
+
+        # Checkbox container
         ps_inner = QWidget()
-        ps_lay = QVBoxLayout()
-        ps_lay.setSpacing(3)
-        ps_lay.setContentsMargins(6, 4, 6, 4)
+        ps_inner.setStyleSheet("background: white;")
+        self._ps_check_lay = QVBoxLayout()
+        self._ps_check_lay.setSpacing(2)
+        self._ps_check_lay.setContentsMargins(6, 4, 6, 6)
 
         self._set_checks: dict[str, QCheckBox] = {}
-        all_sets = [s for s in self.service.prompt_library.list_sets() if s != "All Prompts"]
-        for set_name in all_sets:
+
+        families = self.service.prompt_library.list_families()
+        families_set = set(families)
+        scenarios = sorted(
+            s for s in self.service.prompt_library.list_sets()
+            if s != "All Prompts" and s not in families_set
+        )
+
+        def _section_hdr(text):
+            lbl = QLabel(text)
+            lbl.setStyleSheet(
+                "font-size: 10px; font-weight: bold; color: #9CA3AF; "
+                "padding: 4px 0 1px 0; background: white;"
+            )
+            return lbl
+
+        self._fam_hdr = _section_hdr(f"PROMPT FAMILIES  ({len(families)})")
+        self._ps_check_lay.addWidget(self._fam_hdr)
+
+        for set_name in families:
             n = self.service.prompt_library.count(set_name)
             cb = QCheckBox(f"{set_name}  ({n})")
+            cb.setStyleSheet("font-size: 12px;")
             cb.stateChanged.connect(self._on_sets_changed)
             self._set_checks[set_name] = cb
-            ps_lay.addWidget(cb)
-        ps_lay.addStretch()
-        ps_inner.setLayout(ps_lay)
+            self._ps_check_lay.addWidget(cb)
+
+        if scenarios:
+            self._scen_hdr = _section_hdr(f"SCENARIOS  ({len(scenarios)})")
+            self._ps_check_lay.addWidget(self._scen_hdr)
+            for set_name in scenarios:
+                n = self.service.prompt_library.count(set_name)
+                cb = QCheckBox(f"{set_name}  ({n})")
+                cb.setStyleSheet("font-size: 12px;")
+                cb.stateChanged.connect(self._on_sets_changed)
+                self._set_checks[set_name] = cb
+                self._ps_check_lay.addWidget(cb)
+        else:
+            self._scen_hdr = None
+
+        self._ps_check_lay.addStretch()
+        ps_inner.setLayout(self._ps_check_lay)
 
         ps_scroll = QScrollArea()
         ps_scroll.setWidget(ps_inner)
         ps_scroll.setWidgetResizable(True)
-        ps_scroll.setFixedHeight(96)
+        ps_scroll.setFixedHeight(190)
         ps_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         ps_scroll.setStyleSheet(
-            "QScrollArea { border: 1px solid #D1D5DB; border-radius: 4px; background: transparent; }"
+            "QScrollArea { border: 1px solid #D1D5DB; border-radius: 4px; background: white; }"
         )
 
+        # Stack search + scroll vertically
+        ps_center = QVBoxLayout()
+        ps_center.setSpacing(4)
+        ps_center.setContentsMargins(0, 0, 0, 0)
+        ps_center.addWidget(self._ps_search)
+        ps_center.addWidget(ps_scroll)
+        ps_center_w = QWidget()
+        ps_center_w.setLayout(ps_center)
+
+        # Right control column
         btn_all = QPushButton("All")
-        btn_all.setFixedWidth(42)
-        btn_all.setStyleSheet("font-size: 11px; padding: 2px 4px;")
-        btn_all.clicked.connect(self._select_all_sets)
-
         btn_none = QPushButton("None")
-        btn_none.setFixedWidth(42)
-        btn_none.setStyleSheet("font-size: 11px; padding: 2px 4px;")
+        btn_top = QPushButton("Top 20")
+        for b in (btn_all, btn_none, btn_top):
+            b.setFixedWidth(58)
+            b.setStyleSheet("font-size: 11px; padding: 3px 4px;")
+        btn_all.clicked.connect(self._select_all_sets)
         btn_none.clicked.connect(self._clear_sets)
+        btn_top.clicked.connect(self._select_top_families)
+        btn_top.setToolTip("Select the 20 highest-influence prompt families")
 
-        self._count_lbl = QLabel("0 prompts selected")
-        self._count_lbl.setStyleSheet("color: #6B7280; font-size: 12px;")
+        self._count_lbl = QLabel("0 sets\n0 prompts")
+        self._count_lbl.setStyleSheet("color: #6B7280; font-size: 11px;")
+        self._count_lbl.setFixedWidth(72)
 
         ps_ctrl = QVBoxLayout()
         ps_ctrl.setSpacing(4)
+        ps_ctrl.setAlignment(Qt.AlignTop)
         ps_ctrl.addWidget(btn_all)
         ps_ctrl.addWidget(btn_none)
-        ps_ctrl.addSpacing(4)
+        ps_ctrl.addWidget(btn_top)
+        ps_ctrl.addSpacing(6)
         ps_ctrl.addWidget(self._count_lbl)
         ps_ctrl.addStretch()
 
         row1.addWidget(lbl_ps)
-        row1.addWidget(ps_scroll, 1)
+        row1.addWidget(ps_center_w, 1)
         row1.addLayout(ps_ctrl)
 
         # ── Row 2: Provider checkboxes with connection status ─────────────────
@@ -553,8 +612,9 @@ class VisibilityPage(QWidget):
 
     def _on_sets_changed(self):
         prompts, _ = self._get_selected_prompts()
-        n = len(prompts)
-        self._count_lbl.setText(f"{n} prompt{'s' if n != 1 else ''} selected")
+        n_prompts = len(prompts)
+        n_sets = sum(1 for cb in self._set_checks.values() if cb.isChecked())
+        self._count_lbl.setText(f"{n_sets} set{'s' if n_sets != 1 else ''}\n{n_prompts} prompts")
 
     def _select_all_sets(self):
         for cb in self._set_checks.values():
@@ -563,6 +623,30 @@ class VisibilityPage(QWidget):
     def _clear_sets(self):
         for cb in self._set_checks.values():
             cb.setChecked(False)
+
+    def _select_top_families(self, n: int = 20):
+        top = set(self.service.prompt_library.list_families_by_influence()[:n])
+        for name, cb in self._set_checks.items():
+            cb.setChecked(name in top)
+
+    def _filter_family_list(self, text: str):
+        text = text.lower().strip()
+        families = self.service.prompt_library.list_families()
+        families_set = set(families)
+        has_fam_visible = False
+        has_scen_visible = False
+        for name, cb in self._set_checks.items():
+            visible = not text or text in name.lower()
+            cb.setVisible(visible)
+            if visible:
+                if name in families_set:
+                    has_fam_visible = True
+                else:
+                    has_scen_visible = True
+        if self._fam_hdr:
+            self._fam_hdr.setVisible(has_fam_visible or not text)
+        if self._scen_hdr:
+            self._scen_hdr.setVisible(has_scen_visible or not text)
 
     def _get_selected_prompts(self) -> tuple:
         selected = [name for name, cb in self._set_checks.items() if cb.isChecked()]
