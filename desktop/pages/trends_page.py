@@ -253,14 +253,26 @@ class TrendsPage(QWidget):
     # ── Charts ─────────────────────────────────────────────────────────────────
 
     def _draw_score(self):
+        import numpy as np
+        from collections import defaultdict
+        from matplotlib.lines import Line2D
+
         s = self._summaries
         if not s:
             self._c_score.no_data()
             return
-        if len(s) < 5:
+
+        # Group runs by date → daily average / range
+        daily: dict[str, list] = defaultdict(list)
+        for run in s:
+            daily[run["date"]].append(run["target_score"])
+        dates = sorted(daily.keys())
+
+        if len(dates) < 2:
             self._c_score.no_data(
-                f"Score trend needs 5+ runs to be meaningful.\n"
-                f"You have {len(s)} — keep running Visibility to build history."
+                f"Score trend needs data from at least 2 different days.\n"
+                f"You have {len(s)} run{'s' if len(s) != 1 else ''} across "
+                f"{len(dates)} day — keep running Visibility to build history."
             )
             return
 
@@ -269,53 +281,64 @@ class TrendsPage(QWidget):
         ax = c.ax
         brand = self.app.get_target_brand() or "Target Brand"
 
-        labels  = [x["label"] for x in s]
-        scores  = [x["target_score"] for x in s]
-        providers = [x["provider"] for x in s]
-        xs = range(len(s))
+        xs    = np.arange(len(dates))
+        means = np.array([sum(daily[d]) / len(daily[d]) for d in dates])
+        lo    = np.array([min(daily[d]) for d in dates])
+        hi    = np.array([max(daily[d]) for d in dates])
 
-        # Color points by provider
-        for i, (score, prov) in enumerate(zip(scores, providers)):
-            clr = _PROVIDER_COLORS.get(prov, "#6B7280")
-            ax.scatter(i, score, color=clr, s=60, zorder=4)
+        # Shaded band only where multiple runs exist on the same day
+        if any(len(daily[d]) > 1 for d in dates):
+            ax.fill_between(xs, lo, hi, alpha=0.15, color="#2563EB", label="Daily range")
 
-        # Main line
-        ax.plot(xs, scores, color="#2563EB", linewidth=2, zorder=3)
+        # Daily average line
+        ax.plot(xs, means, color="#2563EB", linewidth=2.5, zorder=4, label="Daily avg")
 
-        # Moving average (window=3 if enough data)
-        if len(scores) >= 3:
-            ma = [
-                round(sum(scores[max(0, i-1):i+2]) / len(scores[max(0, i-1):i+2]), 1)
-                for i in range(len(scores))
-            ]
-            ax.plot(xs, ma, color="#93C5FD", linewidth=1.5,
-                    linestyle="--", label="3-run avg", zorder=2)
+        # Individual run dots coloured by provider
+        for run in s:
+            di = dates.index(run["date"])
+            clr = _PROVIDER_COLORS.get(run["provider"], "#6B7280")
+            ax.scatter(di, run["target_score"], color=clr, s=50, zorder=5, alpha=0.85)
 
-        # Mean reference line
-        mean_score = sum(scores) / len(scores)
-        ax.axhline(mean_score, color="#9CA3AF", linewidth=1,
-                   linestyle=":", label=f"Mean {mean_score:.1f}%")
+        # Trend line (linear regression on daily averages)
+        z = np.polyfit(xs, means, 1)
+        p = np.poly1d(z)
+        direction = "↑" if z[0] > 0.05 else ("↓" if z[0] < -0.05 else "→")
+        ax.plot(xs, p(xs), color="#EF4444", linewidth=1.5,
+                linestyle="--", label=f"Trend {direction}", zorder=3)
 
-        ax.set_xticks(list(xs))
-        ax.set_xticklabels(labels, rotation=35, ha="right", fontsize=8)
+        # Overall mean reference
+        overall = float(means.mean())
+        ax.axhline(overall, color="#9CA3AF", linewidth=1,
+                   linestyle=":", label=f"Avg {overall:.1f}%")
+
+        # X-axis: at most 12 evenly-spaced date labels (MM-DD)
+        step = max(1, len(dates) // 12)
+        ax.set_xticks(xs[::step])
+        ax.set_xticklabels([dates[i][5:] for i in range(0, len(dates), step)],
+                           rotation=30, ha="right", fontsize=9)
         ax.set_ylabel("Visibility Score (%)", fontsize=9)
         ax.set_ylim(bottom=0)
-        ax.set_title(f"{brand} Visibility Score Over Time", fontsize=11, fontweight="bold", pad=8)
+        ax.set_xlim(-0.5, len(dates) - 0.5)
+        ax.set_title(f"{brand} Visibility Score Over Time",
+                     fontsize=11, fontweight="bold", pad=8)
         ax.yaxis.set_major_formatter(mticker.FormatStrFormatter("%.0f%%"))
-        ax.legend(fontsize=8, loc="upper left")
 
-        # Provider legend patches
-        unique_provs = list(dict.fromkeys(providers))
-        if len(unique_provs) > 1:
-            from matplotlib.lines import Line2D
-            handles = [
-                Line2D([0], [0], marker="o", color="w",
-                       markerfacecolor=_PROVIDER_COLORS.get(p, "#6B7280"),
-                       markersize=7, label=p)
-                for p in unique_provs
-            ]
-            ax.legend(handles=handles, fontsize=8, loc="upper right", title="Provider", title_fontsize=8)
-
+        # Combined legend: providers + line types
+        unique_provs = list(dict.fromkeys(run["provider"] for run in s))
+        prov_handles = [
+            Line2D([0], [0], marker="o", color="w",
+                   markerfacecolor=_PROVIDER_COLORS.get(p, "#6B7280"),
+                   markersize=7, label=p)
+            for p in unique_provs
+        ]
+        line_handles = [
+            Line2D([0], [0], color="#2563EB", linewidth=2.5, label="Daily avg"),
+            Line2D([0], [0], color="#EF4444", linewidth=1.5,
+                   linestyle="--", label=f"Trend {direction}"),
+        ]
+        ax.legend(handles=prov_handles + line_handles,
+                  fontsize=8, loc="upper right", ncol=2,
+                  title="Provider / Line", title_fontsize=8)
         c.draw()
 
     def _draw_brands(self):
@@ -395,89 +418,136 @@ class TrendsPage(QWidget):
         c.draw()
 
     def _draw_features(self):
+        import numpy as np
+        from collections import defaultdict
+
         s = self._summaries
         if not s:
             self._c_features.no_data()
             return
-        if len(s) < 5:
+
+        # Group feature rates by date
+        daily_feat: dict[str, dict[str, list]] = defaultdict(lambda: defaultdict(list))
+        for run in s:
+            for feat, rate in run["feature_rates"].items():
+                daily_feat[run["date"]][feat].append(rate)
+        dates = sorted(daily_feat.keys())
+
+        if len(dates) < 2:
             self._c_features.no_data(
-                f"Feature trend needs 5+ runs to be meaningful.\n"
-                f"You have {len(s)} — keep running Visibility to build history."
+                f"Feature trend needs data from at least 2 different days.\n"
+                f"You have {len(s)} run{'s' if len(s) != 1 else ''} across "
+                f"{len(dates)} day — keep running Visibility to build history."
             )
+            return
+
+        # Top 6 features by overall average
+        totals: dict[str, float] = defaultdict(float)
+        for d in daily_feat.values():
+            for feat, rates in d.items():
+                totals[feat] += sum(rates) / len(rates)
+        top_feats = sorted(totals, key=lambda f: -totals[f])[:6]
+
+        if not top_feats:
+            self._c_features.no_data("No feature data available.")
             return
 
         c = self._c_features
         c.reset()
         ax = c.ax
+        xs = np.arange(len(dates))
 
-        series = self.service.feature_time_series(s, top_n=6)
-        if not series:
-            c.no_data("No feature data available.")
-            return
+        for i, feat in enumerate(top_feats):
+            daily_means = [
+                sum(daily_feat[d][feat]) / len(daily_feat[d][feat])
+                if feat in daily_feat[d] else 0
+                for d in dates
+            ]
+            color = _FEAT_PALETTE[i % len(_FEAT_PALETTE)]
+            ax.plot(xs, daily_means, color=color, linewidth=1.8,
+                    label=f"{feat} ({daily_means[-1]:.0f}%)",
+                    marker="o" if len(dates) <= 15 else None, markersize=3.5, zorder=3)
 
-        labels = [x["label"] for x in s]
-        xs = range(len(s))
-        colors = _FEAT_PALETTE
-
-        for i, (feat, rates) in enumerate(series.items()):
-            ax.plot(xs, rates, color=colors[i % len(colors)], linewidth=1.8,
-                    label=f"{feat} (now: {rates[-1]:.0f}%)",
-                    marker="o" if len(s) <= 15 else None, markersize=3.5, zorder=3)
-
-        ax.set_xticks(list(xs))
-        ax.set_xticklabels(labels, rotation=35, ha="right", fontsize=8)
+        step = max(1, len(dates) // 12)
+        ax.set_xticks(xs[::step])
+        ax.set_xticklabels([dates[i][5:] for i in range(0, len(dates), step)],
+                           rotation=30, ha="right", fontsize=9)
         ax.set_ylabel("Mention Rate (%)", fontsize=9)
         ax.set_ylim(bottom=0)
-        ax.set_title("Feature Mention Trends Over Time", fontsize=11, fontweight="bold", pad=8)
+        ax.set_xlim(-0.5, len(dates) - 0.5)
+        ax.set_title("Feature Mention Trends Over Time",
+                     fontsize=11, fontweight="bold", pad=8)
         ax.yaxis.set_major_formatter(mticker.FormatStrFormatter("%.0f%%"))
         ax.legend(fontsize=7, loc="upper left", ncol=2)
         c.draw()
 
     def _draw_position(self):
+        import numpy as np
+        from collections import defaultdict
+
         s = self._summaries
         if not s:
             self._c_position.no_data()
             return
-        if len(s) < 5:
+
+        # Group first-mention shares by date
+        daily_pos: dict[str, dict[str, list]] = defaultdict(lambda: defaultdict(list))
+        for run in s:
+            for b, share in run["first_mention_share"].items():
+                daily_pos[run["date"]][b].append(share)
+        dates = sorted(daily_pos.keys())
+
+        if len(dates) < 2:
             self._c_position.no_data(
-                f"Position trend needs 5+ runs to be meaningful.\n"
-                f"You have {len(s)} — keep running Visibility to build history."
+                f"Position trend needs data from at least 2 different days.\n"
+                f"You have {len(s)} run{'s' if len(s) != 1 else ''} across "
+                f"{len(dates)} day — keep running Visibility to build history."
             )
             return
+
+        brand = self.app.get_target_brand() or "Target Brand"
+
+        # Top 5 brands by cumulative first-mention share + target brand
+        totals: dict[str, float] = defaultdict(float)
+        for d in daily_pos.values():
+            for b, shares in d.items():
+                totals[b] += sum(shares) / len(shares)
+        ranked = sorted(totals, key=lambda b: -totals[b])[:5]
+        if brand not in ranked:
+            ranked.append(brand)
 
         c = self._c_position
         c.reset()
         ax = c.ax
-        brand = self.app.get_target_brand() or "Target Brand"
-
-        series = self.service.position_time_series(s, top_n=5)
-        if not series:
-            c.no_data("No position data available.")
-            return
-
-        labels = [x["label"] for x in s]
-        xs = list(range(len(s)))
+        xs = np.arange(len(dates))
         colors = list(_BRAND_PALETTE)
 
-        non_targets = [b for b in series if b != brand]
-        targets     = [b for b in series if b == brand]
-
+        non_targets = [b for b in ranked if b != brand]
         for i, b in enumerate(non_targets):
-            rates = series[b]
-            ax.plot(xs, rates, color=colors[(i+1) % len(colors)],
-                    linewidth=1.5, label=f"{b}", zorder=3,
-                    marker="o" if len(s) <= 15 else None, markersize=3.5)
+            daily_means = [
+                sum(daily_pos[d][b]) / len(daily_pos[d][b]) if b in daily_pos[d] else 0
+                for d in dates
+            ]
+            ax.plot(xs, daily_means, color=colors[(i + 1) % len(colors)],
+                    linewidth=1.5, label=b, zorder=3,
+                    marker="o" if len(dates) <= 15 else None, markersize=3.5)
 
-        for b in targets:
-            rates = series[b]
-            ax.plot(xs, rates, color="#2563EB", linewidth=2.5,
-                    label=f"{b} ★", zorder=5,
-                    marker="o" if len(s) <= 15 else None, markersize=5)
+        # Target brand highlighted
+        target_means = [
+            sum(daily_pos[d][brand]) / len(daily_pos[d][brand]) if brand in daily_pos[d] else 0
+            for d in dates
+        ]
+        ax.plot(xs, target_means, color="#2563EB", linewidth=2.5,
+                label=f"{brand} ★", zorder=5,
+                marker="o" if len(dates) <= 15 else None, markersize=5)
 
-        ax.set_xticks(xs)
-        ax.set_xticklabels(labels, rotation=35, ha="right", fontsize=8)
+        step = max(1, len(dates) // 12)
+        ax.set_xticks(xs[::step])
+        ax.set_xticklabels([dates[i][5:] for i in range(0, len(dates), step)],
+                           rotation=30, ha="right", fontsize=9)
         ax.set_ylabel("First-Mention Share (%)", fontsize=9)
         ax.set_ylim(bottom=0)
+        ax.set_xlim(-0.5, len(dates) - 0.5)
         ax.set_title(
             "First-Position Brand Mentions Over Time\n"
             "(% of responses where brand is mentioned first)",
