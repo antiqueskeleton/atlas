@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QScrollArea,
     QSizePolicy,
     QSplitter,
+    QTabWidget,
     QTableWidget,
     QTableWidgetItem,
     QTextEdit,
@@ -398,28 +399,6 @@ class VisibilityPage(QWidget):
 
         self._responses_frame, self._responses_body = _section("Latest Run Responses")
 
-        left_split = QSplitter(Qt.Vertical)
-        left_split.addWidget(self._pos_frame)
-        left_split.addWidget(self._brand_frame)
-        left_split.setSizes([300, 300])
-
-        right_split = QSplitter(Qt.Vertical)
-        right_split.addWidget(self._feature_frame)
-        right_split.addWidget(self._runs_frame)
-        right_split.addWidget(self._responses_frame)
-        right_split.setSizes([180, 200, 220])
-
-        h_split = QSplitter(Qt.Horizontal)
-        h_split.addWidget(left_split)
-        h_split.addWidget(right_split)
-        h_split.setSizes([580, 420])
-        h_split.setHandleWidth(6)
-
-        # ── Channel intelligence row ──────────────────────────────────────────
-        ch_lay = QHBoxLayout()
-        ch_lay.setSpacing(10)
-        ch_lay.setContentsMargins(0, 0, 0, 0)
-
         self._channel_frame, _, self._channel_tbl = _table_section(
             "Channel Intelligence", ["Channel", "Mentions", "Top Brands"]
         )
@@ -437,19 +416,61 @@ class VisibilityPage(QWidget):
         self._gap_tbl.setColumnWidth(2, 130)
         self._gap_tbl.setColumnWidth(3, 80)
 
+        # ── Tabbed layout ─────────────────────────────────────────────────────
+        tabs = QTabWidget()
+        tabs.setStyleSheet("""
+            QTabWidget::pane { border: none; padding-top: 8px; }
+            QTabBar::tab {
+                padding: 7px 20px; font-size: 12px; font-weight: 500;
+                border: none; border-bottom: 2px solid transparent;
+                background: transparent; color: #6B7280; margin-right: 4px;
+            }
+            QTabBar::tab:selected { color: #0B84FF; border-bottom: 2px solid #0B84FF; }
+            QTabBar::tab:hover:!selected { color: #111827; }
+        """)
+
+        # Tab 1 — Overview: recent runs + latest responses
+        overview = QWidget()
+        ov_lay = QVBoxLayout(overview)
+        ov_lay.setContentsMargins(0, 0, 0, 0)
+        ov_lay.setSpacing(8)
+        ov_lay.addWidget(self._runs_frame, 2)
+        ov_lay.addWidget(self._responses_frame, 3)
+
+        # Tab 2 — Brands: position share + mentions by provider
+        brands_tab = QWidget()
+        br_split = QSplitter(Qt.Vertical)
+        br_split.addWidget(self._pos_frame)
+        br_split.addWidget(self._brand_frame)
+        br_split.setSizes([500, 500])
+        br_lay = QVBoxLayout(brands_tab)
+        br_lay.setContentsMargins(0, 0, 0, 0)
+        br_lay.addWidget(br_split)
+
+        # Tab 3 — Features: full height feature mention list
+        features_tab = QWidget()
+        ft_lay = QVBoxLayout(features_tab)
+        ft_lay.setContentsMargins(0, 0, 0, 0)
+        ft_lay.addWidget(self._feature_frame)
+
+        # Tab 4 — Channels: intelligence table + gap table side by side
+        channels_tab = QWidget()
+        ch_lay = QHBoxLayout(channels_tab)
+        ch_lay.setContentsMargins(0, 0, 0, 0)
+        ch_lay.setSpacing(10)
         ch_lay.addWidget(self._channel_frame, 1)
         ch_lay.addWidget(self._gap_frame, 1)
 
-        ch_widget = QWidget()
-        ch_widget.setLayout(ch_lay)
-        ch_widget.setMinimumHeight(230)
+        tabs.addTab(overview,      "Overview")
+        tabs.addTab(brands_tab,    "Brands")
+        tabs.addTab(features_tab,  "Features")
+        tabs.addTab(channels_tab,  "Channels")
 
         root.addWidget(title)
         root.addWidget(subtitle)
         root.addWidget(ctrl_frame)
         root.addWidget(kpi_widget)
-        root.addWidget(h_split, 1)
-        root.addWidget(ch_widget)
+        root.addWidget(tabs, 1)
         self.setLayout(root)
 
         self._on_sets_changed()
