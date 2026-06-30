@@ -52,6 +52,7 @@ class VisibilityAnalytics:
     def summarize_responses(self, responses):
         brand_counts = Counter()
         feature_counts = Counter()
+        feature_brand_counts: dict[str, Counter] = defaultdict(Counter)
         provider_brand_counts = defaultdict(Counter)
         provider_response_counts = Counter()
         prompt_set_brand_counts = defaultdict(Counter)
@@ -89,12 +90,15 @@ class VisibilityAnalytics:
                 for index, (_, brand) in enumerate(mentioned_brands[:5], start=1):
                     brand_position_counts[index][brand] += 1
 
+            brand_names_in_response = [b for _, b in mentioned_brands]
+
             for feature in self.features:
                 if feature.lower() in text:
                     feature_counts[feature] += 1
+                    for brand in brand_names_in_response:
+                        feature_brand_counts[feature][brand] += 1
 
             # Channel co-occurrence: track which channels appear alongside which brands
-            brand_names_in_response = [b for _, b in mentioned_brands]
             for ch_name, ch_terms, _ in self.channels:
                 if any(t in text for t in ch_terms):
                     channel_counts[ch_name] += 1
@@ -186,6 +190,7 @@ class VisibilityAnalytics:
             "brand_position_share": brand_position_share,
             "brand_counts": dict(brand_counts),
             "feature_counts": dict(feature_counts),
+            "feature_brand_counts": {f: dict(c) for f, c in feature_brand_counts.items()},
             "provider_brand_counts": {
                 provider: dict(counts)
                 for provider, counts in provider_brand_counts.items()

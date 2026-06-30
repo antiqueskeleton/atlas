@@ -21,6 +21,7 @@ class PerplexityProvider(AIProvider):
                 risks=["Atlas cannot make a live Perplexity request without an API key."],
                 follow_up_questions=["Add a Perplexity API key in Settings."],
                 provider=self.provider_name,
+                is_error=True,
             )
 
         try:
@@ -44,4 +45,5 @@ class PerplexityProvider(AIProvider):
                     "Current models: sonar, sonar-pro, sonar-reasoning",
                 ],
                 provider=self.provider_name,
+                is_error=True,
             )

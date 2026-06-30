@@ -35,20 +35,22 @@ class _RunWorker(QThread):
     all_done = Signal()
     error    = Signal(str)
 
-    def __init__(self, service: VisibilityService, prompts: list, label: str, providers: list):
+    def __init__(self, service: VisibilityService, prompts: list, label: str,
+                 providers: list, prompt_families: dict):
         super().__init__()
         self.service = service
         self.prompts = prompts
         self.label = label
         self.providers = providers
+        self.prompt_families = prompt_families
         self._cancelled = False
         self._pause_event = threading.Event()
-        self._pause_event.set()  # start in running state
+        self._pause_event.set()
         self._total_prompts = len(prompts)
 
     def cancel(self):
         self._cancelled = True
-        self._pause_event.set()  # unblock if currently paused
+        self._pause_event.set()
 
     def pause(self):
         self._pause_event.clear()
@@ -68,7 +70,6 @@ class _RunWorker(QThread):
         lock = threading.Lock()
         completed = [0]
 
-        # Resolve all provider objects up-front (sequential, no race)
         pm = self.service.provider_manager
         provider_objects = {name: pm.get_provider(name) for name in self.providers}
 
@@ -91,6 +92,7 @@ class _RunWorker(QThread):
                     progress_callback=_cb,
                     cancelled=lambda: self._cancelled,
                     paused=lambda: not self._pause_event.is_set(),
+                    prompt_families=self.prompt_families,
                 )
                 self.run_done.emit(result)
             except Exception as exc:
@@ -126,6 +128,27 @@ def _stat_card(title, value, subtitle=""):
         s = QLabel(subtitle); s.setObjectName("CardSubtitle")
         lay.addWidget(s)
 
+    frame.setLayout(lay)
+    return frame, t, v
+
+
+def _compact_card(title, value):
+    """Single-row compact card: Title: Value — for dense KPI rows."""
+    frame = QFrame()
+    frame.setObjectName("StatCard")
+    frame.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+    lay = QHBoxLayout()
+    lay.setSpacing(6)
+    lay.setContentsMargins(10, 5, 10, 5)
+
+    t = QLabel(title + ":")
+    t.setStyleSheet("font-size: 11px; color: #6B7280; font-weight: 600;")
+    t.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+    v = QLabel(value)
+    v.setStyleSheet("font-size: 13px; font-weight: bold; color: #111827;")
+    lay.addWidget(t)
+    lay.addWidget(v)
+    lay.addStretch()
     frame.setLayout(lay)
     return frame, t, v
 
@@ -182,7 +205,7 @@ def _table_section(title, columns, stretch_last=True):
     return frame, t, tbl
 
 
-def _set_tbl(tbl: QTableWidget, rows: list[list]):
+def _set_tbl(tbl: QTableWidget, rows: list[list], tooltips: list[list] | None = None):
     tbl.setSortingEnabled(False)
     tbl.setRowCount(len(rows))
     for r, cells in enumerate(rows):
@@ -190,6 +213,10 @@ def _set_tbl(tbl: QTableWidget, rows: list[list]):
             item = QTableWidgetItem()
             item.setData(Qt.DisplayRole, val)
             item.setFlags(item.flags() & ~Qt.ItemIsEditable)
+            if tooltips and r < len(tooltips) and c < len(tooltips[r]):
+                tip = tooltips[r][c]
+                if tip:
+                    item.setToolTip(tip)
             tbl.setItem(r, c, item)
     tbl.setSortingEnabled(True)
 
@@ -225,7 +252,7 @@ class VisibilityPage(QWidget):
         ctrl_lay.setContentsMargins(14, 12, 14, 12)
         ctrl_lay.setSpacing(8)
 
-        # ── Row 1: Prompt set selector (searchable) ───────────────────────────
+        # ── Row 1: Prompt set selector ────────────────────────────────────────
         row1 = QHBoxLayout()
         row1.setSpacing(10)
 
@@ -233,7 +260,6 @@ class VisibilityPage(QWidget):
         lbl_ps.setFixedWidth(88)
         lbl_ps.setAlignment(Qt.AlignTop | Qt.AlignLeft)
 
-        # Search box
         self._ps_search = QLineEdit()
         self._ps_search.setPlaceholderText("Search families…")
         self._ps_search.setFixedHeight(26)
@@ -243,7 +269,6 @@ class VisibilityPage(QWidget):
         )
         self._ps_search.textChanged.connect(self._filter_family_list)
 
-        # Checkbox container — 2-column grid, rebuilt on each filter change
         self._ps_inner = QWidget()
         self._ps_inner.setStyleSheet("background: white;")
         self._ps_check_grid = QGridLayout()
@@ -296,7 +321,6 @@ class VisibilityPage(QWidget):
             "QScrollArea { border: 1px solid #D1D5DB; border-radius: 4px; background: white; }"
         )
 
-        # Stack search + scroll vertically
         ps_center = QVBoxLayout()
         ps_center.setSpacing(4)
         ps_center.setContentsMargins(0, 0, 0, 0)
@@ -305,7 +329,6 @@ class VisibilityPage(QWidget):
         ps_center_w = QWidget()
         ps_center_w.setLayout(ps_center)
 
-        # Right control column
         btn_all = QPushButton("All")
         btn_none = QPushButton("None")
         btn_top = QPushButton("Top 20")
@@ -335,7 +358,7 @@ class VisibilityPage(QWidget):
         row1.addWidget(ps_center_w, 1)
         row1.addLayout(ps_ctrl)
 
-        # ── Row 2: Provider checkboxes with connection status ─────────────────
+        # ── Row 2: Provider checkboxes ────────────────────────────────────────
         row2 = QHBoxLayout()
         row2.setSpacing(6)
         lbl_prov = QLabel("Providers:")
@@ -346,30 +369,25 @@ class VisibilityPage(QWidget):
         provider_keys = [k for k in self.app.provider_manager.list_providers() if k != "mock"]
         for key in provider_keys:
             has_key = bool(self.app.provider_manager.get_provider_api_key(key))
-
             cb = QCheckBox()
             cb.setChecked(has_key)
             self._provider_checks[key] = cb
-
             dot = QLabel("⬤")
             dot.setFixedWidth(16)
             dot.setStyleSheet(
                 f"color: {'#16A34A' if has_key else '#DC2626'}; font-size: 14px; padding: 0 1px;"
             )
-
             name_lbl = QLabel(key.capitalize())
             name_lbl.setStyleSheet("font-size: 12px;")
             name_lbl.setCursor(Qt.PointingHandCursor)
             name_lbl.mousePressEvent = lambda _e, c=cb: c.setChecked(not c.isChecked())
-
             row2.addWidget(cb)
             row2.addWidget(dot)
             row2.addWidget(name_lbl)
             row2.addSpacing(10)
-
         row2.addStretch()
 
-        # ── Row 3: Run / Pause / Stop + progress ──────────────────────────────
+        # ── Row 3: Run / Pause / Stop ─────────────────────────────────────────
         row3 = QHBoxLayout()
         row3.setSpacing(10)
 
@@ -433,7 +451,6 @@ class VisibilityPage(QWidget):
         self._last_card, _, self._last_val = _stat_card(
             "Last Collection", "—", "most recent visibility run"
         )
-        # Must use objectName selector to beat the global QLabel#CardValue rule
         self._last_val.setStyleSheet("QLabel#CardValue { font-size: 14px; font-weight: 600; }")
         for card in (self._score_card, self._total_card, self._top_card, self._last_card):
             kpi_row.addWidget(card)
@@ -442,20 +459,62 @@ class VisibilityPage(QWidget):
         kpi_widget.setLayout(kpi_row)
 
         # ── Content panels ────────────────────────────────────────────────────
-        self._pos_frame,       self._pos_body       = _section("Brand Position Share")
-        self._brand_frame,     self._brand_body     = _section("Brand Mentions by Provider")
-        self._feature_frame,   self._feature_body   = _section("Feature Mentions")
-        self._runs_frame, _,   self._runs_tbl       = _table_section(
-            "Recent Runs", ["Date", "Provider", "Prompt Set", "Responses"]
+
+        # Overview tab panels
+        self._runs_frame, _, self._runs_tbl = _table_section(
+            "Recent Runs",
+            ["Date", "Provider", "Families", "Results"],
+            stretch_last=False,
         )
         self._runs_tbl.setColumnWidth(0, 130)
         self._runs_tbl.setColumnWidth(1, 90)
-        self._runs_tbl.setColumnWidth(3, 80)
+        self._runs_tbl.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
+        self._runs_tbl.setColumnWidth(3, 90)
 
         self._responses_frame, self._responses_body = _section("Latest Run Responses")
 
+        # Brands tab — sortable tables instead of text areas
+        self._pos_frame, _, self._pos_tbl = _table_section(
+            "Brand Position Share",
+            ["Position", "Brand", "Mentions", "Share %"],
+            stretch_last=False,
+        )
+        self._pos_tbl.setColumnWidth(0, 70)
+        self._pos_tbl.setColumnWidth(2, 70)
+        self._pos_tbl.setColumnWidth(3, 70)
+        self._pos_tbl.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+
+        self._brand_frame, _, self._brand_tbl = _table_section(
+            "Brand Mentions by Provider",
+            ["Provider", "Brand", "Mentions"],
+            stretch_last=False,
+        )
+        self._brand_tbl.setColumnWidth(0, 110)
+        self._brand_tbl.setColumnWidth(2, 80)
+        self._brand_tbl.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+
+        # Features tab — two tables side by side
+        self._feat_total_frame, _, self._feat_total_tbl = _table_section(
+            "Feature Mentions",
+            ["Feature", "Total"],
+            stretch_last=False,
+        )
+        self._feat_total_tbl.setColumnWidth(1, 60)
+        self._feat_total_tbl.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
+
+        self._feat_brand_frame, _, self._feat_brand_tbl = _table_section(
+            "Feature Mentions by Brand",
+            ["Feature", "Brand", "Mentions"],
+            stretch_last=False,
+        )
+        self._feat_brand_tbl.setColumnWidth(2, 70)
+        self._feat_brand_tbl.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
+        self._feat_brand_tbl.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+
+        # Channels tab
         self._channel_frame, _, self._channel_tbl = _table_section(
-            "Channel Intelligence", ["Channel", "Mentions", "Top Brands"]
+            "Channel Intelligence",
+            ["Channel", "Mentions", "Top Brands"],
         )
         self._channel_tbl.setColumnWidth(0, 160)
         self._channel_tbl.setColumnWidth(1, 70)
@@ -484,7 +543,7 @@ class VisibilityPage(QWidget):
             QTabBar::tab:selected { color: #0B84FF; border-bottom: 2px solid #0B84FF; }
         """)
 
-        # Tab 1 — Overview: recent runs + latest responses — side by side
+        # Tab 1 — Overview
         overview = QWidget()
         ov_split = QSplitter(Qt.Horizontal)
         ov_split.addWidget(self._runs_frame)
@@ -494,7 +553,7 @@ class VisibilityPage(QWidget):
         ov_lay.setContentsMargins(0, 0, 0, 0)
         ov_lay.addWidget(ov_split)
 
-        # Tab 2 — Brands: position share + mentions by provider — side by side
+        # Tab 2 — Brands: two tables side by side
         brands_tab = QWidget()
         br_split = QSplitter(Qt.Horizontal)
         br_split.addWidget(self._pos_frame)
@@ -504,13 +563,17 @@ class VisibilityPage(QWidget):
         br_lay.setContentsMargins(0, 0, 0, 0)
         br_lay.addWidget(br_split)
 
-        # Tab 3 — Features: full height feature mention list
+        # Tab 3 — Features: totals + by-brand side by side
         features_tab = QWidget()
+        ft_split = QSplitter(Qt.Horizontal)
+        ft_split.addWidget(self._feat_total_frame)
+        ft_split.addWidget(self._feat_brand_frame)
+        ft_split.setSizes([340, 660])
         ft_lay = QVBoxLayout(features_tab)
         ft_lay.setContentsMargins(0, 0, 0, 0)
-        ft_lay.addWidget(self._feature_frame)
+        ft_lay.addWidget(ft_split)
 
-        # Tab 4 — Channels: intelligence table + gap table side by side
+        # Tab 4 — Channels
         channels_tab = QWidget()
         ch_lay = QHBoxLayout(channels_tab)
         ch_lay.setContentsMargins(0, 0, 0, 0)
@@ -518,19 +581,19 @@ class VisibilityPage(QWidget):
         ch_lay.addWidget(self._channel_frame, 1)
         ch_lay.addWidget(self._gap_frame, 1)
 
-        # Tab 5 — Raw Data: uninterpreted view of all stored responses
+        # Tab 5 — Raw Data
         raw_tab = QWidget()
         raw_lay = QVBoxLayout(raw_tab)
         raw_lay.setContentsMargins(0, 4, 0, 0)
-        raw_lay.setSpacing(8)
+        raw_lay.setSpacing(6)
 
-        # KPI row — pure counts, no derived scores
+        # Compact KPI row (single-line tiles)
         raw_kpi_row = QHBoxLayout()
-        raw_kpi_row.setSpacing(10)
-        self._raw_total_card, _, self._raw_total_val = _stat_card("Total Responses", "—")
-        self._raw_prov_card,  _, self._raw_prov_val  = _stat_card("Providers", "—")
-        self._raw_runs_card,  _, self._raw_runs_val  = _stat_card("Runs", "—")
-        self._raw_fam_card,   _, self._raw_fam_val   = _stat_card("Prompt Families", "—")
+        raw_kpi_row.setSpacing(8)
+        self._raw_total_card, _, self._raw_total_val = _compact_card("Total Responses", "—")
+        self._raw_prov_card,  _, self._raw_prov_val  = _compact_card("Providers", "—")
+        self._raw_runs_card,  _, self._raw_runs_val  = _compact_card("Runs", "—")
+        self._raw_fam_card,   _, self._raw_fam_val   = _compact_card("Prompt Families", "—")
         for card in (self._raw_total_card, self._raw_prov_card,
                      self._raw_runs_card, self._raw_fam_card):
             raw_kpi_row.addWidget(card)
@@ -544,7 +607,7 @@ class VisibilityPage(QWidget):
         filter_lbl = QLabel("Search:")
         filter_lbl.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self._raw_search = QLineEdit()
-        self._raw_search.setPlaceholderText("Filter by keyword in prompt or response…")
+        self._raw_search.setPlaceholderText("Filter by keyword in prompt, response, or family…")
         self._raw_search.textChanged.connect(self._filter_raw_data)
         prov_lbl = QLabel("Provider:")
         prov_lbl.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
@@ -560,18 +623,17 @@ class VisibilityPage(QWidget):
         filter_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         filter_widget.setLayout(filter_row)
 
-        # Response table
+        # Response table — Family now shows the per-response family name
         self._raw_frame, _, self._raw_tbl = _table_section(
             "Responses", ["Date", "Provider", "Family", "Prompt", "Response Preview"],
             stretch_last=True,
         )
         self._raw_tbl.setColumnWidth(0, 130)
         self._raw_tbl.setColumnWidth(1, 100)
-        self._raw_tbl.setColumnWidth(2, 160)
+        self._raw_tbl.setColumnWidth(2, 200)
         self._raw_tbl.setColumnWidth(3, 220)
         self._raw_tbl.currentCellChanged.connect(lambda row, *_: self._on_raw_row_selected(row))
 
-        # Detail pane — full prompt + response on row select
         self._raw_detail_frame, self._raw_detail_body = _section("Full Response")
         self._raw_detail_body.setReadOnly(True)
 
@@ -621,10 +683,9 @@ class VisibilityPage(QWidget):
     # ── Prompt set helpers ────────────────────────────────────────────────────
 
     def _on_sets_changed(self):
-        prompts, _ = self._get_selected_prompts()
-        n_prompts = len(prompts)
+        prompts, _, _fam = self._get_selected_prompts()
         n_sets = sum(1 for cb in self._set_checks.values() if cb.isChecked())
-        self._count_lbl.setText(f"{n_sets} set{'s' if n_sets != 1 else ''}\n{n_prompts} prompts")
+        self._count_lbl.setText(f"{n_sets} set{'s' if n_sets != 1 else ''}\n{len(prompts)} prompts")
 
     def _select_all_sets(self):
         for cb in self._set_checks.values():
@@ -676,19 +737,25 @@ class VisibilityPage(QWidget):
         self._ctrl_frame.setVisible(visible)
         self._collapse_btn.setText("▲  Hide Controls" if visible else "▼  Show Controls")
 
-    def _get_selected_prompts(self) -> tuple:
+    def _get_selected_prompts(self) -> tuple[list, str, dict]:
+        """Returns (prompts, label, prompt_families).
+        label is comma-separated family names.
+        prompt_families maps prompt_text → family_name.
+        """
         selected = [name for name, cb in self._set_checks.items() if cb.isChecked()]
         if not selected:
-            return [], ""
+            return [], "", {}
         prompts = []
-        seen = set()
+        prompt_families: dict[str, str] = {}
+        seen: set[str] = set()
         for name in selected:
             for p in self.service.prompt_library.get(name):
                 if p not in seen:
                     seen.add(p)
                     prompts.append(p)
-        label = selected[0] if len(selected) == 1 else f"Custom ({len(selected)} sets)"
-        return prompts, label
+                    prompt_families[p] = name
+        label = selected[0] if len(selected) == 1 else ", ".join(selected)
+        return prompts, label, prompt_families
 
     def _checked_providers(self) -> list:
         return [k for k, cb in self._provider_checks.items() if cb.isChecked()]
@@ -701,7 +768,7 @@ class VisibilityPage(QWidget):
             QMessageBox.warning(self, "No Provider", "Check at least one AI provider to run against.")
             return
 
-        prompts, label = self._get_selected_prompts()
+        prompts, label, prompt_families = self._get_selected_prompts()
         if not prompts:
             QMessageBox.warning(self, "No Prompts", "Select at least one prompt set.")
             return
@@ -732,7 +799,7 @@ class VisibilityPage(QWidget):
         self._progress.setValue(0)
         self._status_lbl.setText("Starting…")
 
-        self._worker = _RunWorker(self.service, prompts, label, providers)
+        self._worker = _RunWorker(self.service, prompts, label, providers, prompt_families)
         self._worker.progress.connect(self._on_progress)
         self._worker.run_done.connect(self._on_run_done)
         self._worker.all_done.connect(self._on_all_done)
@@ -764,8 +831,12 @@ class VisibilityPage(QWidget):
 
     def _on_run_done(self, result: dict):
         run = result["run"]
+        err = getattr(run, "error_count", 0)
+        parts = [f"{run.response_count} ok"]
+        if err:
+            parts.append(f"{err} failed (not stored)")
         self._status_lbl.setText(
-            f"{run.provider} — {run.response_count} responses in {run.duration_seconds:.1f}s"
+            f"{run.provider} — {', '.join(parts)} in {run.duration_seconds:.1f}s"
         )
         self.refresh()
 
@@ -809,67 +880,96 @@ class VisibilityPage(QWidget):
             self._top_title.setText("Visibility Mention Rank")
             self._top_val.setText("Unranked")
 
-        # Last Collection — two compact lines so it fits the tile at smaller font
+        # Last Collection
         if runs:
             dt = runs[0][4]
             self._last_val.setText(f"{dt[:10]}\n{dt[11:16]}")
         else:
             self._last_val.setText("Never")
 
-        # Brand Position Share
-        pos_text = "Factual mention order — not a recommendation rank.\n\n"
+        # ── Brand Position Share → sortable table ─────────────────────────────
         pos_counts = summary.get("brand_position_counts", {})
         pos_shares = summary.get("brand_position_share", {})
-        if pos_counts:
-            for pos in sorted(pos_counts.keys()):
-                pos_text += f"Position {pos}:\n"
-                for brand, count in pos_counts[pos].items():
-                    share = pos_shares.get(pos, {}).get(brand, 0)
-                    pos_text += f"  • {brand}: {count} ({share}%)\n"
-                pos_text += "\n"
-        else:
-            pos_text += "No data yet. Run a visibility collection first."
-        self._pos_body.setPlainText(pos_text)
+        pos_rows = []
+        for pos in sorted(pos_counts.keys()):
+            for brand, count in sorted(pos_counts[pos].items(), key=lambda x: -x[1]):
+                share = pos_shares.get(pos, {}).get(brand, 0)
+                pos_rows.append([pos, brand, count, f"{share}%"])
+        _set_tbl(self._pos_tbl, pos_rows)
 
-        # Brand Mentions by Provider
+        # ── Brand Mentions by Provider → sortable table ───────────────────────
         prov_brand = summary.get("provider_brand_counts", {})
-        prov_text = ""
-        if prov_brand:
-            for provider, brands in prov_brand.items():
-                prov_text += f"{provider}:\n"
-                for brand, count in sorted(brands.items(), key=lambda x: -x[1]):
-                    prov_text += f"  • {brand}: {count}\n"
-                prov_text += "\n"
-        else:
-            prov_text = "No provider brand data yet."
-        self._brand_body.setPlainText(prov_text)
+        prov_rows = []
+        for provider, brands in sorted(prov_brand.items()):
+            for brand, count in sorted(brands.items(), key=lambda x: -x[1]):
+                prov_rows.append([provider, brand, count])
+        _set_tbl(self._brand_tbl, prov_rows)
 
-        # Feature Mentions
+        # ── Feature Mentions total ────────────────────────────────────────────
         feature_counts = summary.get("feature_counts", {})
-        feat_text = "\n".join(
-            f"• {f}: {c}"
+        feat_rows = [
+            [f, c]
             for f, c in sorted(feature_counts.items(), key=lambda x: -x[1])
-        ) if feature_counts else "No feature data yet."
-        self._feature_body.setPlainText(feat_text)
-
-        # Recent Runs table
-        run_rows = [
-            [r[4][:16], r[1], r[3], r[7]]
-            for r in runs[:25]
         ]
-        _set_tbl(self._runs_tbl, run_rows)
+        _set_tbl(self._feat_total_tbl, feat_rows)
 
-        # Latest Run Responses
+        # ── Feature Mentions by Brand ─────────────────────────────────────────
+        feat_brand = summary.get("feature_brand_counts", {})
+        fb_rows = []
+        for feature, brands in sorted(feat_brand.items()):
+            for brand, count in sorted(brands.items(), key=lambda x: -x[1]):
+                fb_rows.append([feature, brand, count])
+        _set_tbl(self._feat_brand_tbl, fb_rows)
+
+        # ── Recent Runs table ─────────────────────────────────────────────────
+        # Columns: Date | Provider | Families | Results
+        # Families: first name + "+N more" if multiple; full list as tooltip
+        run_rows = []
+        run_tips = []
+        for r in runs[:25]:
+            prompt_set = r[3] or ""
+            err_count = r[9] if len(r) > 9 else 0
+            ok_count = r[7]
+
+            if ", " in prompt_set:
+                parts = [p.strip() for p in prompt_set.split(",")]
+                fam_display = f"{parts[0]}  +{len(parts) - 1} more"
+                fam_tip = "\n".join(parts)
+            else:
+                fam_display = prompt_set
+                fam_tip = ""
+
+            results = f"{ok_count} ok"
+            if err_count:
+                results += f",  {err_count} failed"
+
+            run_rows.append([r[4][:16], r[1], fam_display, results])
+            run_tips.append(["", "", fam_tip, ""])
+        _set_tbl(self._runs_tbl, run_rows, tooltips=run_tips)
+
+        # ── Latest Run Responses ──────────────────────────────────────────────
+        # Only successful responses are stored; show provider + error summary in header
         latest_id = runs[0][0] if runs else None
         resp_text = ""
         if latest_id:
+            latest_run = runs[0]
+            err_count = latest_run[9] if len(latest_run) > 9 else 0
+            provider = latest_run[1]
+            ok_count = latest_run[7]
+            header_line = f"✓ {provider}  —  {ok_count} successful response(s)"
+            if err_count:
+                header_line += f"  |  {err_count} API error(s) filtered out"
+            resp_text = header_line + "\n" + ("─" * 60) + "\n\n"
+
             for r in self.service.get_responses_for_run(latest_id):
-                resp_text += f"Prompt: {r[4]}\nResponse: {r[5][:400]}…\n{'─'*60}\n\n"
+                family = r[7] if len(r) > 7 and r[7] else ""
+                family_str = f"  [{family}]" if family else ""
+                resp_text += f"Prompt{family_str}: {r[4]}\nResponse: {r[5][:400]}…\n{'─'*60}\n\n"
         else:
             resp_text = "No responses available."
         self._responses_body.setPlainText(resp_text)
 
-        # Channel Intelligence table
+        # ── Channel Intelligence ──────────────────────────────────────────────
         channel_counts = summary.get("channel_counts", {})
         channel_brand_counts = summary.get("channel_brand_counts", {})
         ch_rows = []
@@ -881,7 +981,7 @@ class VisibilityPage(QWidget):
             ch_rows.append([ch, count, brand_str])
         _set_tbl(self._channel_tbl, ch_rows)
 
-        # Channel Gaps table
+        # ── Channel Gaps ──────────────────────────────────────────────────────
         gap_data = summary.get("firman_channel_gap", [])
         self._gap_title.setText(
             f"{brand_label} Channel Gaps  —  channels where competitors have stronger reach"
@@ -906,19 +1006,18 @@ class VisibilityPage(QWidget):
         self._raw_fam_val.setText(str(stats["families"]))
 
         rows = self.service.repository.list_responses()
-        # Build display tuples: (date, provider, family, prompt, response)
+        # Tuple: (id, run_id, provider, model, prompt, response, collected_at, family_display)
         self._raw_all_rows = [
             (
-                (r[6] or "")[:16],   # date (collected_at)
+                (r[6] or "")[:16],   # date
                 r[2] or "",          # provider
-                r[7] or "—",         # family (prompt_set from join)
+                r[7] or "—",         # family (per-response, falls back to run label)
                 r[4] or "",          # prompt text
                 r[5] or "",          # full response
             )
             for r in rows
         ]
 
-        # Repopulate provider filter (keep current selection if still valid)
         current_prov = self._raw_prov_filter.currentText()
         self._raw_prov_filter.blockSignals(True)
         self._raw_prov_filter.clear()
@@ -939,7 +1038,10 @@ class VisibilityPage(QWidget):
         filtered = [
             r for r in self._raw_all_rows
             if (prov == "All Providers" or r[1] == prov)
-            and (not search or search in r[3].lower() or search in r[4].lower())
+            and (not search or
+                 search in r[2].lower() or   # family
+                 search in r[3].lower() or   # prompt
+                 search in r[4].lower())      # response
         ]
 
         self._raw_tbl.setSortingEnabled(False)
@@ -966,7 +1068,10 @@ class VisibilityPage(QWidget):
         filtered = [
             r for r in self._raw_all_rows
             if (prov == "All Providers" or r[1] == prov)
-            and (not search or search in r[3].lower() or search in r[4].lower())
+            and (not search or
+                 search in r[2].lower() or
+                 search in r[3].lower() or
+                 search in r[4].lower())
         ]
         if row_idx >= len(filtered):
             return

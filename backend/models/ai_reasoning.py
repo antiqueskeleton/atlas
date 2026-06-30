@@ -11,3 +11,4 @@ class AIReasoning:
     supporting_evidence: list[int] = field(default_factory=list)
     provider: str = ""
     raw_response: str = ""
+    is_error: bool = False
