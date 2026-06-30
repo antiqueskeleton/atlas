@@ -92,41 +92,60 @@ class AtlasMainWindow(QMainWindow):
         self.setCentralWidget(root_widget)
 
     def _build_nav(self) -> QWidget:
-        panel = QWidget()
-        panel.setFixedWidth(210)
-        panel.setStyleSheet(f"background: {NAVY};")
+        self._nav_collapsed = False
+        self._nav_panel = QWidget()
+        self._nav_panel.setFixedWidth(210)
+        self._nav_panel.setStyleSheet(f"background: {NAVY};")
 
         layout = QVBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
         # ── Brand header ──────────────────────────────────────────────────────
-        header = QWidget()
-        header.setStyleSheet(
+        self._nav_header = QWidget()
+        self._nav_header.setStyleSheet(
             f"background: {NAVY}; border-bottom: 1px solid {STEEL};"
         )
         h_lay = QVBoxLayout()
         h_lay.setContentsMargins(8, 8, 8, 8)
         h_lay.setSpacing(0)
 
-        logo_lbl = QLabel()
-        logo_lbl.setStyleSheet("border: none; background: transparent;")
-        logo_lbl.setAlignment(Qt.AlignCenter)
+        # Full sidebar logo (expanded mode)
+        self._logo_full = QLabel()
+        self._logo_full.setStyleSheet("border: none; background: transparent;")
+        self._logo_full.setAlignment(Qt.AlignCenter)
         logo_pix = QPixmap(str(_IMAGES_DIR / "atlas_sidebar.png"))
         if not logo_pix.isNull():
             scaled = logo_pix.scaledToWidth(194, Qt.SmoothTransformation)
-            logo_lbl.setPixmap(scaled)
-            header.setFixedHeight(scaled.height() + 16)
+            self._logo_full.setPixmap(scaled)
+            self._nav_header_height = scaled.height() + 16
         else:
-            logo_lbl.setText("ATLAS")
-            logo_lbl.setStyleSheet(
+            self._logo_full.setText("ATLAS")
+            self._logo_full.setStyleSheet(
                 f"font-size: 22px; font-weight: bold; color: {PRIMARY}; "
                 "letter-spacing: 4px; border: none; background: transparent;"
             )
-            header.setFixedHeight(76)
+            self._nav_header_height = 76
+        self._nav_header.setFixedHeight(self._nav_header_height)
 
-        h_lay.addWidget(logo_lbl)
-        header.setLayout(h_lay)
+        # Small icon logo (collapsed mode)
+        self._logo_icon = QLabel()
+        self._logo_icon.setAlignment(Qt.AlignCenter)
+        self._logo_icon.setStyleSheet("border: none; background: transparent;")
+        icon_pix = QPixmap(str(_IMAGES_DIR / "atlas_icon.png"))
+        if not icon_pix.isNull():
+            self._logo_icon.setPixmap(icon_pix.scaledToWidth(38, Qt.SmoothTransformation))
+        else:
+            self._logo_icon.setText("A")
+            self._logo_icon.setStyleSheet(
+                f"font-size: 22px; font-weight: bold; color: {PRIMARY}; "
+                "border: none; background: transparent;"
+            )
+        self._logo_icon.setVisible(False)
+
+        h_lay.addWidget(self._logo_full)
+        h_lay.addWidget(self._logo_icon)
+        self._nav_header.setLayout(h_lay)
 
         # ── Navigation list ───────────────────────────────────────────────────
         self.nav = QListWidget()
@@ -137,19 +156,91 @@ class AtlasMainWindow(QMainWindow):
         self.nav.currentRowChanged.connect(self._on_nav_changed)
 
         # ── Version footer ────────────────────────────────────────────────────
-        version = QLabel("v 0.7  ·  Atlas AI")
-        version.setStyleSheet(
+        self._nav_version = QLabel("v 0.7  ·  Atlas AI")
+        self._nav_version.setStyleSheet(
             f"color: {STEEL}; font-size: 10px; padding: 10px 16px; "
             "border: none; background: transparent;"
         )
-        version.setAlignment(Qt.AlignLeft | Qt.AlignBottom)
+        self._nav_version.setAlignment(Qt.AlignLeft | Qt.AlignBottom)
 
-        layout.addWidget(header)
+        # ── Collapse toggle button ────────────────────────────────────────────
+        self._nav_toggle_btn = QPushButton("«  Collapse")
+        self._nav_toggle_btn.setCursor(Qt.PointingHandCursor)
+        self._nav_toggle_btn.setToolTip("Collapse navigation")
+        self._nav_toggle_btn.setFixedHeight(34)
+        self._nav_toggle_btn.setStyleSheet(
+            f"QPushButton {{ background: transparent; color: {STEEL}; border: none; "
+            "font-size: 12px; padding: 4px 16px; text-align: left; }}"
+            f"QPushButton:hover {{ color: {PRIMARY}; background: {SLATE}; }}"
+        )
+        self._nav_toggle_btn.clicked.connect(self._toggle_nav)
+
+        layout.addWidget(self._nav_header)
         layout.addWidget(self.nav)
         layout.addStretch()
-        layout.addWidget(version)
-        panel.setLayout(layout)
-        return panel
+        layout.addWidget(self._nav_version)
+        layout.addWidget(self._nav_toggle_btn)
+        self._nav_panel.setLayout(layout)
+        return self._nav_panel
+
+    def _toggle_nav(self):
+        self._nav_collapsed = not self._nav_collapsed
+        c = self._nav_collapsed
+
+        self._nav_panel.setFixedWidth(64 if c else 210)
+        self._logo_full.setVisible(not c)
+        self._logo_icon.setVisible(c)
+        self._nav_header.setFixedHeight(56 if c else self._nav_header_height)
+        self._nav_version.setVisible(not c)
+
+        if c:
+            for i, (icon, _) in enumerate(_NAV_ITEMS):
+                item = self.nav.item(i)
+                item.setText(icon)
+                item.setTextAlignment(Qt.AlignCenter)
+            self.nav.setStyleSheet(f"""
+                QListWidget#AtlasNav {{
+                    background: {NAVY};
+                    border: none;
+                    outline: none;
+                    padding: 6px 0;
+                }}
+                QListWidget#AtlasNav::item {{
+                    color: {SILVER};
+                    padding: 14px 0px;
+                    border-radius: 6px;
+                    margin: 2px 4px;
+                    font-size: 22px;
+                }}
+                QListWidget#AtlasNav::item:hover {{
+                    background: {SLATE};
+                    color: {LIGHT};
+                }}
+                QListWidget#AtlasNav::item:selected {{
+                    background: {PRIMARY};
+                    color: white;
+                }}
+            """)
+            self._nav_toggle_btn.setText("»")
+            self._nav_toggle_btn.setToolTip("Expand navigation")
+            self._nav_toggle_btn.setStyleSheet(
+                f"QPushButton {{ background: transparent; color: {STEEL}; border: none; "
+                "font-size: 16px; font-weight: bold; padding: 4px 0px; text-align: center; }}"
+                f"QPushButton:hover {{ color: {PRIMARY}; background: {SLATE}; }}"
+            )
+        else:
+            for i, (icon, label) in enumerate(_NAV_ITEMS):
+                item = self.nav.item(i)
+                item.setText(f"  {icon}  {label}")
+                item.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+            self.nav.setStyleSheet("")
+            self._nav_toggle_btn.setText("«  Collapse")
+            self._nav_toggle_btn.setToolTip("Collapse navigation")
+            self._nav_toggle_btn.setStyleSheet(
+                f"QPushButton {{ background: transparent; color: {STEEL}; border: none; "
+                "font-size: 12px; padding: 4px 16px; text-align: left; }}"
+                f"QPushButton:hover {{ color: {PRIMARY}; background: {SLATE}; }}"
+            )
 
     def _build_pages(self) -> QWidget:
         wrapper = QWidget()
