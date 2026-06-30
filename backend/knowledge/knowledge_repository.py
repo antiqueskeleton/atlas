@@ -635,6 +635,22 @@ class KnowledgeRepository:
                 ORDER BY brand_name
             """).fetchall()
 
+    def filter_new_brands(self, candidates: list[str]) -> list[str]:
+        """Return only candidate names that don't already exist in the library (name or alias)."""
+        self._migrate_brands_table()
+        existing: set[str] = set()
+        with self._conn() as c:
+            for name, aliases in c.execute(
+                "SELECT name, COALESCE(aliases,'') FROM brands WHERE market_id=?",
+                (self.MARKET_ID,),
+            ).fetchall():
+                existing.add(name.lower().strip())
+                for alias in aliases.split(","):
+                    a = alias.strip().lower()
+                    if a:
+                        existing.add(a)
+        return [b for b in candidates if b.lower().strip() not in existing]
+
     def delete_prompt(self, family_name, prompt_text):
         csv_path = self._data / "market_questions.csv"
         if not csv_path.exists():
