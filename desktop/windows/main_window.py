@@ -346,7 +346,7 @@ class AtlasMainWindow(QMainWindow):
         badge_row.addWidget(ver_badge)
 
         tagline = QLabel("AI Intelligence Platform")
-        tagline.setStyleSheet("font-size: 13px; color: #6B7280; font-weight: 500;")
+        tagline.setStyleSheet("font-size: 14px; color: #6B7280; font-weight: 500;")
         tagline.setAlignment(Qt.AlignCenter)
 
         def _sep():
@@ -361,20 +361,15 @@ class AtlasMainWindow(QMainWindow):
             "positioning across AI providers — so you always know how your\n"
             "brand appears in the answers people are reading."
         )
-        desc.setStyleSheet("font-size: 12px; color: #374151; line-height: 1.5;")
+        desc.setStyleSheet("font-size: 13px; color: #374151; line-height: 1.5;")
         desc.setAlignment(Qt.AlignCenter)
         desc.setWordWrap(True)
 
-        # Built by
-        built_lbl = QLabel("Built by  <a href='https://dweeb.co' style='color:#0B84FF;'>dweeb.co</a>")
-        built_lbl.setStyleSheet("font-size: 12px; color: #6B7280;")
-        built_lbl.setAlignment(Qt.AlignCenter)
-        built_lbl.setOpenExternalLinks(True)
-
-        # Copyright
-        copy_lbl = QLabel("© 2026 dweeb.co  ·  All rights reserved.")
-        copy_lbl.setStyleSheet("font-size: 10px; color: #9CA3AF;")
+        # Copyright with dweeb.co as link
+        copy_lbl = QLabel("© 2026 <a href='https://dweeb.co' style='color:#0B84FF;'>dweeb.co</a>")
+        copy_lbl.setStyleSheet("font-size: 12px; color: #9CA3AF;")
         copy_lbl.setAlignment(Qt.AlignCenter)
+        copy_lbl.setOpenExternalLinks(True)
 
         close_btn = QPushButton("Close")
         close_btn.setFixedWidth(110)
@@ -400,9 +395,7 @@ class AtlasMainWindow(QMainWindow):
         lay.addWidget(desc)
         lay.addSpacing(14)
         lay.addWidget(_sep())
-        lay.addSpacing(10)
-        lay.addWidget(built_lbl)
-        lay.addSpacing(4)
+        lay.addSpacing(12)
         lay.addWidget(copy_lbl)
         lay.addSpacing(16)
         lay.addLayout(btn_row)
