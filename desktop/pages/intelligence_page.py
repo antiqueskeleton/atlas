@@ -4,6 +4,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
+    QScrollArea,
     QSizePolicy,
     QSplitter,
     QTabWidget,
@@ -173,12 +174,29 @@ class IntelligencePage(QWidget):
         self._product_frame, self._product_body = _section_card("Product Intelligence")
         self._persona_frame, self._persona_body = _section_card("Consumer Personas")
         self._journey_frame, self._journey_body = _section_card("Buying Journey")
-        self._opp_frame, self._opp_body = _section_card("Opportunities")
+
+        # Opportunities tab — scroll area of individual cards
+        self._opp_tab = QWidget()
+        opp_tab_lay = QVBoxLayout()
+        opp_tab_lay.setContentsMargins(0, 0, 0, 0)
+        opp_tab_lay.setSpacing(0)
+        self._opp_scroll = QScrollArea()
+        self._opp_scroll.setWidgetResizable(True)
+        self._opp_scroll.setFrameShape(QFrame.NoFrame)
+        self._opp_container = QWidget()
+        self._opp_cards_layout = QVBoxLayout()
+        self._opp_cards_layout.setSpacing(8)
+        self._opp_cards_layout.setContentsMargins(8, 8, 8, 8)
+        self._opp_cards_layout.addStretch()
+        self._opp_container.setLayout(self._opp_cards_layout)
+        self._opp_scroll.setWidget(self._opp_container)
+        opp_tab_lay.addWidget(self._opp_scroll)
+        self._opp_tab.setLayout(opp_tab_lay)
 
         self.tabs.addTab(self._product_frame, "Product")
         self.tabs.addTab(self._persona_frame, "Personas")
         self.tabs.addTab(self._journey_frame, "Journey")
-        self.tabs.addTab(self._opp_frame, "Opportunities")
+        self.tabs.addTab(self._opp_tab, "Opportunities")
 
         self._brief_frame, self._brief_body = _section_card("Executive Briefing")
 
@@ -208,7 +226,7 @@ class IntelligencePage(QWidget):
         # Clear panels so user sees fresh generation, not stale data
         for body in (self._product_body, self._persona_body, self._journey_body):
             body.setPlainText("Analyzing stored responses…")
-        self._opp_body.setPlainText("Identifying strategic opportunities…")
+        self._render_opportunities([], placeholder="Identifying strategic opportunities…")
         self._brief_body.setPlainText("Generating executive briefing from current analysis…")
 
         self._worker = _RunWorker(self.service, None)  # uses active provider from Settings
@@ -260,11 +278,9 @@ class IntelligencePage(QWidget):
         latest = self.service.get_latest_briefing()
         if not latest:
             placeholder = "No intelligence runs yet. Click 'Run Intelligence Analysis' to start."
-            for body in (
-                self._product_body, self._persona_body,
-                self._journey_body, self._opp_body, self._brief_body,
-            ):
+            for body in (self._product_body, self._persona_body, self._journey_body, self._brief_body):
                 body.setPlainText(placeholder)
+            self._render_opportunities([], placeholder=placeholder)
             return
 
         run = latest["run"]
@@ -301,11 +317,13 @@ class IntelligencePage(QWidget):
         )
 
         if briefing:
-            self._opp_body.setPlainText(briefing[3] or "No opportunity analysis available.")
             self._brief_body.setPlainText(briefing[4] or "No executive briefing available.")
         else:
-            self._opp_body.setPlainText("No opportunity analysis available.")
             self._brief_body.setPlainText("No executive briefing available.")
+
+        run_id = run[0]
+        opp_rows = self.service.repository.get_opportunities_for_run(run_id)
+        self._render_opportunities(opp_rows)
 
         # KPIs from brand stats
         brand_stats = self._compute_brand_stats(results)
@@ -323,6 +341,85 @@ class IntelligencePage(QWidget):
             self._kpi_top_val.setText(f"#{rank} of {len(sorted_brands)}")
         else:
             self._kpi_top_val.setText("Unranked")
+
+    _STATUS_CYCLE = ["new", "in_progress", "done"]
+    _STATUS_LABELS = {"new": "New", "in_progress": "In Progress", "done": "Done"}
+    _STATUS_COLORS = {"new": "#6B7280", "in_progress": "#F59E0B", "done": "#16A34A"}
+
+    def _render_opportunities(self, opp_rows, placeholder=None):
+        # Clear existing cards (all items except the trailing stretch)
+        while self._opp_cards_layout.count() > 1:
+            item = self._opp_cards_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+        if not opp_rows:
+            msg = placeholder or "No opportunities yet. Run Intelligence Analysis to generate."
+            lbl = QLabel(msg)
+            lbl.setStyleSheet("color:#6B7280; padding:16px;")
+            lbl.setWordWrap(True)
+            self._opp_cards_layout.insertWidget(0, lbl)
+            return
+
+        for idx, (opp_id, title, evidence, description, status) in enumerate(opp_rows):
+            status = status or "new"
+            card = QFrame()
+            card.setObjectName("StatCard")
+            card_lay = QVBoxLayout()
+            card_lay.setSpacing(6)
+
+            # Title + status button row
+            title_row = QHBoxLayout()
+            title_lbl = QLabel(f"{idx + 1}. {title}")
+            title_lbl.setStyleSheet("font-weight:bold; font-size:13px;")
+            title_lbl.setWordWrap(True)
+            title_lbl.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+
+            color = self._STATUS_COLORS.get(status, "#6B7280")
+            status_btn = QPushButton(self._STATUS_LABELS.get(status, "New"))
+            status_btn.setFixedSize(96, 24)
+            status_btn.setStyleSheet(
+                f"QPushButton {{ background:{color}; color:white; border:none; "
+                f"border-radius:4px; font-size:11px; }}"
+                f"QPushButton:hover {{ background:{color}; opacity:0.85; }}"
+            )
+
+            def _make_toggle(oid, btn, cur):
+                def _toggle():
+                    nxt = self._STATUS_CYCLE[(self._STATUS_CYCLE.index(cur) + 1) % 3]
+                    self.service.repository.update_opportunity_status(oid, nxt)
+                    run = self.service.repository.get_latest_run()
+                    if run:
+                        self._render_opportunities(
+                            self.service.repository.get_opportunities_for_run(run[0])
+                        )
+                return _toggle
+
+            status_btn.clicked.connect(_make_toggle(opp_id, status_btn, status))
+            title_row.addWidget(title_lbl)
+            title_row.addWidget(status_btn)
+            card_lay.addLayout(title_row)
+
+            if evidence:
+                ev_hdr = QLabel("Evidence")
+                ev_hdr.setStyleSheet("font-size:11px; color:#6B7280; font-weight:bold;")
+                ev_body = QLabel(evidence)
+                ev_body.setWordWrap(True)
+                ev_body.setStyleSheet("font-size:12px; color:#374151;")
+                card_lay.addWidget(ev_hdr)
+                card_lay.addWidget(ev_body)
+
+            if description:
+                ac_hdr = QLabel("Action")
+                ac_hdr.setStyleSheet("font-size:11px; color:#6B7280; font-weight:bold;")
+                ac_body = QLabel(description)
+                ac_body.setWordWrap(True)
+                ac_body.setStyleSheet("font-size:12px; color:#374151;")
+                card_lay.addWidget(ac_hdr)
+                card_lay.addWidget(ac_body)
+
+            card.setLayout(card_lay)
+            self._opp_cards_layout.insertWidget(self._opp_cards_layout.count() - 1, card)
 
     def _compute_brand_stats(self, results):
         from collections import Counter

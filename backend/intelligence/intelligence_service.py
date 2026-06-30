@@ -1,4 +1,5 @@
 import csv
+import re
 import uuid
 from collections import Counter
 from datetime import datetime
@@ -151,6 +152,9 @@ class IntelligenceService:
 
         brand_stats = self._count_brands(collected)
         opportunities = self._run_opportunity_pass(provider, collected)
+        parsed_opps = self._parse_opportunities(opportunities)
+        if parsed_opps:
+            self.repository.save_opportunities(run_id, parsed_opps)
         briefing = self._run_briefing_pass(provider, collected, brand_stats)
 
         completed_at = datetime.now()
@@ -221,6 +225,9 @@ class IntelligenceService:
 
         brand_stats = self._count_brands(collected)
         opportunities = self._run_opportunity_pass(provider, collected)
+        parsed_opps = self._parse_opportunities(opportunities)
+        if parsed_opps:
+            self.repository.save_opportunities(run_id, parsed_opps)
         briefing = self._run_briefing_pass(provider, collected, brand_stats)
 
         completed_at = datetime.now()
@@ -414,6 +421,26 @@ class IntelligenceService:
             defaults = ["Firman", "Champion", "Westinghouse", "Honda", "Generac", "Yamaha", "Predator"]
             return {b: [b.lower()] for b in defaults}
         return terms
+
+    @staticmethod
+    def _parse_opportunities(text: str) -> list[dict]:
+        """Parse LLM opportunity text into structured dicts (title, evidence, description)."""
+        pattern = re.compile(
+            r"OPPORTUNITY\s*\[?\d+\]?:\s*(.+?)\n"
+            r"EVIDENCE:\s*(.*?)\n"
+            r"ACTION:\s*(.*?)(?=\nOPPORTUNITY|\Z)",
+            re.DOTALL | re.IGNORECASE,
+        )
+        results = []
+        for m in pattern.finditer(text):
+            title = m.group(1).strip()
+            if title:
+                results.append({
+                    "title": title,
+                    "evidence": m.group(2).strip(),
+                    "description": m.group(3).strip(),
+                })
+        return results
 
     @staticmethod
     def _join_responses(pairs: list[tuple[str, str]]) -> str:

@@ -15,6 +15,12 @@ class IntelligenceRepository:
 
     def _initialize(self):
         with self.connect() as conn:
+            # Migrate: add run_id to opportunities if the column doesn't exist yet
+            try:
+                conn.execute("ALTER TABLE opportunities ADD COLUMN run_id TEXT")
+            except Exception:
+                pass
+
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS intelligence_runs (
                     run_id     TEXT PRIMARY KEY,
@@ -125,3 +131,29 @@ class IntelligenceRepository:
                        opportunities, executive_briefing, created_at
                 FROM intelligence_briefings WHERE run_id=?
             """, (run_id,)).fetchone()
+
+    def save_opportunities(self, run_id: str, opp_list: list):
+        from datetime import datetime
+        now = datetime.now().isoformat()
+        with self.connect() as conn:
+            conn.executemany("""
+                INSERT INTO opportunities (run_id, created_date, title, description, evidence, status)
+                VALUES (?, ?, ?, ?, ?, 'new')
+            """, [
+                (run_id, now, o["title"], o["description"], o["evidence"])
+                for o in opp_list
+            ])
+
+    def get_opportunities_for_run(self, run_id: str):
+        with self.connect() as conn:
+            return conn.execute("""
+                SELECT opportunity_id, title, evidence, description, status
+                FROM opportunities WHERE run_id=? ORDER BY opportunity_id ASC
+            """, (run_id,)).fetchall()
+
+    def update_opportunity_status(self, opp_id: int, status: str):
+        with self.connect() as conn:
+            conn.execute(
+                "UPDATE opportunities SET status=? WHERE opportunity_id=?",
+                (status, opp_id),
+            )
