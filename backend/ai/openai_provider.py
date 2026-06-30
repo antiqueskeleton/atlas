@@ -21,6 +21,7 @@ class OpenAIProvider(AIProvider):
                 risks=["Atlas cannot make a live OpenAI request without an API key."],
                 follow_up_questions=["Would you like to add an OpenAI API key in Settings?"],
                 provider=self.provider_name,
+                is_error=True,
             )
 
         try:
@@ -38,4 +39,5 @@ class OpenAIProvider(AIProvider):
                     "Models: gpt-4.1, gpt-4.1-mini, gpt-4o, gpt-4o-mini",
                 ],
                 provider=self.provider_name,
+                is_error=True,
             )

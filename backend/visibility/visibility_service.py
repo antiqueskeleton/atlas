@@ -24,6 +24,7 @@ class VisibilityService:
         cancelled: Callable[[], bool] | None = None,
         paused: Callable[[], bool] | None = None,
         prompts: list[str] | None = None,
+        prompt_families: dict[str, str] | None = None,
     ) -> dict:
         if prompts is None:
             prompts = self.prompt_library.get(prompt_set)
@@ -32,6 +33,7 @@ class VisibilityService:
             provider_name=provider_name,
             provider=provider,
             prompt_set=prompt_set,
+            prompt_families=prompt_families,
             progress_callback=progress_callback,
             cancelled=cancelled,
             paused=paused,

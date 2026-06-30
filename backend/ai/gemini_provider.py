@@ -20,6 +20,7 @@ class GeminiProvider(AIProvider):
                 risks=["Atlas cannot make a live Gemini request without an API key."],
                 follow_up_questions=["Add a Google Gemini API key in Settings."],
                 provider=self.provider_name,
+                is_error=True,
             )
 
         try:
@@ -39,6 +40,7 @@ class GeminiProvider(AIProvider):
                 risks=["Missing dependency."],
                 follow_up_questions=[],
                 provider=self.provider_name,
+                is_error=True,
             )
 
         except Exception as error:
@@ -50,4 +52,5 @@ class GeminiProvider(AIProvider):
                     f"Tried model: {self.model}. If 404, try 'gemini-1.5-flash' or 'gemini-2.5-flash' in Settings.",
                 ],
                 provider=self.provider_name,
+                is_error=True,
             )

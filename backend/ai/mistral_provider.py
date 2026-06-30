@@ -21,6 +21,7 @@ class MistralProvider(AIProvider):
                 risks=["Atlas cannot make a live Mistral request without an API key."],
                 follow_up_questions=["Add a Mistral API key in Settings."],
                 provider=self.provider_name,
+                is_error=True,
             )
 
         try:
@@ -44,4 +45,5 @@ class MistralProvider(AIProvider):
                     "Models: mistral-large-latest, mistral-small-latest, open-mistral-nemo",
                 ],
                 provider=self.provider_name,
+                is_error=True,
             )

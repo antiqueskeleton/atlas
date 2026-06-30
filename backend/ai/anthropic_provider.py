@@ -20,6 +20,7 @@ class AnthropicProvider(AIProvider):
                 risks=["Atlas cannot make a live Anthropic request without an API key."],
                 follow_up_questions=["Add an Anthropic API key in Settings."],
                 provider=self.provider_name,
+                is_error=True,
             )
 
         try:
@@ -43,6 +44,7 @@ class AnthropicProvider(AIProvider):
                 risks=["Missing dependency."],
                 follow_up_questions=[],
                 provider=self.provider_name,
+                is_error=True,
             )
 
         except Exception as error:
@@ -52,4 +54,5 @@ class AnthropicProvider(AIProvider):
                 risks=["The API key may be invalid or the request timed out."],
                 follow_up_questions=["Check the Anthropic API key in Settings."],
                 provider=self.provider_name,
+                is_error=True,
             )

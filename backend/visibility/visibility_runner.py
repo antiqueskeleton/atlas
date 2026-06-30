@@ -17,24 +17,11 @@ class VisibilityRunner:
         provider_name: str | None = None,
         provider=None,
         prompt_set: str = "Default",
+        prompt_families: dict[str, str] | None = None,
         progress_callback: Callable[[int, int], None] | None = None,
         cancelled: Callable[[], bool] | None = None,
         paused: Callable[[], bool] | None = None,
     ) -> dict:
-        """
-        Run every prompt against one provider and return a run + responses dict.
-
-        Args:
-            prompts: list of prompt strings to send
-            provider_name: provider key; falls back to active provider
-            provider: pre-resolved provider object (skips set_active_provider when given)
-            prompt_set: label stored with the run record
-            progress_callback: called after each prompt with (completed, total)
-            cancelled: called before each prompt; if True, stops the run early
-
-        Returns:
-            {"run": VisibilityRun, "responses": list[VisibilityResponse]}
-        """
         if provider is None:
             provider_name = provider_name or self.provider_manager.active_provider_name
             provider = self.provider_manager.get_provider(provider_name)
@@ -48,9 +35,9 @@ class VisibilityRunner:
         )
 
         responses = []
+        error_count = 0
 
         for i, prompt in enumerate(prompts):
-            # Block here while paused, unblocks on resume or cancel
             if paused:
                 import time
                 while paused():
@@ -61,16 +48,21 @@ class VisibilityRunner:
 
             reasoning = provider.ask(prompt)
 
-            responses.append(
-                VisibilityResponse(
-                    run_id=run.run_id,
-                    provider=provider.provider_name,
-                    model=run.model,
-                    prompt=prompt,
-                    response=reasoning.executive_summary,
-                    collected_at=datetime.now(),
+            if reasoning.is_error:
+                error_count += 1
+            else:
+                family = (prompt_families or {}).get(prompt, "")
+                responses.append(
+                    VisibilityResponse(
+                        run_id=run.run_id,
+                        provider=provider.provider_name,
+                        model=run.model,
+                        prompt=prompt,
+                        response=reasoning.executive_summary,
+                        collected_at=datetime.now(),
+                        family_name=family,
+                    )
                 )
-            )
 
             if progress_callback:
                 progress_callback(i + 1, len(prompts))
@@ -78,6 +70,7 @@ class VisibilityRunner:
         run.completed_at = datetime.now()
         run.status = "completed" if not (cancelled and cancelled()) else "cancelled"
         run.response_count = len(responses)
+        run.error_count = error_count
         run.duration_seconds = (run.completed_at - run.started_at).total_seconds()
 
         return {"run": run, "responses": responses}

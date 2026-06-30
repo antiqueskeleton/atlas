@@ -10,3 +10,4 @@ class VisibilityResponse:
     prompt: str
     response: str
     collected_at: datetime
+    family_name: str = ""

@@ -18,3 +18,5 @@ class VisibilityRun:
     response_count: int = 0
 
     duration_seconds: float = 0.0
+
+    error_count: int = 0

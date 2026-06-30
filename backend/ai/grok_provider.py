@@ -21,6 +21,7 @@ class GrokProvider(AIProvider):
                 risks=["Atlas cannot make a live Grok request without an API key."],
                 follow_up_questions=["Add an xAI API key in Settings."],
                 provider=self.provider_name,
+                is_error=True,
             )
 
         try:
@@ -44,4 +45,5 @@ class GrokProvider(AIProvider):
                     "Current models: grok-3, grok-3-mini, grok-3-fast",
                 ],
                 provider=self.provider_name,
+                is_error=True,
             )
