@@ -65,18 +65,17 @@ class AtlasMainWindow(QMainWindow):
         menu = self.menuBar()
 
         file_menu = menu.addMenu("File")
-        file_menu.addAction("New Project")
-        file_menu.addAction("Open Project")
-        file_menu.addSeparator()
         file_menu.addAction("Exit", self.close)
 
         tools_menu = menu.addMenu("Tools")
         import_action = tools_menu.addAction("Import Responses")
         import_action.triggered.connect(self._import_responses)
-        tools_menu.addAction("Manage Knowledge")
+        knowledge_action = tools_menu.addAction("Manage Knowledge")
+        knowledge_action.triggered.connect(lambda: self.nav.setCurrentRow(5))
 
         help_menu = menu.addMenu("Help")
-        help_menu.addAction("About Atlas")
+        about_action = help_menu.addAction("About Atlas")
+        about_action.triggered.connect(self._show_about)
 
     # ── Layout ────────────────────────────────────────────────────────────────
 
@@ -216,6 +215,60 @@ class AtlasMainWindow(QMainWindow):
         from PySide6.QtGui import QDesktopServices
         from PySide6.QtCore import QUrl
         QDesktopServices.openUrl(QUrl(url))
+
+    def _show_about(self):
+        from PySide6.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton
+        from PySide6.QtCore import Qt
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle("About Atlas")
+        dlg.setFixedWidth(380)
+
+        lay = QVBoxLayout()
+        lay.setSpacing(10)
+        lay.setContentsMargins(28, 24, 28, 20)
+
+        name = QLabel("Atlas AI")
+        name.setStyleSheet("font-size: 22px; font-weight: bold;")
+        name.setAlignment(Qt.AlignCenter)
+
+        version = QLabel(f"Version {APP_VERSION}")
+        version.setStyleSheet("font-size: 13px; color: #6B7280;")
+        version.setAlignment(Qt.AlignCenter)
+
+        desc = QLabel(
+            "AI Intelligence Platform\n"
+            "Firman Power Equipment\n\n"
+            "Tracks brand visibility, market perception, and\n"
+            "competitive positioning across AI providers."
+        )
+        desc.setStyleSheet("font-size: 12px; color: #374151;")
+        desc.setAlignment(Qt.AlignCenter)
+        desc.setWordWrap(True)
+
+        sep = QLabel()
+        sep.setFixedHeight(1)
+        sep.setStyleSheet("background: #E5E7EB;")
+
+        close_btn = QPushButton("Close")
+        close_btn.setFixedWidth(100)
+        close_btn.clicked.connect(dlg.accept)
+
+        btn_row = QVBoxLayout()
+        btn_row.setAlignment(Qt.AlignCenter)
+        btn_row.addWidget(close_btn)
+
+        lay.addWidget(name)
+        lay.addWidget(version)
+        lay.addSpacing(6)
+        lay.addWidget(desc)
+        lay.addSpacing(6)
+        lay.addWidget(sep)
+        lay.addSpacing(4)
+        lay.addLayout(btn_row)
+
+        dlg.setLayout(lay)
+        dlg.exec()
 
     def _import_responses(self):
         from PySide6.QtWidgets import QMessageBox
