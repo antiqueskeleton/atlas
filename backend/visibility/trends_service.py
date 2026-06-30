@@ -26,7 +26,7 @@ class TrendsService:
         summaries = []
 
         for run in runs:
-            run_id, provider, model, prompt_set, started_at, completed_at, status, response_count, duration = run
+            run_id, provider, model, prompt_set, started_at, completed_at, status, response_count, duration, *_ = run
 
             if status != "completed":
                 continue
