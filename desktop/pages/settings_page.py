@@ -460,16 +460,26 @@ class SettingsPage(QWidget):
             self._run_health_checks()
 
         elif key == "reparse_opps":
+            from PySide6.QtWidgets import QMessageBox
             unparsed = self._health_check_data.get("unparsed", [])
             count = 0
+            errors = []
             for run_id, opp_text in unparsed:
                 if not opp_text:
                     continue
-                parsed = IntelligenceService._parse_opportunities(opp_text)
-                if parsed:
-                    ir.save_opportunities(run_id, parsed)
-                    count += len(parsed)
+                try:
+                    parsed = IntelligenceService._parse_opportunities(opp_text)
+                    if parsed:
+                        ir.save_opportunities(run_id, parsed)
+                        count += len(parsed)
+                except Exception as exc:
+                    errors.append(f"{run_id[:8]}: {exc}")
             self._run_health_checks()
+            if errors:
+                QMessageBox.warning(
+                    self, "Re-parse Errors",
+                    f"Saved {count} opportunit(y/ies). Errors:\n" + "\n".join(errors),
+                )
 
     # ── Helpers ───────────────────────────────────────────────────────────────
 
