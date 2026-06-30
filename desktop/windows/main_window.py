@@ -137,7 +137,7 @@ class AtlasMainWindow(QMainWindow):
         self.nav.currentRowChanged.connect(self._on_nav_changed)
 
         # ── Version footer ────────────────────────────────────────────────────
-        version = QLabel("v 0.2  ·  Atlas AI")
+        version = QLabel("v 0.7  ·  Atlas AI")
         version.setStyleSheet(
             f"color: {STEEL}; font-size: 10px; padding: 10px 16px; "
             "border: none; background: transparent;"
@@ -217,54 +217,95 @@ class AtlasMainWindow(QMainWindow):
         QDesktopServices.openUrl(QUrl(url))
 
     def _show_about(self):
-        from PySide6.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton
+        from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton
         from PySide6.QtCore import Qt
 
         dlg = QDialog(self)
         dlg.setWindowTitle("About Atlas")
-        dlg.setFixedWidth(380)
+        dlg.setFixedWidth(420)
 
         lay = QVBoxLayout()
-        lay.setSpacing(10)
-        lay.setContentsMargins(28, 24, 28, 20)
+        lay.setSpacing(0)
+        lay.setContentsMargins(32, 28, 32, 24)
 
-        name = QLabel("Atlas AI")
-        name.setStyleSheet("font-size: 22px; font-weight: bold;")
-        name.setAlignment(Qt.AlignCenter)
+        # App name + version badge row
+        name_lbl = QLabel("Atlas AI")
+        name_lbl.setStyleSheet("font-size: 26px; font-weight: 700; color: #111827; letter-spacing: 1px;")
+        name_lbl.setAlignment(Qt.AlignCenter)
 
-        version = QLabel(f"Version {APP_VERSION}")
-        version.setStyleSheet("font-size: 13px; color: #6B7280;")
-        version.setAlignment(Qt.AlignCenter)
-
-        desc = QLabel(
-            "AI Intelligence Platform\n"
-            "Firman Power Equipment\n\n"
-            "Tracks brand visibility, market perception, and\n"
-            "competitive positioning across AI providers."
+        ver_badge = QLabel(f"v{APP_VERSION}")
+        ver_badge.setAlignment(Qt.AlignCenter)
+        ver_badge.setStyleSheet(
+            "font-size: 11px; font-weight: 600; color: #0B84FF; "
+            "background: #EFF6FF; border: 1px solid #BFDBFE; "
+            "border-radius: 10px; padding: 2px 10px;"
         )
-        desc.setStyleSheet("font-size: 12px; color: #374151;")
+        ver_badge.setFixedHeight(22)
+
+        badge_row = QHBoxLayout()
+        badge_row.setAlignment(Qt.AlignCenter)
+        badge_row.addWidget(ver_badge)
+
+        tagline = QLabel("AI Intelligence Platform")
+        tagline.setStyleSheet("font-size: 13px; color: #6B7280; font-weight: 500;")
+        tagline.setAlignment(Qt.AlignCenter)
+
+        def _sep():
+            s = QLabel()
+            s.setFixedHeight(1)
+            s.setStyleSheet("background: #E5E7EB; margin: 0px;")
+            return s
+
+        # Description
+        desc = QLabel(
+            "Atlas tracks brand visibility, market perception, and competitive\n"
+            "positioning across AI providers — so you always know how your\n"
+            "brand appears in the answers people are reading."
+        )
+        desc.setStyleSheet("font-size: 12px; color: #374151; line-height: 1.5;")
         desc.setAlignment(Qt.AlignCenter)
         desc.setWordWrap(True)
 
-        sep = QLabel()
-        sep.setFixedHeight(1)
-        sep.setStyleSheet("background: #E5E7EB;")
+        # Built by
+        built_lbl = QLabel("Built by  <a href='https://dweeb.co' style='color:#0B84FF;'>dweeb.co</a>")
+        built_lbl.setStyleSheet("font-size: 12px; color: #6B7280;")
+        built_lbl.setAlignment(Qt.AlignCenter)
+        built_lbl.setOpenExternalLinks(True)
+
+        # Copyright
+        copy_lbl = QLabel("© 2026 dweeb.co  ·  All rights reserved.")
+        copy_lbl.setStyleSheet("font-size: 10px; color: #9CA3AF;")
+        copy_lbl.setAlignment(Qt.AlignCenter)
 
         close_btn = QPushButton("Close")
-        close_btn.setFixedWidth(100)
+        close_btn.setFixedWidth(110)
+        close_btn.setStyleSheet(
+            "QPushButton { background: #111827; color: white; border: none; "
+            "border-radius: 5px; padding: 6px 16px; font-size: 12px; font-weight: 600; }"
+            "QPushButton:hover { background: #374151; }"
+        )
         close_btn.clicked.connect(dlg.accept)
 
-        btn_row = QVBoxLayout()
+        btn_row = QHBoxLayout()
         btn_row.setAlignment(Qt.AlignCenter)
         btn_row.addWidget(close_btn)
 
-        lay.addWidget(name)
-        lay.addWidget(version)
+        lay.addWidget(name_lbl)
         lay.addSpacing(6)
-        lay.addWidget(desc)
-        lay.addSpacing(6)
-        lay.addWidget(sep)
+        lay.addLayout(badge_row)
         lay.addSpacing(4)
+        lay.addWidget(tagline)
+        lay.addSpacing(16)
+        lay.addWidget(_sep())
+        lay.addSpacing(14)
+        lay.addWidget(desc)
+        lay.addSpacing(14)
+        lay.addWidget(_sep())
+        lay.addSpacing(10)
+        lay.addWidget(built_lbl)
+        lay.addSpacing(4)
+        lay.addWidget(copy_lbl)
+        lay.addSpacing(16)
         lay.addLayout(btn_row)
 
         dlg.setLayout(lay)

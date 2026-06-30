@@ -42,7 +42,7 @@ def _make_splash() -> QSplashScreen:
         p.drawText(
             0, pix.height() - 26, pix.width(), 20,
             Qt.AlignHCenter | Qt.AlignVCenter,
-            "Firman Power Equipment  ·  v0.2",
+            "dweeb.co  ·  v0.7",
         )
         p.end()
 
