@@ -78,6 +78,97 @@ class _ScrapeWorker(QThread):
         self.finished_all.emit()
 
 
+class _BrandDiscoveryWorker(QThread):
+    done  = Signal(list, list)   # all_brands, providers_queried
+    error = Signal(str)
+
+    def __init__(self, provider_manager, provider_names: list):
+        super().__init__()
+        self._pm = provider_manager
+        self._names = provider_names
+
+    def run(self):
+        from backend.knowledge.brand_discovery import discover_brands
+        try:
+            brands, providers = discover_brands(self._pm, self._names)
+            self.done.emit(brands, providers)
+        except Exception as exc:
+            self.error.emit(str(exc))
+
+
+class _BrandDiscoveryDialog(QDialog):
+    def __init__(self, new_brands: list, providers_queried: list, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Discovered Brands")
+        self.setMinimumWidth(480)
+        self.setMinimumHeight(500)
+
+        root = QVBoxLayout()
+        root.setSpacing(10)
+
+        summary = QLabel(
+            f"<b>{len(new_brands)}</b> brand(s) not currently in your library.<br>"
+            f"<span style='color:#6B7280;font-size:11px;'>"
+            f"Queried: {', '.join(providers_queried) if providers_queried else 'none'}</span>"
+        )
+        summary.setWordWrap(True)
+        root.addWidget(summary)
+
+        sel_bar = QHBoxLayout()
+        btn_all  = QPushButton("Select All")
+        btn_none = QPushButton("Deselect All")
+        sel_bar.addWidget(btn_all)
+        sel_bar.addWidget(btn_none)
+        sel_bar.addStretch()
+        root.addLayout(sel_bar)
+
+        self._list = QListWidget()
+        for brand in new_brands:
+            item = QListWidgetItem(brand)
+            item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+            item.setCheckState(Qt.Checked)
+            self._list.addItem(item)
+        root.addWidget(self._list)
+
+        self._add_btn = QPushButton(f"Add Selected ({len(new_brands)})")
+        cancel_btn = QPushButton("Cancel")
+        btn_bar = QHBoxLayout()
+        btn_bar.addStretch()
+        btn_bar.addWidget(cancel_btn)
+        btn_bar.addWidget(self._add_btn)
+        root.addLayout(btn_bar)
+
+        btn_all.clicked.connect(self._select_all)
+        btn_none.clicked.connect(self._deselect_all)
+        self._list.itemChanged.connect(self._update_count)
+        self._add_btn.clicked.connect(self.accept)
+        cancel_btn.clicked.connect(self.reject)
+
+        self.setLayout(root)
+
+    def _select_all(self):
+        for i in range(self._list.count()):
+            self._list.item(i).setCheckState(Qt.Checked)
+
+    def _deselect_all(self):
+        for i in range(self._list.count()):
+            self._list.item(i).setCheckState(Qt.Unchecked)
+
+    def _update_count(self):
+        n = sum(
+            1 for i in range(self._list.count())
+            if self._list.item(i).checkState() == Qt.Checked
+        )
+        self._add_btn.setText(f"Add Selected ({n})")
+
+    def selected_brands(self) -> list:
+        return [
+            self._list.item(i).text()
+            for i in range(self._list.count())
+            if self._list.item(i).checkState() == Qt.Checked
+        ]
+
+
 class _FieldDialog(QDialog):
     def __init__(self, title, fields, initial=None, parent=None):
         super().__init__(parent)
@@ -241,14 +332,20 @@ class KnowledgePage(QWidget):
 
         self._brands_count = QLabel()
 
-        btn_add = QPushButton("+ Add Brand")
-        btn_edit = QPushButton("Edit")
-        btn_del = QPushButton("Delete")
+        btn_add      = QPushButton("+ Add Brand")
+        btn_edit     = QPushButton("Edit")
+        btn_del      = QPushButton("Delete")
+        btn_discover = QPushButton("Discover Brands")
         btn_add.clicked.connect(self._add_brand)
         btn_edit.clicked.connect(self._edit_brand)
         btn_del.clicked.connect(self._delete_brand)
+        btn_discover.clicked.connect(self._discover_brands)
 
-        bar = _action_bar(btn_add, btn_edit, btn_del, "stretch", self._brands_count)
+        self._disc_lbl = QLabel("")
+        self._disc_lbl.setStyleSheet("color:#6B7280; font-size:11px;")
+        self._disc_worker = None
+
+        bar = _action_bar(btn_add, btn_edit, btn_del, btn_discover, "stretch", self._disc_lbl, self._brands_count)
 
         lay.addWidget(self._brands_table)
         lay.addLayout(bar)
@@ -343,6 +440,53 @@ class KnowledgePage(QWidget):
             return
         self.repo.delete_brand(brand_id)
         self._refresh_brands()
+
+    def _discover_brands(self):
+        if self._disc_worker and self._disc_worker.isRunning():
+            return
+        pm = self.app.provider_manager if self.app else None
+        if not pm:
+            QMessageBox.warning(self, "Not Ready", "App not fully initialized.")
+            return
+        active = [
+            name for name in ("openai", "anthropic", "gemini", "perplexity", "grok", "mistral")
+            if pm.get_provider_api_key(name)
+        ]
+        if not active:
+            QMessageBox.warning(
+                self, "No Providers",
+                "No API keys are configured. Add API keys in Settings first.",
+            )
+            return
+        self._disc_lbl.setText(f"Querying {len(active)} provider(s)…")
+        self._disc_worker = _BrandDiscoveryWorker(pm, active)
+        self._disc_worker.done.connect(self._on_discovery_done)
+        self._disc_worker.error.connect(self._on_discovery_error)
+        self._disc_worker.start()
+
+    def _on_discovery_done(self, all_brands: list, providers: list):
+        new_brands = self.repo.filter_new_brands(all_brands)
+        self._disc_lbl.setText(f"Found {len(all_brands)} total, {len(new_brands)} new")
+        if not new_brands:
+            QMessageBox.information(
+                self, "No New Brands",
+                f"All {len(all_brands)} brands returned by AI providers are already in your library.",
+            )
+            return
+        dlg = _BrandDiscoveryDialog(new_brands, providers, parent=self)
+        if dlg.exec() != QDialog.Accepted:
+            return
+        selected = dlg.selected_brands()
+        if not selected:
+            return
+        for name in selected:
+            self.repo.add_brand(name=name)
+        self._refresh_brands()
+        self._disc_lbl.setText(f"Added {len(selected)} brand(s)")
+
+    def _on_discovery_error(self, msg: str):
+        self._disc_lbl.setText("Discovery failed")
+        QMessageBox.critical(self, "Discovery Error", f"Brand discovery failed:\n{msg}")
 
     # ─── Features ─────────────────────────────────────────────────────────────
 
