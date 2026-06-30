@@ -13,7 +13,7 @@ _DISCOVERY_PROMPT = (
     "not model names, wattage types, product categories, or descriptions. "
     "Return ONLY a valid JSON array of strings with no other text, no markdown "
     "code fences, and no explanation.\n"
-    'Example: ["Firman","Honda","Champion","Westinghouse","Generac","DuroMax"]'
+    'Example: ["Firman","Honda","Westinghouse","Generac","DuroMax","Yamaha"]'
 )
 
 

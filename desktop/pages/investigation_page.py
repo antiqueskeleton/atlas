@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QSizePolicy,
     QSplitter,
+    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -84,7 +85,7 @@ class InvestigationPage(QWidget):
         subtitle.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         self.search = SearchBar(
-            placeholder="Example: Why did Firman lose to Champion for home backup?",
+            placeholder="Example: Why is Firman losing to Generac in home standby searches?",
             button_text="Investigate",
         )
         self.search.connect(self.run)
@@ -117,7 +118,7 @@ class InvestigationPage(QWidget):
         ctrl_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         ctrl_widget.setLayout(ctrl)
 
-        # ── Left panels ───────────────────────────────────────────────────────
+        # ── Shared widgets ────────────────────────────────────────────────────
         self.intent = IntentPanel()
         self.plan_panel = InvestigationPlanPanel()
         self.summary = ScrollableCard("Executive Summary")
@@ -125,18 +126,6 @@ class InvestigationPage(QWidget):
         self.task_results = TaskResultsPanel()
         self.recommendations = RecommendationCard()
         self.executive_consensus = ExecutiveConsensusPanel()
-
-        left_splitter = QSplitter(Qt.Vertical)
-        left_splitter.addWidget(self.intent)
-        left_splitter.addWidget(self.plan_panel)
-        left_splitter.addWidget(self.summary)
-        left_splitter.addWidget(self.ai_reasoning)
-        left_splitter.addWidget(self.task_results)
-        left_splitter.addWidget(self.recommendations)
-        left_splitter.addWidget(self.executive_consensus)
-        left_splitter.setSizes([80, 120, 180, 140, 200, 100, 200])
-
-        # ── Right panels ──────────────────────────────────────────────────────
         self.provider_card = ProviderCard()
         self.relationships = RelationshipExplorer()
         self.evidence = ScrollableCard("Evidence Summary")
@@ -161,40 +150,95 @@ class InvestigationPage(QWidget):
         ev_nav.addWidget(self._ev_prev_btn)
         ev_nav.addWidget(self._ev_idx_lbl, stretch=1)
         ev_nav.addWidget(self._ev_next_btn)
-
         ev_nav_widget = QWidget()
         ev_nav_widget.setLayout(ev_nav)
         ev_nav_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
-        ev_wrapper = QWidget()
-        ev_wrapper_layout = QVBoxLayout()
-        ev_wrapper_layout.setContentsMargins(0, 0, 0, 0)
-        ev_wrapper_layout.setSpacing(0)
-        ev_wrapper_layout.addWidget(self.evidence_viewer)
-        ev_wrapper_layout.addWidget(ev_nav_widget)
-        ev_wrapper.setLayout(ev_wrapper_layout)
-        ev_wrapper.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        # ── Tab: Summary ──────────────────────────────────────────────────────
+        # Executive Summary fills most of the space; AI Reasoning, Recommendation,
+        # and Consensus share the bottom strip.
+        summary_tab = QWidget()
+        sum_lay = QVBoxLayout(summary_tab)
+        sum_lay.setContentsMargins(0, 6, 0, 0)
+        sum_lay.setSpacing(0)
 
-        right_splitter = QSplitter(Qt.Vertical)
-        right_splitter.addWidget(self.provider_card)
-        right_splitter.addWidget(self.relationships)
-        right_splitter.addWidget(self.evidence)
-        right_splitter.addWidget(ev_wrapper)
-        right_splitter.addWidget(self.prompt_panel)
-        right_splitter.setSizes([80, 160, 200, 200, 120])
+        bottom_row = QSplitter(Qt.Horizontal)
+        bottom_row.addWidget(self.ai_reasoning)
+        bottom_row.addWidget(self.recommendations)
+        bottom_row.addWidget(self.executive_consensus)
+        bottom_row.setSizes([340, 260, 300])
 
-        h_splitter = QSplitter(Qt.Horizontal)
-        h_splitter.addWidget(left_splitter)
-        h_splitter.addWidget(right_splitter)
-        h_splitter.setSizes([600, 400])
-        h_splitter.setHandleWidth(6)
+        sum_splitter = QSplitter(Qt.Vertical)
+        sum_splitter.addWidget(self.summary)
+        sum_splitter.addWidget(bottom_row)
+        sum_splitter.setSizes([440, 220])
+        sum_lay.addWidget(sum_splitter, 1)
+
+        # ── Tab: Agents ───────────────────────────────────────────────────────
+        agents_tab = QWidget()
+        ag_lay = QVBoxLayout(agents_tab)
+        ag_lay.setContentsMargins(0, 6, 0, 0)
+        ag_lay.addWidget(self.task_results, 1)
+
+        # ── Tab: Evidence ─────────────────────────────────────────────────────
+        evidence_tab = QWidget()
+        ev_lay = QVBoxLayout(evidence_tab)
+        ev_lay.setContentsMargins(0, 6, 0, 0)
+        ev_lay.setSpacing(0)
+
+        ev_viewer_wrap = QWidget()
+        ev_vw_lay = QVBoxLayout(ev_viewer_wrap)
+        ev_vw_lay.setContentsMargins(0, 0, 0, 0)
+        ev_vw_lay.setSpacing(0)
+        ev_vw_lay.addWidget(self.evidence_viewer, 1)
+        ev_vw_lay.addWidget(ev_nav_widget)
+
+        ev_splitter = QSplitter(Qt.Vertical)
+        ev_splitter.addWidget(ev_viewer_wrap)
+        ev_splitter.addWidget(self.evidence)
+        ev_splitter.setSizes([420, 200])
+        ev_lay.addWidget(ev_splitter, 1)
+
+        # ── Tab: Plan & Details ───────────────────────────────────────────────
+        plan_tab = QWidget()
+        plan_lay = QVBoxLayout(plan_tab)
+        plan_lay.setContentsMargins(0, 6, 0, 0)
+        plan_lay.setSpacing(0)
+
+        top_row = QSplitter(Qt.Horizontal)
+        top_row.addWidget(self.intent)
+        top_row.addWidget(self.provider_card)
+        top_row.setSizes([700, 200])
+
+        detail_splitter = QSplitter(Qt.Vertical)
+        detail_splitter.addWidget(top_row)
+        detail_splitter.addWidget(self.plan_panel)
+        detail_splitter.addWidget(self.relationships)
+        detail_splitter.addWidget(self.prompt_panel)
+        detail_splitter.setSizes([130, 200, 200, 120])
+        plan_lay.addWidget(detail_splitter, 1)
+
+        # ── Assemble tabs ─────────────────────────────────────────────────────
+        self._tabs = QTabWidget()
+        self._tabs.setStyleSheet(
+            "QTabWidget::pane { border: none; padding-top: 4px; }"
+            "QTabBar::tab { padding: 7px 22px; font-size: 13px; font-weight: 500;"
+            "  border: none; border-bottom: 2px solid transparent;"
+            "  background: transparent; color: #6B7280; margin-right: 4px; }"
+            "QTabBar::tab:hover { color: #111827; }"
+            "QTabBar::tab:selected { color: #0B84FF; border-bottom: 2px solid #0B84FF; }"
+        )
+        self._tabs.addTab(summary_tab, "Summary")
+        self._tabs.addTab(agents_tab, "Agents")
+        self._tabs.addTab(evidence_tab, "Evidence")
+        self._tabs.addTab(plan_tab, "Plan & Details")
 
         root.addWidget(title)
         root.addWidget(subtitle)
         root.addSpacing(4)
         root.addWidget(self.search)
         root.addWidget(ctrl_widget)
-        root.addWidget(h_splitter, stretch=1)
+        root.addWidget(self._tabs, stretch=1)
         self.setLayout(root)
 
     # ── Providers ─────────────────────────────────────────────────────────────
@@ -241,6 +285,7 @@ class InvestigationPage(QWidget):
 
     def _on_finished(self, investigation: dict):
         self.search.button.setEnabled(True)
+        self._tabs.setCurrentIndex(0)
         provider = investigation.get("provider", "")
         n_tasks = len(investigation.get("task_results", []))
         self._status_lbl.setText(f"Complete · {provider} · {n_tasks} agents ran")

@@ -23,7 +23,7 @@ from PySide6.QtCore import QThread, Signal
 
 APP_VERSION = "0.7"
 
-ATLAS_UPDATE_URL = "https://raw.githubusercontent.com/antiqueskeleton/atlas/master/update_manifest.json"
+ATLAS_UPDATE_URL = "https://raw.githubusercontent.com/antiqueskeleton/atlas/main/update_manifest.json"
 
 
 class UpdateChecker(QThread):

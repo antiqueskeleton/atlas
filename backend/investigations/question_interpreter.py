@@ -14,7 +14,7 @@ class QuestionInterpreter:
         if any(word in normalized for word in ["compare", "vs", "versus", "against"]):
             request.intent = "compare"
 
-        brands = ["Firman", "Champion", "Honda", "Westinghouse", "Generac", "Predator", "DuroMax", "Yamaha"]
+        brands = ["Firman", "Honda", "Westinghouse", "Generac", "Predator", "DuroMax", "Yamaha", "CAT"]
 
         mentioned_brands = [
             brand for brand in brands

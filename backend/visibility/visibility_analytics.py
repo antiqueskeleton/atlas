@@ -26,7 +26,7 @@ class VisibilityAnalytics:
             self.brands = list(brand_terms.keys())
             self.brand_terms = brand_terms
         else:
-            fallback = ["Firman", "Champion", "Westinghouse", "Honda", "Generac", "Yamaha", "Predator"]
+            fallback = ["Firman", "Westinghouse", "Honda", "Generac", "Yamaha", "Predator", "DuroMax"]
             self.brands = self._load_terms(
                 brands_path or str(data_dir / "brands.csv"),
                 fallback=fallback,
