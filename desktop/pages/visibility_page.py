@@ -3,10 +3,12 @@ import threading
 from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
+    QComboBox,
     QFrame,
     QHBoxLayout,
     QHeaderView,
     QLabel,
+    QLineEdit,
     QMessageBox,
     QProgressBar,
     QPushButton,
@@ -429,17 +431,19 @@ class VisibilityPage(QWidget):
             QTabBar::tab:hover:!selected { color: #111827; }
         """)
 
-        # Tab 1 — Overview: recent runs + latest responses
+        # Tab 1 — Overview: recent runs + latest responses — side by side
         overview = QWidget()
+        ov_split = QSplitter(Qt.Horizontal)
+        ov_split.addWidget(self._runs_frame)
+        ov_split.addWidget(self._responses_frame)
+        ov_split.setSizes([500, 500])
         ov_lay = QVBoxLayout(overview)
         ov_lay.setContentsMargins(0, 0, 0, 0)
-        ov_lay.setSpacing(8)
-        ov_lay.addWidget(self._runs_frame, 2)
-        ov_lay.addWidget(self._responses_frame, 3)
+        ov_lay.addWidget(ov_split)
 
-        # Tab 2 — Brands: position share + mentions by provider
+        # Tab 2 — Brands: position share + mentions by provider — side by side
         brands_tab = QWidget()
-        br_split = QSplitter(Qt.Vertical)
+        br_split = QSplitter(Qt.Horizontal)
         br_split.addWidget(self._pos_frame)
         br_split.addWidget(self._brand_frame)
         br_split.setSizes([500, 500])
@@ -461,10 +465,79 @@ class VisibilityPage(QWidget):
         ch_lay.addWidget(self._channel_frame, 1)
         ch_lay.addWidget(self._gap_frame, 1)
 
+        # Tab 5 — Raw Data: uninterpreted view of all stored responses
+        raw_tab = QWidget()
+        raw_lay = QVBoxLayout(raw_tab)
+        raw_lay.setContentsMargins(0, 4, 0, 0)
+        raw_lay.setSpacing(8)
+
+        # KPI row — pure counts, no derived scores
+        raw_kpi_row = QHBoxLayout()
+        raw_kpi_row.setSpacing(10)
+        self._raw_total_card, _, self._raw_total_val = _stat_card("Total Responses", "—")
+        self._raw_prov_card,  _, self._raw_prov_val  = _stat_card("Providers", "—")
+        self._raw_runs_card,  _, self._raw_runs_val  = _stat_card("Runs", "—")
+        self._raw_fam_card,   _, self._raw_fam_val   = _stat_card("Prompt Families", "—")
+        for card in (self._raw_total_card, self._raw_prov_card,
+                     self._raw_runs_card, self._raw_fam_card):
+            raw_kpi_row.addWidget(card)
+        raw_kpi_widget = QWidget()
+        raw_kpi_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        raw_kpi_widget.setLayout(raw_kpi_row)
+
+        # Filter bar
+        filter_row = QHBoxLayout()
+        filter_row.setSpacing(8)
+        filter_lbl = QLabel("Search:")
+        filter_lbl.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self._raw_search = QLineEdit()
+        self._raw_search.setPlaceholderText("Filter by keyword in prompt or response…")
+        self._raw_search.textChanged.connect(self._filter_raw_data)
+        prov_lbl = QLabel("Provider:")
+        prov_lbl.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self._raw_prov_filter = QComboBox()
+        self._raw_prov_filter.setFixedWidth(160)
+        self._raw_prov_filter.addItem("All Providers")
+        self._raw_prov_filter.currentTextChanged.connect(self._filter_raw_data)
+        filter_row.addWidget(filter_lbl)
+        filter_row.addWidget(self._raw_search, 1)
+        filter_row.addWidget(prov_lbl)
+        filter_row.addWidget(self._raw_prov_filter)
+        filter_widget = QWidget()
+        filter_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        filter_widget.setLayout(filter_row)
+
+        # Response table
+        self._raw_frame, _, self._raw_tbl = _table_section(
+            "Responses", ["Date", "Provider", "Family", "Prompt", "Response Preview"],
+            stretch_last=True,
+        )
+        self._raw_tbl.setColumnWidth(0, 130)
+        self._raw_tbl.setColumnWidth(1, 100)
+        self._raw_tbl.setColumnWidth(2, 160)
+        self._raw_tbl.setColumnWidth(3, 220)
+        self._raw_tbl.currentRowChanged.connect(self._on_raw_row_selected)
+
+        # Detail pane — full prompt + response on row select
+        self._raw_detail_frame, self._raw_detail_body = _section("Full Response")
+        self._raw_detail_body.setReadOnly(True)
+
+        raw_split = QSplitter(Qt.Vertical)
+        raw_split.addWidget(self._raw_frame)
+        raw_split.addWidget(self._raw_detail_frame)
+        raw_split.setSizes([420, 200])
+
+        raw_lay.addWidget(raw_kpi_widget)
+        raw_lay.addWidget(filter_widget)
+        raw_lay.addWidget(raw_split, 1)
+
+        self._raw_all_rows: list = []
+
         tabs.addTab(overview,      "Overview")
         tabs.addTab(brands_tab,    "Brands")
         tabs.addTab(features_tab,  "Features")
         tabs.addTab(channels_tab,  "Channels")
+        tabs.addTab(raw_tab,       "Raw Data")
 
         root.addWidget(title)
         root.addWidget(subtitle)
@@ -708,3 +781,88 @@ class VisibilityPage(QWidget):
             [g["channel"], g["firman_count"] or 0, g["top_competitor"], g["top_competitor_count"]]
             for g in gap_data[:20]
         ])
+
+        self._refresh_raw_data()
+
+    # ── Raw Data tab ──────────────────────────────────────────────────────────
+
+    def _refresh_raw_data(self):
+        stats = self.service.repository.count_stats()
+        self._raw_total_val.setText(str(stats["total"]))
+        self._raw_prov_val.setText(str(stats["providers"]))
+        self._raw_runs_val.setText(str(stats["runs"]))
+        self._raw_fam_val.setText(str(stats["families"]))
+
+        rows = self.service.repository.list_responses()
+        # Build display tuples: (date, provider, family, prompt, response)
+        self._raw_all_rows = [
+            (
+                (r[6] or "")[:16],   # date (collected_at)
+                r[2] or "",          # provider
+                r[7] or "—",         # family (prompt_set from join)
+                r[4] or "",          # prompt text
+                r[5] or "",          # full response
+            )
+            for r in rows
+        ]
+
+        # Repopulate provider filter (keep current selection if still valid)
+        current_prov = self._raw_prov_filter.currentText()
+        self._raw_prov_filter.blockSignals(True)
+        self._raw_prov_filter.clear()
+        self._raw_prov_filter.addItem("All Providers")
+        providers = sorted({r[1] for r in self._raw_all_rows if r[1]})
+        for p in providers:
+            self._raw_prov_filter.addItem(p)
+        idx = self._raw_prov_filter.findText(current_prov)
+        self._raw_prov_filter.setCurrentIndex(idx if idx >= 0 else 0)
+        self._raw_prov_filter.blockSignals(False)
+
+        self._filter_raw_data()
+
+    def _filter_raw_data(self):
+        search = self._raw_search.text().lower().strip()
+        prov   = self._raw_prov_filter.currentText()
+
+        filtered = [
+            r for r in self._raw_all_rows
+            if (prov == "All Providers" or r[1] == prov)
+            and (not search or search in r[3].lower() or search in r[4].lower())
+        ]
+
+        self._raw_tbl.setSortingEnabled(False)
+        self._raw_tbl.setRowCount(len(filtered))
+        for row_idx, (date, provider, family, prompt, response) in enumerate(filtered):
+            for col, val in enumerate((
+                date,
+                provider,
+                family,
+                prompt[:120],
+                response[:120],
+            )):
+                item = QTableWidgetItem(str(val))
+                item.setFlags(item.flags() & ~Qt.ItemIsEditable)
+                self._raw_tbl.setItem(row_idx, col, item)
+        self._raw_tbl.setSortingEnabled(True)
+        self._raw_detail_body.clear()
+
+    def _on_raw_row_selected(self, row_idx: int):
+        if row_idx < 0:
+            return
+        search = self._raw_search.text().lower().strip()
+        prov   = self._raw_prov_filter.currentText()
+        filtered = [
+            r for r in self._raw_all_rows
+            if (prov == "All Providers" or r[1] == prov)
+            and (not search or search in r[3].lower() or search in r[4].lower())
+        ]
+        if row_idx >= len(filtered):
+            return
+        date, provider, family, prompt, response = filtered[row_idx]
+        self._raw_detail_body.setPlainText(
+            f"Provider: {provider}  |  Family: {family}  |  Date: {date}\n"
+            f"{'─' * 60}\n"
+            f"PROMPT:\n{prompt}\n\n"
+            f"{'─' * 60}\n"
+            f"RESPONSE:\n{response}"
+        )

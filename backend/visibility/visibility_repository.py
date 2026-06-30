@@ -154,3 +154,22 @@ class VisibilityRepository:
         with self.connect() as conn:
             cursor = conn.execute("SELECT COUNT(*) FROM visibility_responses")
             return cursor.fetchone()[0]
+
+    def count_stats(self) -> dict:
+        """Pure counts for the Raw Data tab KPI row — no derived metrics."""
+        with self.connect() as conn:
+            row = conn.execute("""
+                SELECT
+                    COUNT(*)                                      AS total,
+                    COUNT(DISTINCT vr.provider)                   AS providers,
+                    COUNT(DISTINCT vr.run_id)                     AS runs,
+                    COUNT(DISTINCT COALESCE(vs.prompt_set, '?'))  AS families
+                FROM visibility_responses vr
+                LEFT JOIN visibility_runs vs ON vr.run_id = vs.run_id
+            """).fetchone()
+        return {
+            "total":    row[0] or 0,
+            "providers": row[1] or 0,
+            "runs":     row[2] or 0,
+            "families": row[3] or 0,
+        }
