@@ -5,6 +5,7 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QFrame,
+    QGridLayout,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -242,23 +243,26 @@ class VisibilityPage(QWidget):
         )
         self._ps_search.textChanged.connect(self._filter_family_list)
 
-        # Checkbox container
-        ps_inner = QWidget()
-        ps_inner.setStyleSheet("background: white;")
-        self._ps_check_lay = QVBoxLayout()
-        self._ps_check_lay.setSpacing(2)
-        self._ps_check_lay.setContentsMargins(6, 4, 6, 6)
+        # Checkbox container — 2-column grid, rebuilt on each filter change
+        self._ps_inner = QWidget()
+        self._ps_inner.setStyleSheet("background: white;")
+        self._ps_check_grid = QGridLayout()
+        self._ps_check_grid.setSpacing(2)
+        self._ps_check_grid.setContentsMargins(6, 4, 6, 6)
+        self._ps_check_grid.setColumnStretch(0, 1)
+        self._ps_check_grid.setColumnStretch(1, 1)
+        self._ps_inner.setLayout(self._ps_check_grid)
 
         self._set_checks: dict[str, QCheckBox] = {}
 
-        families = self.service.prompt_library.list_families()
-        families_set = set(families)
-        scenarios = sorted(
+        self._families_ordered = self.service.prompt_library.list_families()
+        families_set = set(self._families_ordered)
+        self._scenarios_ordered = sorted(
             s for s in self.service.prompt_library.list_sets()
             if s != "All Prompts" and s not in families_set
         )
 
-        def _section_hdr(text):
+        def _hdr_label(text=""):
             lbl = QLabel(text)
             lbl.setStyleSheet(
                 "font-size: 10px; font-weight: bold; color: #9CA3AF; "
@@ -266,35 +270,25 @@ class VisibilityPage(QWidget):
             )
             return lbl
 
-        self._fam_hdr = _section_hdr(f"PROMPT FAMILIES  ({len(families)})")
-        self._ps_check_lay.addWidget(self._fam_hdr)
+        self._fam_hdr = _hdr_label()
+        self._scen_hdr = _hdr_label() if self._scenarios_ordered else None
 
-        for set_name in families:
+        for set_name in self._families_ordered:
             n = self.service.prompt_library.count(set_name)
             cb = QCheckBox(f"{set_name}  ({n})")
             cb.setStyleSheet("font-size: 12px;")
             cb.stateChanged.connect(self._on_sets_changed)
             self._set_checks[set_name] = cb
-            self._ps_check_lay.addWidget(cb)
 
-        if scenarios:
-            self._scen_hdr = _section_hdr(f"SCENARIOS  ({len(scenarios)})")
-            self._ps_check_lay.addWidget(self._scen_hdr)
-            for set_name in scenarios:
-                n = self.service.prompt_library.count(set_name)
-                cb = QCheckBox(f"{set_name}  ({n})")
-                cb.setStyleSheet("font-size: 12px;")
-                cb.stateChanged.connect(self._on_sets_changed)
-                self._set_checks[set_name] = cb
-                self._ps_check_lay.addWidget(cb)
-        else:
-            self._scen_hdr = None
-
-        self._ps_check_lay.addStretch()
-        ps_inner.setLayout(self._ps_check_lay)
+        for set_name in self._scenarios_ordered:
+            n = self.service.prompt_library.count(set_name)
+            cb = QCheckBox(f"{set_name}  ({n})")
+            cb.setStyleSheet("font-size: 12px;")
+            cb.stateChanged.connect(self._on_sets_changed)
+            self._set_checks[set_name] = cb
 
         ps_scroll = QScrollArea()
-        ps_scroll.setWidget(ps_inner)
+        ps_scroll.setWidget(self._ps_inner)
         ps_scroll.setWidgetResizable(True)
         ps_scroll.setFixedHeight(190)
         ps_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -598,13 +592,27 @@ class VisibilityPage(QWidget):
         tabs.addTab(channels_tab,  "Channels")
         tabs.addTab(raw_tab,       "Raw Data")
 
+        self._ctrl_frame = ctrl_frame
+
+        self._collapse_btn = QPushButton("▲  Hide Controls")
+        self._collapse_btn.setFlat(True)
+        self._collapse_btn.setCursor(Qt.PointingHandCursor)
+        self._collapse_btn.setStyleSheet(
+            "QPushButton { text-align: left; font-size: 11px; color: #6B7280; "
+            "background: transparent; border: none; padding: 0px; }"
+            "QPushButton:hover { color: #0B84FF; }"
+        )
+        self._collapse_btn.clicked.connect(self._toggle_ctrl_panel)
+
         root.addWidget(title)
         root.addWidget(subtitle)
-        root.addWidget(ctrl_frame)
+        root.addWidget(self._collapse_btn)
+        root.addWidget(self._ctrl_frame)
         root.addWidget(kpi_widget)
         root.addWidget(tabs, 1)
         self.setLayout(root)
 
+        self._rebuild_check_grid("")
         self._on_sets_changed()
         self.refresh()
 
@@ -630,23 +638,41 @@ class VisibilityPage(QWidget):
             cb.setChecked(name in top)
 
     def _filter_family_list(self, text: str):
-        text = text.lower().strip()
-        families = self.service.prompt_library.list_families()
-        families_set = set(families)
-        has_fam_visible = False
-        has_scen_visible = False
-        for name, cb in self._set_checks.items():
-            visible = not text or text in name.lower()
-            cb.setVisible(visible)
-            if visible:
-                if name in families_set:
-                    has_fam_visible = True
-                else:
-                    has_scen_visible = True
-        if self._fam_hdr:
-            self._fam_hdr.setVisible(has_fam_visible or not text)
-        if self._scen_hdr:
-            self._scen_hdr.setVisible(has_scen_visible or not text)
+        self._rebuild_check_grid(text)
+
+    def _rebuild_check_grid(self, query: str):
+        query = query.lower().strip()
+        while self._ps_check_grid.count():
+            self._ps_check_grid.takeAt(0)
+
+        row = 0
+        vis_fams = [n for n in self._families_ordered if not query or query in n.lower()]
+        fam_count = f"{len(vis_fams)}" + (f"/{len(self._families_ordered)}" if query else "")
+        self._fam_hdr.setText(f"PROMPT FAMILIES  ({fam_count})")
+        self._ps_check_grid.addWidget(self._fam_hdr, row, 0, 1, 2)
+        row += 1
+        for i, name in enumerate(vis_fams):
+            self._ps_check_grid.addWidget(self._set_checks[name], row + i // 2, i % 2)
+        if vis_fams:
+            row += (len(vis_fams) + 1) // 2
+
+        if self._scen_hdr is not None:
+            vis_scens = [n for n in self._scenarios_ordered if not query or query in n.lower()]
+            if vis_scens:
+                self._scen_hdr.setText(f"SCENARIOS  ({len(vis_scens)})")
+                self._ps_check_grid.addWidget(self._scen_hdr, row, 0, 1, 2)
+                row += 1
+                for i, name in enumerate(vis_scens):
+                    self._ps_check_grid.addWidget(self._set_checks[name], row + i // 2, i % 2)
+                row += (len(vis_scens) + 1) // 2
+
+        self._ps_check_grid.setRowStretch(row, 1)
+        self._ps_inner.adjustSize()
+
+    def _toggle_ctrl_panel(self):
+        visible = not self._ctrl_frame.isVisible()
+        self._ctrl_frame.setVisible(visible)
+        self._collapse_btn.setText("▲  Hide Controls" if visible else "▼  Show Controls")
 
     def _get_selected_prompts(self) -> tuple:
         selected = [name for name, cb in self._set_checks.items() if cb.isChecked()]
