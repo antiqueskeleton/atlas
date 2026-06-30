@@ -1,7 +1,9 @@
+import os
 import threading
 
 from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtWidgets import (
+    QFileDialog,
     QCheckBox,
     QComboBox,
     QFrame,
@@ -107,6 +109,19 @@ class _RunWorker(QThread):
                     self.error.emit(f"Thread error: {exc}")
 
         self.all_done.emit()
+
+
+# ── PDF export worker ─────────────────────────────────────────────────────────
+
+class _PDFWorker(QThread):
+    finished = Signal(tuple)
+
+    def __init__(self, fn):
+        super().__init__()
+        self._fn = fn
+
+    def run(self):
+        self.finished.emit(self._fn())
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -673,9 +688,30 @@ class VisibilityPage(QWidget):
         )
         self._collapse_btn.clicked.connect(self._toggle_ctrl_panel)
 
+        self._export_pdf_btn = QPushButton("Export PDF Report")
+        self._export_pdf_btn.setFixedHeight(28)
+        self._export_pdf_btn.setCursor(Qt.PointingHandCursor)
+        self._export_pdf_btn.setStyleSheet(
+            "QPushButton { font-size: 12px; font-weight: 600; color: white; "
+            "background: #0B84FF; border: none; border-radius: 5px; padding: 4px 14px; }"
+            "QPushButton:hover { background: #0056CC; }"
+            "QPushButton:pressed { background: #003D99; }"
+            "QPushButton:disabled { background: #9CA3AF; }"
+        )
+        self._export_pdf_btn.clicked.connect(self._export_pdf)
+
+        toolbar_row = QHBoxLayout()
+        toolbar_row.setContentsMargins(0, 0, 0, 0)
+        toolbar_row.addWidget(self._collapse_btn, 1)
+        toolbar_row.addStretch()
+        toolbar_row.addWidget(self._export_pdf_btn)
+        toolbar_widget = QWidget()
+        toolbar_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        toolbar_widget.setLayout(toolbar_row)
+
         root.addWidget(title)
         root.addWidget(subtitle)
-        root.addWidget(self._collapse_btn)
+        root.addWidget(toolbar_widget)
         root.addWidget(self._ctrl_frame)
         root.addWidget(kpi_widget)
         root.addWidget(tabs, 1)
@@ -741,6 +777,63 @@ class VisibilityPage(QWidget):
         visible = not self._ctrl_frame.isVisible()
         self._ctrl_frame.setVisible(visible)
         self._collapse_btn.setText("▲  Hide Controls" if visible else "▼  Show Controls")
+
+    def _export_pdf(self):
+        default_name = (
+            f"Atlas_Visibility_Report_"
+            f"{self.app.get_target_brand() or 'Report'}_"
+            f"{__import__('datetime').date.today().isoformat()}.pdf"
+        ).replace(" ", "_")
+        downloads = os.path.join(os.path.expanduser("~"), "Downloads")
+        default_path = os.path.join(downloads, default_name)
+
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Save PDF Report", default_path,
+            "PDF Files (*.pdf);;All Files (*)"
+        )
+        if not path:
+            return
+
+        self._export_pdf_btn.setEnabled(False)
+        self._export_pdf_btn.setText("Generating…")
+
+        def _generate():
+            try:
+                from backend.reports.pdf_report import VisibilityPDFReport
+                analytics = self.service.analytics_summary()
+                runs      = self.service.list_runs()
+                stats     = self.service.repository.count_stats()
+                rpt = VisibilityPDFReport(
+                    analytics=analytics,
+                    runs=runs,
+                    stats=stats,
+                    target_brand=self.app.get_target_brand(),
+                )
+                rpt.generate(path)
+                return path, None
+            except Exception as exc:
+                return None, str(exc)
+
+        def _done(result):
+            out_path, err = result
+            self._export_pdf_btn.setEnabled(True)
+            self._export_pdf_btn.setText("Export PDF Report")
+            if err:
+                QMessageBox.critical(self, "Export Failed", f"Could not generate PDF:\n\n{err}")
+            else:
+                reply = QMessageBox.information(
+                    self, "Report Ready",
+                    f"PDF saved to:\n{out_path}",
+                    QMessageBox.Open | QMessageBox.Ok,
+                    QMessageBox.Ok,
+                )
+                if reply == QMessageBox.Open:
+                    os.startfile(out_path)
+
+        worker = _PDFWorker(_generate)
+        worker.finished.connect(_done)
+        worker.start()
+        self._pdf_worker = worker  # keep reference
 
     def _get_selected_prompts(self) -> tuple[list, str, dict]:
         """Returns (prompts, label, prompt_families).
