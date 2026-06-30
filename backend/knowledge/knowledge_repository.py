@@ -514,9 +514,28 @@ class KnowledgeRepository:
                     top_keywords TEXT,
                     notes TEXT,
                     data_source TEXT DEFAULT 'manual',
-                    recorded_at TEXT DEFAULT (datetime('now'))
+                    recorded_at TEXT DEFAULT (datetime('now')),
+                    page_title TEXT,
+                    meta_description TEXT,
+                    h1_tags TEXT,
+                    h2_tags TEXT,
+                    has_schema INTEGER DEFAULT 0,
+                    has_sitemap INTEGER DEFAULT 0,
+                    is_https INTEGER DEFAULT 0,
+                    load_ms INTEGER DEFAULT 0,
+                    scraped_at TEXT
                 )
             """)
+            for col in (
+                "page_title TEXT", "meta_description TEXT", "h1_tags TEXT",
+                "h2_tags TEXT", "has_schema INTEGER DEFAULT 0",
+                "has_sitemap INTEGER DEFAULT 0", "is_https INTEGER DEFAULT 0",
+                "load_ms INTEGER DEFAULT 0", "scraped_at TEXT",
+            ):
+                try:
+                    c.execute(f"ALTER TABLE web_intelligence ADD COLUMN {col}")
+                except Exception:
+                    pass
 
     def list_web_intelligence(self):
         self._ensure_web_table()
@@ -525,7 +544,7 @@ class KnowledgeRepository:
                 SELECT w.id, COALESCE(b.name, '?') AS brand_name, w.domain,
                        w.monthly_visits_est, w.domain_authority, w.organic_keywords_est,
                        w.backlink_count, w.top_keywords, w.notes, w.data_source,
-                       w.recorded_at
+                       w.recorded_at, w.scraped_at
                 FROM web_intelligence w
                 LEFT JOIN brands b ON b.brand_id = w.brand_id
                 ORDER BY brand_name
@@ -573,6 +592,48 @@ class KnowledgeRepository:
         self._ensure_web_table()
         with self._conn() as c:
             c.execute("DELETE FROM web_intelligence WHERE id=?", (entry_id,))
+
+    def update_web_scrape_result(self, entry_id: int, scrape: dict):
+        """Persist scraped on-page signals back to the web_intelligence row."""
+        self._ensure_web_table()
+        import json
+        from datetime import datetime
+        h1s = json.dumps(scrape.get("h1s", []))
+        h2s = json.dumps(scrape.get("h2s", []))
+        with self._conn() as c:
+            c.execute("""
+                UPDATE web_intelligence
+                SET page_title=?, meta_description=?, h1_tags=?, h2_tags=?,
+                    top_keywords=?, has_schema=?, has_sitemap=?, is_https=?,
+                    load_ms=?, data_source='scraped', scraped_at=?
+                WHERE id=?
+            """, (
+                scrape.get("title", "")[:200],
+                scrape.get("meta_description", "")[:300],
+                h1s, h2s,
+                scrape.get("top_keywords", ""),
+                int(scrape.get("has_schema", False)),
+                int(scrape.get("has_sitemap", False)),
+                int(scrape.get("is_https", False)),
+                scrape.get("load_ms", 0),
+                datetime.now().isoformat(),
+                entry_id,
+            ))
+
+    def list_web_intelligence_for_briefing(self) -> list:
+        """Return scraped/manual entries suitable for feeding into the intelligence briefing."""
+        self._ensure_web_table()
+        with self._conn() as c:
+            return c.execute("""
+                SELECT COALESCE(b.name, '?') AS brand_name, w.domain,
+                       w.page_title, w.meta_description, w.h1_tags,
+                       w.top_keywords, w.domain_authority, w.monthly_visits_est,
+                       w.has_schema, w.has_sitemap, w.is_https, w.scraped_at
+                FROM web_intelligence w
+                LEFT JOIN brands b ON b.brand_id = w.brand_id
+                WHERE w.domain IS NOT NULL AND w.domain != ''
+                ORDER BY brand_name
+            """).fetchall()
 
     def delete_prompt(self, family_name, prompt_text):
         csv_path = self._data / "market_questions.csv"

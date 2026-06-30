@@ -5,7 +5,7 @@ from PySide6.QtWidgets import (
     QSpinBox, QSplitter, QTableWidget, QTableWidgetItem,
     QTabWidget, QVBoxLayout, QWidget,
 )
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtGui import QColor
 
 from backend.knowledge.knowledge_repository import KnowledgeRepository
@@ -56,6 +56,26 @@ _PROMPT_FIELDS = [
     ("Prompt Text *",         "text",  "area", ""),
     ("Influence Score (1-10)","score", "spin", 5),
 ]
+
+
+class _ScrapeWorker(QThread):
+    """Scrapes each (entry_id, domain) pair sequentially and emits progress."""
+    progress = Signal(int, int, str)   # current, total, brand_name
+    done     = Signal(int, dict)       # entry_id, scrape_result
+    finished_all = Signal()
+
+    def __init__(self, entries: list):
+        super().__init__()
+        self._entries = entries  # list of (entry_id, brand_name, domain)
+
+    def run(self):
+        from backend.intelligence.web_scraper import scrape_domain
+        total = len(self._entries)
+        for idx, (entry_id, brand_name, domain) in enumerate(self._entries, 1):
+            self.progress.emit(idx, total, brand_name)
+            result = scrape_domain(domain)
+            self.done.emit(entry_id, result)
+        self.finished_all.emit()
 
 
 class _FieldDialog(QDialog):
@@ -836,20 +856,31 @@ class KnowledgePage(QWidget):
         self._web_table.doubleClicked.connect(lambda _: self._edit_web())
 
         self._web_count = QLabel()
+        self._web_scrape_lbl = QLabel("")
+        self._web_scrape_lbl.setStyleSheet("color:#6B7280; font-size:11px;")
 
-        btn_add  = QPushButton("+ Add Entry")
-        btn_edit = QPushButton("Edit")
-        btn_del  = QPushButton("Delete")
+        btn_add       = QPushButton("+ Add Entry")
+        btn_edit      = QPushButton("Edit")
+        btn_del       = QPushButton("Delete")
+        self._btn_scrape     = QPushButton("Scrape Selected")
+        self._btn_scrape_all = QPushButton("Scrape All")
         btn_add.clicked.connect(self._add_web)
         btn_edit.clicked.connect(self._edit_web)
         btn_del.clicked.connect(self._delete_web)
+        self._btn_scrape.clicked.connect(self._scrape_selected)
+        self._btn_scrape_all.clicked.connect(self._scrape_all)
 
-        bar = _action_bar(btn_add, btn_edit, btn_del, "stretch", self._web_count)
+        bar = _action_bar(
+            btn_add, btn_edit, btn_del,
+            self._btn_scrape, self._btn_scrape_all,
+            "stretch", self._web_scrape_lbl, self._web_count,
+        )
 
         lay.addWidget(note)
         lay.addWidget(self._web_table)
         lay.addLayout(bar)
         w.setLayout(lay)
+        self._web_worker = None
         self._refresh_web()
         return w
 
@@ -857,17 +888,19 @@ class KnowledgePage(QWidget):
         rows = self.repo.list_web_intelligence()
         t = self._web_table
         t.setRowCount(0)
-        for entry_id, brand, domain, visits, da, kw, backlinks, top_kw, notes, source, updated in rows:
+        for entry_id, brand, domain, visits, da, kw, backlinks, top_kw, notes, source, recorded, scraped in rows:
             r = t.rowCount()
             t.insertRow(r)
             t.setItem(r, 0, _cell(brand, entry_id))
-            t.setItem(r, 1, _cell(domain))
+            t.setItem(r, 1, _cell(domain or "—"))
             t.setItem(r, 2, _cell(f"{visits:,}" if visits else "—"))
             t.setItem(r, 3, _cell(f"{da}/100" if da else "—"))
-            t.setItem(r, 4, _cell(f"{kw:,}" if kw else "—"))
+            kw_display = (top_kw or "")[:40] or (f"{kw:,}" if kw else "—")
+            t.setItem(r, 4, _cell(kw_display))
             t.setItem(r, 5, _cell(f"{backlinks:,}" if backlinks else "—"))
             t.setItem(r, 6, _cell(source or "manual"))
-            t.setItem(r, 7, _cell((updated or "")[:10]))
+            date_str = (scraped or recorded or "")[:10]
+            t.setItem(r, 7, _cell(date_str))
         self._web_count.setText(f"{len(rows)} entries")
 
     def _web_fields(self, brands_list):
@@ -970,6 +1003,57 @@ class KnowledgePage(QWidget):
             return
         self.repo.delete_web_entry(entry_id)
         self._refresh_web()
+
+    def _scrape_selected(self):
+        row = self._web_table.currentRow()
+        if row < 0:
+            QMessageBox.information(self, "No Selection", "Select a row to scrape.")
+            return
+        entry_id = self._web_table.item(row, 0).data(Qt.UserRole)
+        domain   = self._web_table.item(row, 1).text()
+        brand    = self._web_table.item(row, 0).text()
+        if not domain or domain == "—":
+            QMessageBox.information(self, "No Domain", "This entry has no domain set.")
+            return
+        self._start_scrape([(entry_id, brand, domain)])
+
+    def _scrape_all(self):
+        rows = self.repo.list_web_intelligence()
+        entries = [
+            (r[0], r[1], r[2])
+            for r in rows
+            if r[2]  # domain not empty
+        ]
+        if not entries:
+            QMessageBox.information(self, "Nothing to Scrape", "Add entries with domains first.")
+            return
+        self._start_scrape(entries)
+
+    def _start_scrape(self, entries):
+        if self._web_worker and self._web_worker.isRunning():
+            return
+        self._btn_scrape.setEnabled(False)
+        self._btn_scrape_all.setEnabled(False)
+        self._web_scrape_lbl.setText(f"Starting scrape of {len(entries)} domain(s)…")
+        self._web_worker = _ScrapeWorker(entries)
+        self._web_worker.progress.connect(self._on_scrape_progress)
+        self._web_worker.done.connect(self._on_scrape_done)
+        self._web_worker.finished_all.connect(self._on_scrape_finished)
+        self._web_worker.start()
+
+    def _on_scrape_progress(self, current, total, brand_name):
+        self._web_scrape_lbl.setText(f"Scraping {current}/{total}: {brand_name}…")
+
+    def _on_scrape_done(self, entry_id, result):
+        if result.get("error"):
+            self._web_scrape_lbl.setText(f"Error on entry {entry_id}: {result['error']}")
+        self.repo.update_web_scrape_result(entry_id, result)
+        self._refresh_web()
+
+    def _on_scrape_finished(self):
+        self._btn_scrape.setEnabled(True)
+        self._btn_scrape_all.setEnabled(True)
+        self._web_scrape_lbl.setText("Scrape complete.")
 
     # ─── Providers ────────────────────────────────────────────────────────────
 

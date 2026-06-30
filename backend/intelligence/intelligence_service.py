@@ -46,11 +46,16 @@ BUYING JOURNEY (how AI describes the purchase process):
 BRAND VISIBILITY FROM RESEARCH:
 {brand_block}
 
+WEB PRESENCE COMPARISON (on-page SEO signals scraped from brand homepages):
+{web_block}
+
 Write a structured executive briefing (350-450 words) with these sections:
 MARKET LANDSCAPE: [2-3 sentences on the category as AI presents it]
 KEY CONSUMER SEGMENTS: [3 specific buyer profiles with motivations]
 BUYING JOURNEY INSIGHTS: [How AI describes the path to purchase]
 {target_brand} POSITIONING: [Where and how {target_brand} appears — or doesn't — in the research]
+WEB PRESENCE INSIGHT: [1-2 sentences on how {target_brand}'s homepage messaging and keywords \
+compare to competitors — only if web data is available]
 STRATEGIC RECOMMENDATIONS:
 1. [Specific, actionable recommendation]
 2. [Specific, actionable recommendation]
@@ -395,11 +400,49 @@ class IntelligenceService:
             persona_block=block("Consumer Personas"),
             journey_block=block("Buying Journey"),
             brand_block=brand_block,
+            web_block=self._build_web_block(),
         )
         result = provider.ask(prompt)
         return result.executive_summary or ""
 
     # ── Helpers ───────────────────────────────────────────────────────────────
+
+    def _build_web_block(self) -> str:
+        """Build a web presence summary from scraped web_intelligence rows."""
+        try:
+            from backend.knowledge.knowledge_repository import KnowledgeRepository
+            rows = KnowledgeRepository().list_web_intelligence_for_briefing()
+        except Exception:
+            return "No web presence data available."
+        if not rows:
+            return "No web presence data available."
+        lines = []
+        for brand, domain, title, meta, h1s_json, keywords, da, visits, schema, sitemap, https, scraped in rows:
+            if not scraped:
+                continue  # skip unscraped manual entries — they have no on-page data
+            import json
+            try:
+                h1s = json.loads(h1s_json or "[]")
+            except Exception:
+                h1s = []
+            h1_str = " | ".join(h1s[:3]) if h1s else "—"
+            kw_str = (keywords or "")[:100] or "—"
+            signals = []
+            if https:
+                signals.append("HTTPS")
+            if sitemap:
+                signals.append("Sitemap")
+            if schema:
+                signals.append("Schema.org")
+            lines.append(
+                f"  {brand} ({domain})\n"
+                f"    Title: {title or '—'}\n"
+                f"    Meta: {meta[:120] if meta else '—'}\n"
+                f"    H1(s): {h1_str}\n"
+                f"    Top keywords: {kw_str}\n"
+                f"    Signals: {', '.join(signals) or 'none'}"
+            )
+        return "\n\n".join(lines) if lines else "No scraped web data yet — run Scrape All on Knowledge → Web Intelligence tab."
 
     def _count_brands(self, collected: dict) -> dict:
         brand_terms = self._load_brands()
