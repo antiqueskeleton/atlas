@@ -290,7 +290,7 @@ class VisibilityPage(QWidget):
         ps_scroll = QScrollArea()
         ps_scroll.setWidget(self._ps_inner)
         ps_scroll.setWidgetResizable(True)
-        ps_scroll.setFixedHeight(190)
+        ps_scroll.setFixedHeight(340)
         ps_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         ps_scroll.setStyleSheet(
             "QScrollArea { border: 1px solid #D1D5DB; border-radius: 4px; background: white; }"
@@ -595,12 +595,14 @@ class VisibilityPage(QWidget):
         self._ctrl_frame = ctrl_frame
 
         self._collapse_btn = QPushButton("▲  Hide Controls")
-        self._collapse_btn.setFlat(True)
         self._collapse_btn.setCursor(Qt.PointingHandCursor)
+        self._collapse_btn.setFixedHeight(28)
         self._collapse_btn.setStyleSheet(
-            "QPushButton { text-align: left; font-size: 11px; color: #6B7280; "
-            "background: transparent; border: none; padding: 0px; }"
-            "QPushButton:hover { color: #0B84FF; }"
+            "QPushButton { text-align: left; font-size: 12px; font-weight: 600; "
+            "color: #374151; background: #F3F4F6; border: 1px solid #D1D5DB; "
+            "border-radius: 5px; padding: 4px 12px; }"
+            "QPushButton:hover { background: #E5E7EB; color: #0B84FF; border-color: #0B84FF; }"
+            "QPushButton:pressed { background: #D1D5DB; }"
         )
         self._collapse_btn.clicked.connect(self._toggle_ctrl_panel)
 
