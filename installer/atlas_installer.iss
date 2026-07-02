@@ -6,7 +6,7 @@
 ; (or use build.bat which runs ICO generation, PyInstaller, and ISCC)
 
 #define AppName      "Atlas AI"
-#define AppVersion   "0.8"
+#define AppVersion   "0.9"
 #define AppPublisher "dweeb.co"
 #define AppExeName   "Atlas AI.exe"
 #define BuildDir     "..\dist\Atlas AI"
