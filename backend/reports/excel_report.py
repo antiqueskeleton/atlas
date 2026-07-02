@@ -178,9 +178,12 @@ class VisibilityExcelReport:
         pos_counts  = a.get("brand_position_counts", {})
         pos_share   = a.get("brand_position_share", {})
         positions   = sorted(pos_counts.keys()) if pos_counts else []
+        neg_counts  = a.get("negative_brand_counts", {})
+        neg_rate    = a.get("brand_negative_rate", {})
 
         headers = (
-            ["Brand", "Mentions", "Mention Rate %", "First-Mention %"]
+            ["Brand", "Mentions", "Mention Rate %", "First-Mention %",
+             "Negative Mentions", "Negative %"]
             + [f"#{p} Count" for p in positions]
             + [f"#{p} Share %" for p in positions]
         )
@@ -194,6 +197,8 @@ class VisibilityExcelReport:
                 cnt,
                 round(cnt / total * 100, 1),
                 first_share.get(brand, 0),
+                neg_counts.get(brand, 0),
+                neg_rate.get(brand, 0),
             ] + [pos_counts.get(p, {}).get(brand, 0) for p in positions]
               + [pos_share.get(p, {}).get(brand, 0) for p in positions],
                 highlight=(brand == tb))

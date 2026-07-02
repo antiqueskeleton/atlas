@@ -135,6 +135,22 @@ class IntelligencePage(QWidget):
         self._mode_lbl.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self._update_mode_label()
 
+        ctrl.addWidget(self.run_btn)
+        ctrl.addWidget(self.last_run_lbl)
+        ctrl.addStretch()
+        ctrl.addWidget(self._mode_lbl)
+
+        ctrl_widget = QWidget()
+        ctrl_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        ctrl_widget.setLayout(ctrl)
+
+        # ── Row 2: Export buttons — own row, matching the Visibility page's
+        # toolbar pattern (#38: this row used to be crammed into row 1
+        # alongside the Run button, status label, and Mode badge). ────────────
+        export_row = QHBoxLayout()
+        export_row.setSpacing(8)
+        export_row.setContentsMargins(0, 0, 0, 0)
+
         _export_btn_style = (
             "QPushButton { font-size: 11px; font-weight: 600; color: #0B84FF; "
             "background: white; border: 1.5px solid #0B84FF; border-radius: 5px; padding: 3px 10px; }"
@@ -156,16 +172,13 @@ class IntelligencePage(QWidget):
         self._export_docx_btn.clicked.connect(self._export_docx)
         self._export_docx_btn.setToolTip("Export the latest briefing as an editable Word document")
 
-        ctrl.addWidget(self.run_btn)
-        ctrl.addWidget(self.last_run_lbl)
-        ctrl.addStretch()
-        ctrl.addWidget(self._export_docx_btn)
-        ctrl.addWidget(self._export_pdf_btn)
-        ctrl.addWidget(self._mode_lbl)
+        export_row.addStretch()
+        export_row.addWidget(self._export_docx_btn)
+        export_row.addWidget(self._export_pdf_btn)
 
-        ctrl_widget = QWidget()
-        ctrl_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        ctrl_widget.setLayout(ctrl)
+        export_widget = QWidget()
+        export_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        export_widget.setLayout(export_row)
 
         # Status label — single compact line below controls
         self.status_lbl = QLabel("")
@@ -239,6 +252,7 @@ class IntelligencePage(QWidget):
         root.addWidget(title)
         root.addWidget(subtitle)
         root.addWidget(ctrl_widget)
+        root.addWidget(export_widget)
         root.addWidget(self.status_lbl)
         root.addWidget(kpi_widget)
         root.addWidget(h_splitter, stretch=1)
@@ -276,7 +290,7 @@ class IntelligencePage(QWidget):
                 for k in ("Product Intelligence", "Consumer Personas", "Buying Journey")
             )
             if buckets_ok:
-                self._mode_lbl.setText(f"Mode: DB  ({total} stored responses — 2 API calls)")
+                self._mode_lbl.setText(f"Mode: DB  ({total} stored responses — 3 API calls)")
                 self._mode_lbl.setStyleSheet("font-size:12px; color:#16A34A; font-weight:bold;")
             else:
                 self._mode_lbl.setText(f"Mode: Live  (DB has {total} responses but missing buckets)")
@@ -289,7 +303,7 @@ class IntelligencePage(QWidget):
         used = result.get("responses_used", 0)
         mode_str = f"DB ({used} responses)" if source == "db" else f"Live ({used} prompts)"
         self.status_lbl.setText(
-            f"Complete — {result['provider']} · {dur:.0f}s · {mode_str} + 2 synthesis passes"
+            f"Complete — {result['provider']} · {dur:.0f}s · {mode_str} + 3 synthesis passes"
         )
         self._update_mode_label()
         self._load_latest()
@@ -491,8 +505,7 @@ class IntelligencePage(QWidget):
         else:
             self._brief_body.setPlainText("No executive briefing available.")
 
-        run_id = run[0]
-        opp_rows = self.service.repository.get_opportunities_for_run(run_id)
+        opp_rows = self.service.repository.get_all_opportunities()
         self._render_opportunities(opp_rows)
 
         # KPIs from brand stats
@@ -531,8 +544,9 @@ class IntelligencePage(QWidget):
             self._opp_cards_layout.insertWidget(0, lbl)
             return
 
-        for idx, (opp_id, title, evidence, description, status) in enumerate(opp_rows):
+        for idx, (opp_id, title, evidence, description, status, *rest) in enumerate(opp_rows):
             status = status or "new"
+            created_date = rest[0] if rest else ""
             card = QFrame()
             card.setObjectName("StatCard")
             card_lay = QVBoxLayout()
@@ -558,17 +572,21 @@ class IntelligencePage(QWidget):
                 def _toggle():
                     nxt = self._STATUS_CYCLE[(self._STATUS_CYCLE.index(cur) + 1) % 3]
                     self.service.repository.update_opportunity_status(oid, nxt)
-                    run = self.service.repository.get_latest_run()
-                    if run:
-                        self._render_opportunities(
-                            self.service.repository.get_opportunities_for_run(run[0])
-                        )
+                    # Cross-run view (#39): re-render from ALL runs, not just the
+                    # latest, so toggling one card's status doesn't make every
+                    # older run's opportunities disappear.
+                    self._render_opportunities(self.service.repository.get_all_opportunities())
                 return _toggle
 
             status_btn.clicked.connect(_make_toggle(opp_id, status_btn, status))
             title_row.addWidget(title_lbl)
             title_row.addWidget(status_btn)
             card_lay.addLayout(title_row)
+
+            if created_date:
+                date_lbl = QLabel(f"From run: {created_date[:10]}")
+                date_lbl.setStyleSheet("font-size:10px; color:#9CA3AF;")
+                card_lay.addWidget(date_lbl)
 
             if evidence:
                 ev_hdr = QLabel("Evidence")

@@ -384,6 +384,7 @@ class VisibilityPage(QWidget):
         row2.addWidget(lbl_prov)
 
         self._provider_checks: dict[str, QCheckBox] = {}
+        self._provider_dots: dict[str, QLabel] = {}
         provider_keys = [k for k in self.app.provider_manager.list_providers() if k != "mock"]
         for key in provider_keys:
             has_key = bool(self.app.provider_manager.get_provider_api_key(key))
@@ -402,6 +403,7 @@ class VisibilityPage(QWidget):
             )
             dot.setToolTip(dot_tip)
             cb.setToolTip(dot_tip)
+            self._provider_dots[key] = dot
             name_lbl = QLabel(key.capitalize())
             name_lbl.setStyleSheet("font-size: 12px;")
             name_lbl.setCursor(Qt.PointingHandCursor)
@@ -523,6 +525,21 @@ class VisibilityPage(QWidget):
         self._brand_tbl.setColumnWidth(2, 80)
         self._brand_tbl.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
 
+        self._sentiment_frame, _, self._sentiment_tbl = _table_section(
+            "Brand Sentiment",
+            ["Brand", "Mentions", "Negative", "Negative %"],
+            stretch_last=False,
+        )
+        self._sentiment_tbl.setColumnWidth(1, 80)
+        self._sentiment_tbl.setColumnWidth(2, 80)
+        self._sentiment_tbl.setColumnWidth(3, 90)
+        self._sentiment_tbl.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
+        self._sentiment_tbl.setToolTip(
+            "Negative = responses where this brand was mentioned in an unfavorable or "
+            "comparative-losing context (e.g. \"unlike Firman, Honda includes...\"). "
+            "Negative % is of that brand's OWN mentions, not of all responses."
+        )
+
         # Features tab — two tables side by side
         self._feat_total_frame, _, self._feat_total_tbl = _table_section(
             "Feature Mentions",
@@ -583,7 +600,7 @@ class VisibilityPage(QWidget):
         ov_lay.setContentsMargins(0, 0, 0, 0)
         ov_lay.addWidget(ov_split)
 
-        # Tab 2 — Brands: two tables side by side
+        # Tab 2 — Brands: position + provider tables on top, sentiment below
         brands_tab = QWidget()
         br_split = QSplitter(Qt.Horizontal)
         br_split.addWidget(self._pos_frame)
@@ -591,7 +608,9 @@ class VisibilityPage(QWidget):
         br_split.setSizes([500, 500])
         br_lay = QVBoxLayout(brands_tab)
         br_lay.setContentsMargins(0, 0, 0, 0)
-        br_lay.addWidget(br_split)
+        br_lay.setSpacing(8)
+        br_lay.addWidget(br_split, 2)
+        br_lay.addWidget(self._sentiment_frame, 1)
 
         # Tab 3 — Features: totals + by-brand side by side
         features_tab = QWidget()
@@ -1046,6 +1065,29 @@ class VisibilityPage(QWidget):
 
     # ── Refresh ───────────────────────────────────────────────────────────────
 
+    def refresh_provider_status(self):
+        """
+        Re-check each provider's API key and update its status dot/tooltip.
+        has_key was previously only computed once at page construction, so a
+        key added in Settings after startup never changed the dot from red to
+        green until the app was restarted (#47). Called from main_window's
+        nav-change handler whenever this page becomes visible.
+        """
+        for key, dot in self._provider_dots.items():
+            has_key = bool(self.app.provider_manager.get_provider_api_key(key))
+            dot_tip = (
+                "API key configured — ready to collect"
+                if has_key else
+                "No API key set — add one in Settings before running this provider"
+            )
+            dot.setStyleSheet(
+                f"color: {'#16A34A' if has_key else '#DC2626'}; font-size: 14px; padding: 0 1px;"
+            )
+            dot.setToolTip(dot_tip)
+            cb = self._provider_checks.get(key)
+            if cb:
+                cb.setToolTip(dot_tip)
+
     def refresh(self):
         summary = self.service.analytics_summary()
         runs = self.service.list_runs() or []
@@ -1096,6 +1138,15 @@ class VisibilityPage(QWidget):
             for brand, count in sorted(brands.items(), key=lambda x: -x[1]):
                 prov_rows.append([provider, brand, count])
         _set_tbl(self._brand_tbl, prov_rows)
+
+        # ── Brand Sentiment → sortable table ───────────────────────────────────
+        negative_counts = summary.get("negative_brand_counts", {})
+        negative_rates = summary.get("brand_negative_rate", {})
+        sentiment_rows = [
+            [brand, count, negative_counts.get(brand, 0), f"{negative_rates.get(brand, 0)}%"]
+            for brand, count in sorted(brand_counts.items(), key=lambda x: -x[1])
+        ]
+        _set_tbl(self._sentiment_tbl, sentiment_rows)
 
         # ── Feature Mentions total ────────────────────────────────────────────
         feature_counts = summary.get("feature_counts", {})
