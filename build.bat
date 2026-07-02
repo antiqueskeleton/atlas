@@ -2,7 +2,7 @@
 setlocal
 
 echo ============================================================
-echo   Atlas AI  ^|  Build Script  ^|  v0.7
+echo   Atlas AI  ^|  Build Script  ^|  v0.8
 echo   dweeb.co
 echo ============================================================
 echo.
@@ -80,7 +80,7 @@ if errorlevel 1 (
 echo.
 echo ============================================================
 echo   BUILD COMPLETE
-echo   Installer:  dist\installer\AtlasAI-v0.7-Setup.exe
+echo   Installer:  dist\installer\AtlasAI-v0.8-Setup.exe
 echo ============================================================
 
 :done

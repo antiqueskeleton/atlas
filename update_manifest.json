@@ -1,5 +1,5 @@
-﻿{
-  "version": "0.7",
-  "download_url": "https://github.com/antiqueskeleton/atlas/releases/download/v0.7/AtlasAI-v0.7-Setup.exe",
-  "release_notes": "v0.7 — Tabbed investigation workspace, parallel intelligence synthesis, brand auto-discovery, collapsible navigation, improved packaging."
+{
+  "version": "0.8",
+  "download_url": "https://github.com/antiqueskeleton/atlas/releases/download/v0.8/AtlasAI-v0.8-Setup.exe",
+  "release_notes": "v0.8 — Fixed the auto-updater URL baked into v0.7 (was silently failing to check for updates). Comp Shopping price pipeline fixed; Intelligence Engine PDF/Word export with fact-anchored briefings; brand-agnostic fixes so any target brand works correctly; simplified Trends charts; Help > Usage Guide and tooltips added throughout."
 }
