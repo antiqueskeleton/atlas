@@ -1,5 +1,5 @@
 {
-  "version": "0.8",
-  "download_url": "https://github.com/antiqueskeleton/atlas/releases/download/v0.8/AtlasAI-v0.8-Setup.exe",
-  "release_notes": "v0.8 — Fixed the auto-updater URL baked into v0.7 (was silently failing to check for updates). Comp Shopping price pipeline fixed; Intelligence Engine PDF/Word export with fact-anchored briefings; brand-agnostic fixes so any target brand works correctly; simplified Trends charts; Help > Usage Guide and tooltips added throughout."
+  "version": "0.9",
+  "download_url": "https://github.com/antiqueskeleton/atlas/releases/download/v0.9/AtlasAI-v0.9-Setup.exe",
+  "release_notes": "v0.9 — Fixed a bug that silently broke the auto-updater on every version (it could never detect a real update until now); added a manual Check for Updates option to the Help menu. Intelligence Engine now tracks negative/unfavorable brand mentions separately from positive ones, and correctly distinguishes real visibility gaps from product categories the brand simply doesn't compete in. More resilient to API errors, with a first real automated test suite behind the scenes. Various UI fixes: Intelligence page layout, provider status indicators, splash screen, and Trends chart clarity."
 }
