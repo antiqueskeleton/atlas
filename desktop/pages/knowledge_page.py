@@ -340,6 +340,10 @@ class KnowledgePage(QWidget):
         btn_edit.clicked.connect(self._edit_brand)
         btn_del.clicked.connect(self._delete_brand)
         btn_discover.clicked.connect(self._discover_brands)
+        btn_discover.setToolTip(
+            "Query AI providers for brands mentioned but not yet tracked — "
+            "review and add any new competitors found"
+        )
 
         self._disc_lbl = QLabel("")
         self._disc_lbl.setStyleSheet("color:#6B7280; font-size:11px;")

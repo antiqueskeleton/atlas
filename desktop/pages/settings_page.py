@@ -126,6 +126,10 @@ class SettingsPage(QWidget):
         self.brand_input.setText(self.app.config_service.get_target_brand())
         self.brand_input.setMaximumWidth(320)
         self.brand_input.setMinimumWidth(160)
+        self.brand_input.setToolTip(
+            "This brand's mentions drive every KPI, chart, and briefing across the app — "
+            "change it to analyze a different brand's AI visibility"
+        )
 
         save_brand = QPushButton("Save")
         save_brand.setFixedWidth(70)
@@ -160,6 +164,10 @@ class SettingsPage(QWidget):
                 break
 
         self.provider_select.currentIndexChanged.connect(self._change_active_provider)
+        self.provider_select.setToolTip(
+            "Default provider for Investigation queries — Visibility and Intelligence "
+            "runs let you pick providers separately each time"
+        )
 
         row.addWidget(self.provider_select)
         row.addStretch()
@@ -232,6 +240,7 @@ class SettingsPage(QWidget):
                     b.setText("Hide" if on else "Show"),
                 )
             )
+            show_btn.setToolTip("Reveal or mask the API key text")
 
             # Model field
             model_inp = QLineEdit()
@@ -239,6 +248,7 @@ class SettingsPage(QWidget):
             model_inp.setFixedWidth(230)
             saved_model = self.app.config_service.get_model(key)
             model_inp.setText(saved_model or default_model)
+            model_inp.setToolTip("Pin a specific model version — leave as-is to use the default")
 
             # Test button
             test_btn = QPushButton("Test")
@@ -246,6 +256,7 @@ class SettingsPage(QWidget):
             test_btn.clicked.connect(
                 lambda checked, k=key, ki=key_inp, mi=model_inp: self._test_provider(k, ki, mi)
             )
+            test_btn.setToolTip("Send a small test request to verify this key and model work")
 
             row.addWidget(key_inp)
             row.addWidget(show_btn)
@@ -295,6 +306,7 @@ class SettingsPage(QWidget):
         refresh_btn = QPushButton("Run Health Check")
         refresh_btn.setFixedWidth(160)
         refresh_btn.clicked.connect(self._run_health_checks)
+        refresh_btn.setToolTip("Verify database integrity and configuration — no API calls made")
         btn_row = QHBoxLayout()
         btn_row.addWidget(refresh_btn)
         btn_row.addStretch()

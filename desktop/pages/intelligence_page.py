@@ -1,8 +1,10 @@
 from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtWidgets import (
+    QFileDialog,
     QFrame,
     QHBoxLayout,
     QLabel,
+    QMessageBox,
     QPushButton,
     QScrollArea,
     QSizePolicy,
@@ -119,6 +121,10 @@ class IntelligencePage(QWidget):
         self.run_btn = QPushButton("Run Intelligence Analysis")
         self.run_btn.setFixedWidth(210)
         self.run_btn.clicked.connect(self._start_run)
+        self.run_btn.setToolTip(
+            "Synthesize stored Visibility responses into a briefing, personas, "
+            "buying-journey insights, and strategic opportunities"
+        )
 
         self.last_run_lbl = QLabel("No runs yet.")
         self.last_run_lbl.setStyleSheet("color:#6B7280; font-size:12px;")
@@ -129,9 +135,32 @@ class IntelligencePage(QWidget):
         self._mode_lbl.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self._update_mode_label()
 
+        _export_btn_style = (
+            "QPushButton { font-size: 11px; font-weight: 600; color: #0B84FF; "
+            "background: white; border: 1.5px solid #0B84FF; border-radius: 5px; padding: 3px 10px; }"
+            "QPushButton:hover { background: #EFF6FF; }"
+            "QPushButton:pressed { background: #DBEAFE; }"
+            "QPushButton:disabled { color: #9CA3AF; border-color: #9CA3AF; }"
+        )
+        self._export_pdf_btn = QPushButton("Export PDF")
+        self._export_pdf_btn.setFixedHeight(26)
+        self._export_pdf_btn.setCursor(Qt.PointingHandCursor)
+        self._export_pdf_btn.setStyleSheet(_export_btn_style)
+        self._export_pdf_btn.clicked.connect(self._export_pdf)
+        self._export_pdf_btn.setToolTip("Export the latest briefing as a formatted PDF")
+
+        self._export_docx_btn = QPushButton("Export Word")
+        self._export_docx_btn.setFixedHeight(26)
+        self._export_docx_btn.setCursor(Qt.PointingHandCursor)
+        self._export_docx_btn.setStyleSheet(_export_btn_style)
+        self._export_docx_btn.clicked.connect(self._export_docx)
+        self._export_docx_btn.setToolTip("Export the latest briefing as an editable Word document")
+
         ctrl.addWidget(self.run_btn)
         ctrl.addWidget(self.last_run_lbl)
         ctrl.addStretch()
+        ctrl.addWidget(self._export_docx_btn)
+        ctrl.addWidget(self._export_pdf_btn)
         ctrl.addWidget(self._mode_lbl)
 
         ctrl_widget = QWidget()
@@ -268,6 +297,147 @@ class IntelligencePage(QWidget):
     def _on_run_error(self, message: str):
         self.run_btn.setEnabled(True)
         self.status_lbl.setText(f"Error: {message}")
+
+    # ── Export ───────────────────────────────────────────────────────────────
+
+    def _get_report_data(self):
+        """Return (run, briefing, results, opportunities) for the latest run, or None."""
+        latest = self.service.get_latest_briefing()
+        if not latest:
+            QMessageBox.information(
+                self, "No Data",
+                "Run Intelligence Analysis first to generate data for export."
+            )
+            return None
+        run      = latest["run"]
+        briefing = latest["briefing"]
+        results  = latest["results"]
+        run_id   = run[0]
+        opps     = self.service.repository.get_opportunities_for_run(run_id)
+        return run, briefing, results, opps
+
+    def _export_pdf(self):
+        data = self._get_report_data()
+        if not data:
+            return
+
+        brand = self.app.get_target_brand() or "Report"
+        ts    = __import__('datetime').datetime.now().strftime("%Y%m%d_%H%M")
+        default = f"Atlas_Intelligence_Report_{brand}_{ts}.pdf"
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Save PDF Report", default, "PDF Files (*.pdf)"
+        )
+        if not path:
+            return
+
+        self._export_pdf_btn.setEnabled(False)
+        self._export_pdf_btn.setText("Generating…")
+
+        run, briefing, results, opps = data
+
+        def _generate():
+            try:
+                from backend.reports.intelligence_pdf_report import IntelligencePDFReport
+                rpt = IntelligencePDFReport(
+                    run=run, briefing=briefing, results=results,
+                    opportunities=opps, target_brand=brand,
+                )
+                rpt.generate(path)
+                return path, None
+            except Exception as exc:
+                return None, str(exc)
+
+        def _done(result):
+            out_path, err = result
+            self._export_pdf_btn.setEnabled(True)
+            self._export_pdf_btn.setText("Export PDF")
+            if err:
+                QMessageBox.critical(self, "Export Failed",
+                                     f"Could not generate PDF:\n\n{err}")
+            else:
+                reply = QMessageBox.information(
+                    self, "Report Ready",
+                    f"PDF saved to:\n{out_path}",
+                    QMessageBox.Open | QMessageBox.Ok,
+                    QMessageBox.Ok,
+                )
+                if reply == QMessageBox.Open:
+                    import os, subprocess
+                    if os.name == 'nt':
+                        os.startfile(out_path)
+
+        from PySide6.QtCore import QThread, Signal as _Signal
+
+        class _W(QThread):
+            finished = _Signal(tuple)
+            def run(self_):
+                self_.finished.emit(_generate())
+
+        self._pdf_worker = _W()
+        self._pdf_worker.finished.connect(_done)
+        self._pdf_worker.start()
+
+    def _export_docx(self):
+        data = self._get_report_data()
+        if not data:
+            return
+
+        brand = self.app.get_target_brand() or "Report"
+        ts    = __import__('datetime').datetime.now().strftime("%Y%m%d_%H%M")
+        default = f"Atlas_Intelligence_Report_{brand}_{ts}.docx"
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Save Word Document", default,
+            "Word Documents (*.docx)"
+        )
+        if not path:
+            return
+
+        self._export_docx_btn.setEnabled(False)
+        self._export_docx_btn.setText("Generating…")
+
+        run, briefing, results, opps = data
+
+        def _generate():
+            try:
+                from backend.reports.intelligence_docx_report import IntelligenceDocxReport
+                rpt = IntelligenceDocxReport(
+                    run=run, briefing=briefing, results=results,
+                    opportunities=opps, target_brand=brand,
+                )
+                rpt.generate(path)
+                return path, None
+            except Exception as exc:
+                return None, str(exc)
+
+        def _done(result):
+            out_path, err = result
+            self._export_docx_btn.setEnabled(True)
+            self._export_docx_btn.setText("Export Word")
+            if err:
+                QMessageBox.critical(self, "Export Failed",
+                                     f"Could not generate Word document:\n\n{err}")
+            else:
+                reply = QMessageBox.information(
+                    self, "Export Ready",
+                    f"Word document saved to:\n{out_path}",
+                    QMessageBox.Open | QMessageBox.Ok,
+                    QMessageBox.Ok,
+                )
+                if reply == QMessageBox.Open:
+                    import os
+                    if os.name == 'nt':
+                        os.startfile(out_path)
+
+        from PySide6.QtCore import QThread, Signal as _Signal
+
+        class _W(QThread):
+            finished = _Signal(tuple)
+            def run(self_):
+                self_.finished.emit(_generate())
+
+        self._docx_worker = _W()
+        self._docx_worker.finished.connect(_done)
+        self._docx_worker.start()
 
     # ── Load ─────────────────────────────────────────────────────────────────
 

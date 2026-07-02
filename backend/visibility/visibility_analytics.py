@@ -166,11 +166,11 @@ class VisibilityAnalytics:
                     else 0
                 )
 
-        # Channel gap: channels where competitors appear more than Firman
-        firman_channel_gap = []
+        # Channel gap: channels where competitors appear more than the target brand
+        target_channel_gap = []
         if target:
             for ch_name, _, _ in self.channels:
-                firman_count = brand_channel_counts[target].get(ch_name, 0)
+                target_count = brand_channel_counts[target].get(ch_name, 0)
                 competitor_counts = {
                     b: brand_channel_counts[b].get(ch_name, 0)
                     for b in self.brands
@@ -179,15 +179,15 @@ class VisibilityAnalytics:
                 if competitor_counts:
                     top_competitor = max(competitor_counts, key=competitor_counts.get)
                     top_count = competitor_counts[top_competitor]
-                    if top_count > firman_count:
-                        firman_channel_gap.append({
+                    if top_count > target_count:
+                        target_channel_gap.append({
                             "channel": ch_name,
-                            "firman_count": firman_count,
+                            "target_count": target_count,
                             "top_competitor": top_competitor,
                             "top_competitor_count": top_count,
                             "total_competitor_mentions": sum(competitor_counts.values()),
                         })
-            firman_channel_gap.sort(key=lambda x: -x["total_competitor_mentions"])
+            target_channel_gap.sort(key=lambda x: -x["total_competitor_mentions"])
 
         return {
             "total_responses": total_responses,
@@ -212,7 +212,7 @@ class VisibilityAnalytics:
             "channel_counts": dict(channel_counts),
             "brand_channel_counts": {b: dict(c) for b, c in brand_channel_counts.items()},
             "channel_brand_counts": {ch: dict(b) for ch, b in channel_brand_counts.items()},
-            "firman_channel_gap": firman_channel_gap,
+            "target_channel_gap": target_channel_gap,
         }
 
     def _load_channels(self, path) -> list[tuple[str, list[str], str]]:

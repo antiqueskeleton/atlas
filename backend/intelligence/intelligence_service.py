@@ -11,63 +11,101 @@ from backend.visibility.visibility_repository import VisibilityRepository
 
 
 _OPPORTUNITY_PROMPT_TEMPLATE = """\
-You are a market intelligence analyst for the portable generator industry.
+You are a market intelligence analyst for the portable generator industry. \
+Your output will drive real marketing decisions, so every opportunity must be grounded in the \
+data below — not in general industry knowledge.
 
-Below are raw AI responses collected from {n_prompts} market research questions covering product \
-features, consumer personas, and the buying journey. Analyze these responses and identify the top \
-5 strategic opportunities to improve a brand's visibility and positioning in AI-generated content.
+RULES:
+- EVIDENCE must cite a specific count ("X of Y responses...") or quote a sentence directly from \
+the data. Do not write generic observations.
+- TACTICS must name specific platforms, programs, or content types — not vague instructions. \
+Examples of the required specificity: "Enroll in Amazon Vine and automate Seller Central \
+Request-a-Review"; "Publish a 300-word comparison page targeting '[feature] vs [feature]' \
+keyword"; "Seed 2-3 YouTube reviewers in the 50K-500K subscriber range with review units"; \
+"Post organic answers in r/preppers and r/DIY with product link in bio".
+- If an opportunity cannot be supported by the data, skip it.
 
-For each opportunity, state:
-OPPORTUNITY [N]: [Short title]
-EVIDENCE: [What the research shows — specific patterns or gaps]
-ACTION: [Concrete step to address this opportunity]
-
-Focus on: content gaps, underserved buyer segments, missing brand associations, messaging \
-weaknesses, and channels where AI models draw from (Reddit, YouTube, review sites, etc.).
-
-RESEARCH FINDINGS:
+RESEARCH DATA ({n_prompts} responses):
 {findings}
+
+Identify the top 5 strategic opportunities using this exact format:
+
+OPPORTUNITY [N]: [Short title — what specific gap or weakness needs to change]
+EVIDENCE: [Exact count or direct quote from the data above]
+ACTION: [One concrete first step, specific enough to assign to a person today]
+TACTICS: [2-4 execution examples with platform/program/content-type specifics]
 """
 
 _BRIEFING_PROMPT_TEMPLATE = """\
-You are a senior market intelligence analyst. Write an executive briefing based on AI research \
-collected across {n_prompts} questions about the portable generator market.
+You are a market intelligence analyst producing a briefing for a generator brand's marketing team.
+
+CRITICAL RULES:
+- Every claim must cite a number from the quantitative data provided ("appeared in X of Y \
+responses", "mentioned by Z% of responses").
+- Do not write generic industry commentary. If the data does not support a statement, omit it.
+- Include verbatim quotes from the research excerpts — copy exact sentences, do not paraphrase.
+- If a section has insufficient data to draw a real conclusion, say "Insufficient data" rather \
+than inventing an observation.
 
 TARGET BRAND: {target_brand}
 
-PRODUCT INTELLIGENCE (how AI describes the category):
-{product_block}
-
-CONSUMER PERSONAS (who AI says buys generators):
-{persona_block}
-
-BUYING JOURNEY (how AI describes the purchase process):
-{journey_block}
-
-BRAND VISIBILITY FROM RESEARCH:
+QUANTITATIVE VISIBILITY DATA:
 {brand_block}
 
-WEB PRESENCE COMPARISON (on-page SEO signals scraped from brand homepages):
+VERBATIM EXCERPTS MENTIONING {target_brand}:
+{quotes_block}
+
+PRODUCT INTELLIGENCE — what AI models say about this generator category:
+{product_block}
+
+CONSUMER PERSONAS — who AI models say buys generators:
+{persona_block}
+
+BUYING JOURNEY — how AI models describe the path to purchase:
+{journey_block}
+
+WEB PRESENCE SIGNALS (scraped from brand homepages):
 {web_block}
 
-Write a structured executive briefing (350-450 words) with these sections:
-MARKET LANDSCAPE: [2-3 sentences on the category as AI presents it]
-KEY CONSUMER SEGMENTS: [3 specific buyer profiles with motivations]
-BUYING JOURNEY INSIGHTS: [How AI describes the path to purchase]
-{target_brand} POSITIONING: [Where and how {target_brand} appears — or doesn't — in the research]
-WEB PRESENCE INSIGHT: [1-2 sentences on how {target_brand}'s homepage messaging and keywords \
-compare to competitors — only if web data is available]
-STRATEGIC RECOMMENDATIONS:
-1. [Specific, actionable recommendation]
-2. [Specific, actionable recommendation]
-3. [Specific, actionable recommendation]
+Produce a structured briefing with the sections below. Lead every section with a specific \
+data point before any analysis.
+
+VISIBILITY SNAPSHOT
+State {target_brand}'s exact mention rate and rank. Name the top competitors by count and the \
+gap in percentage points.
+
+WHAT AI MODELS SAY ABOUT {target_brand}
+Quote at least one verbatim sentence from the research excerpts above. Characterize whether \
+the tone is a primary recommendation, a comparison mention, or an absence.
+
+KEY CONSUMER SEGMENTS
+Name 2-3 specific buyer types that appeared in the research (e.g., "homeowners preparing for \
+hurricane season", "RV owners needing <2000W"). State what purchase driver each segment cited.
+
+BUYING JOURNEY INSIGHTS
+What sources do AI models direct consumers to consult? Where in the journey does {target_brand} \
+appear or disappear?
+
+GAPS AND RISKS
+What is {target_brand} not mentioned for that competitors are? Name the competitor, the context, \
+and the count difference. Only include gaps visible in the data above.
+
+RECOMMENDED ACTIONS
+For each gap named above give one specific tactic. Match the tactic type to the gap:
+- Review count gap → Amazon Vine enrollment, Seller Central Request-a-Review automation, \
+  influencer seeding with review units
+- Feature association gap → dedicated landing page, YouTube tutorial targeting the feature \
+  keyword, press release to trade publications
+- Channel gap → retailer co-op program, organic community presence (subreddits, forums), \
+  SEO content targeting that channel name + product category
 """
 
 # ── Family → bucket classification ────────────────────────────────────────────
 # Terms are matched against lowercase family_name substrings.
 
 _BRAND_TERMS = [
-    "firman brand",
+    "brand perception", "brand awareness", "brand intelligence", "brand research",
+    "brand sentiment", "brand reputation", "brand comparison",
 ]
 
 _JOURNEY_TERMS = [
@@ -275,11 +313,15 @@ class IntelligenceService:
 
     # ── Classification helpers ────────────────────────────────────────────────
 
-    @staticmethod
-    def _classify_family(family_name: str) -> str:
+    def _classify_family(self, family_name: str) -> str:
         """Return 'product' | 'persona' | 'journey' | 'brand'."""
         f = family_name.lower()
-        if any(t in f for t in _BRAND_TERMS):
+        # Match generic brand terms OR "[target brand] brand" for any configured target
+        target_lower = (self.target_brand or "").lower()
+        brand_terms = list(_BRAND_TERMS)
+        if target_lower:
+            brand_terms.append(f"{target_lower} brand")
+        if any(t in f for t in brand_terms):
             return "brand"
         if any(t in f for t in _JOURNEY_TERMS):
             return "journey"
@@ -376,41 +418,94 @@ class IntelligenceService:
     def _run_briefing_pass(self, provider, collected: dict, brand_stats: dict) -> str:
         def block(name):
             pairs = collected.get(name, [])
-            return "\n".join(f"- {r[:400]}" for _, r in pairs) or "No data."
+            # Include full responses but cap at 600 chars each to stay within token budget
+            return "\n\n".join(f"Q: {p}\nA: {r[:600]}" for p, r in pairs) or "No data."
 
         target = self.target_brand or "N/A"
         counts = brand_stats.get("counts", {})
-        total = brand_stats.get("total_responses", 1)
-        brand_lines = "\n".join(
-            f"- {b}: {c} mention(s) ({round(c / total * 100)}%)"
-            for b, c in sorted(counts.items(), key=lambda x: -x[1])[:8]
-        ) or "No brand data."
+        total  = max(brand_stats.get("total_responses", 1), 1)
 
+        # Ranked brand mention table with gap vs target
         target_count = counts.get(target, 0)
-        target_rate = round(target_count / total * 100) if total else 0
+        target_rate  = round(target_count / total * 100) if total else 0
+        sorted_brands = sorted(counts.items(), key=lambda x: -x[1])
+        rank = next((i + 1 for i, (b, _) in enumerate(sorted_brands) if b == target), None)
+
+        brand_lines = "\n".join(
+            f"  {'→ ' if b == target else '  '}{b}: {c} of {total} responses "
+            f"({round(c / total * 100)}%)"
+            for b, c in sorted_brands[:10]
+        ) or "  No brand data."
+
         brand_block = (
-            f"Brands appearing in responses:\n{brand_lines}\n"
-            f"\n{target} appeared in {target_count} of {total} responses ({target_rate}%)."
+            f"{target}: {target_count} of {total} responses ({target_rate}%)"
+            + (f", rank #{rank} of {len(sorted_brands)}" if rank else "")
+            + f"\n\nAll tracked brands:\n{brand_lines}"
         )
 
-        # Enrich brand block with direct perception responses if available
+        # Enrich with direct brand perception responses
         brand_direct = collected.get("Brand Intelligence", [])
         if brand_direct:
-            brand_block += f"\n\nDIRECT {target.upper()} BRAND INTELLIGENCE (AI responses):\n"
-            brand_block += "\n".join(f"- {r[:500]}" for _, r in brand_direct[:5])
+            brand_block += f"\n\nDIRECT {target.upper()} BRAND PERCEPTION RESPONSES:\n"
+            brand_block += "\n\n".join(f"Q: {p}\nA: {r[:500]}" for p, r in brand_direct[:4])
+
+        # Extract verbatim sentences mentioning the target brand
+        quotes_block = self._extract_brand_quotes(collected, target, max_quotes=5)
 
         all_count = sum(len(v) for v in collected.values())
         prompt = _BRIEFING_PROMPT_TEMPLATE.format(
-            n_prompts=all_count,
             target_brand=target,
+            brand_block=brand_block,
+            quotes_block=quotes_block,
             product_block=block("Product Intelligence"),
             persona_block=block("Consumer Personas"),
             journey_block=block("Buying Journey"),
-            brand_block=brand_block,
             web_block=self._build_web_block(),
         )
         result = provider.ask(prompt)
         return result.executive_summary or ""
+
+    def _extract_brand_quotes(self, collected: dict, target: str,
+                              max_quotes: int = 5) -> str:
+        """
+        Pull verbatim sentences from stored responses that mention the target brand.
+        Prefers sentences where the brand is compared, contrasted, or evaluated.
+        """
+        if not target or target == "N/A":
+            return "No target brand set."
+
+        target_lower = target.lower()
+        comparison_signals = ("unlike", "compared", "versus", "vs", "better than",
+                              "worse than", "instead of", "over", "recommend",
+                              "prefer", "top pick", "best", "not as")
+
+        scored: list[tuple[int, str]] = []
+
+        for pairs in collected.values():
+            for _, response in pairs:
+                for sentence in re.split(r'(?<=[.!?])\s+', response):
+                    if target_lower not in sentence.lower():
+                        continue
+                    s = sentence.strip()
+                    if len(s) < 30 or len(s) > 400:
+                        continue
+                    # Score higher if it contains a comparison signal
+                    score = 2 if any(sig in s.lower() for sig in comparison_signals) else 1
+                    scored.append((score, s))
+
+        if not scored:
+            return f"No responses directly mentioned {target}."
+
+        # Deduplicate and sort by score, take top N
+        seen: set[str] = set()
+        unique: list[tuple[int, str]] = []
+        for score, s in sorted(scored, key=lambda x: -x[0]):
+            if s not in seen:
+                seen.add(s)
+                unique.append((score, s))
+
+        lines = [f'  "{s}"' for _, s in unique[:max_quotes]]
+        return "\n".join(lines)
 
     # ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -478,18 +573,26 @@ class IntelligenceService:
         pattern = re.compile(
             r"OPPORTUNITY\s*\[?\d+\]?:\s*(.+?)\n"
             r"EVIDENCE:\s*(.*?)\n"
-            r"ACTION:\s*(.*?)(?=\nOPPORTUNITY|\Z)",
+            r"ACTION:\s*(.*?)\n"
+            r"(?:TACTICS:\s*(.*?))?(?=\nOPPORTUNITY|\Z)",
             re.DOTALL | re.IGNORECASE,
         )
         results = []
         for m in pattern.finditer(text):
             title = m.group(1).strip()
-            if title:
-                results.append({
-                    "title": title,
-                    "evidence": m.group(2).strip(),
-                    "description": m.group(3).strip(),
-                })
+            if not title:
+                continue
+            action  = m.group(3).strip()
+            tactics = (m.group(4) or "").strip()
+            # Combine action + tactics into description so the UI surfaces both
+            description = action
+            if tactics:
+                description += f"\n\nTactics:\n{tactics}"
+            results.append({
+                "title":       title,
+                "evidence":    m.group(2).strip(),
+                "description": description,
+            })
         return results
 
     @staticmethod

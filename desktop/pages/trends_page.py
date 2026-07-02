@@ -24,10 +24,6 @@ from backend.visibility.trends_service import TrendsService
 
 # ── Color palettes ─────────────────────────────────────────────────────────────
 
-_BRAND_PALETTE = [
-    "#2563EB", "#DC2626", "#16A34A", "#D97706",
-    "#7C3AED", "#0891B2", "#EA580C", "#9333EA",
-]
 _PROVIDER_COLORS = {
     "openai":     "#10A37F",
     "OpenAI":     "#10A37F",
@@ -48,6 +44,9 @@ _FEAT_PALETTE = [
     "#6366F1", "#F43F5E", "#14B8A6", "#F59E0B",
     "#8B5CF6", "#EC4899",
 ]
+# Muted tones for "everyone but the target brand" on multi-line trend charts —
+# keeps blue (#2563EB) exclusively meaning "target brand" across every chart on this page.
+_COMPETITOR_MUTED = ["#94A3B8", "#64748B", "#CBD5E1"]
 
 
 # ── Reusable canvas ────────────────────────────────────────────────────────────
@@ -151,6 +150,7 @@ class TrendsPage(QWidget):
         refresh_btn = QPushButton("Refresh")
         refresh_btn.setFixedWidth(90)
         refresh_btn.clicked.connect(self._refresh)
+        refresh_btn.setToolTip("Reload all charts from the latest Visibility run data")
         ctrl.addWidget(self.status_lbl)
         ctrl.addStretch()
         ctrl.addWidget(refresh_btn)
@@ -255,7 +255,6 @@ class TrendsPage(QWidget):
     def _draw_score(self):
         import numpy as np
         from collections import defaultdict
-        from matplotlib.lines import Line2D
 
         s = self._summaries
         if not s:
@@ -293,23 +292,12 @@ class TrendsPage(QWidget):
         # Daily average line
         ax.plot(xs, means, color="#2563EB", linewidth=2.5, zorder=4, label="Daily avg")
 
-        # Individual run dots coloured by provider
-        for run in s:
-            di = dates.index(run["date"])
-            clr = _PROVIDER_COLORS.get(run["provider"], "#6B7280")
-            ax.scatter(di, run["target_score"], color=clr, s=50, zorder=5, alpha=0.85)
-
         # Trend line (linear regression on daily averages)
         z = np.polyfit(xs, means, 1)
         p = np.poly1d(z)
         direction = "↑" if z[0] > 0.05 else ("↓" if z[0] < -0.05 else "→")
         ax.plot(xs, p(xs), color="#EF4444", linewidth=1.5,
                 linestyle="--", label=f"Trend {direction}", zorder=3)
-
-        # Overall mean reference
-        overall = float(means.mean())
-        ax.axhline(overall, color="#9CA3AF", linewidth=1,
-                   linestyle=":", label=f"Avg {overall:.1f}%")
 
         # X-axis: at most 12 evenly-spaced date labels (MM-DD)
         step = max(1, len(dates) // 12)
@@ -323,22 +311,9 @@ class TrendsPage(QWidget):
                      fontsize=11, fontweight="bold", pad=8)
         ax.yaxis.set_major_formatter(mticker.FormatStrFormatter("%.0f%%"))
 
-        # Combined legend: providers + line types
-        unique_provs = list(dict.fromkeys(run["provider"] for run in s))
-        prov_handles = [
-            Line2D([0], [0], marker="o", color="w",
-                   markerfacecolor=_PROVIDER_COLORS.get(p, "#6B7280"),
-                   markersize=7, label=p)
-            for p in unique_provs
-        ]
-        line_handles = [
-            Line2D([0], [0], color="#2563EB", linewidth=2.5, label="Daily avg"),
-            Line2D([0], [0], color="#EF4444", linewidth=1.5,
-                   linestyle="--", label=f"Trend {direction}"),
-        ]
-        ax.legend(handles=prov_handles + line_handles,
-                  fontsize=8, loc="upper right", ncol=2,
-                  title="Provider / Line", title_fontsize=8)
+        # Per-provider breakdown lives on its own "By Provider" tab — this chart
+        # stays focused on the single trend line + volatility band + direction.
+        ax.legend(fontsize=8, loc="upper right")
         c.draw()
 
     def _draw_brands(self):
@@ -441,12 +416,12 @@ class TrendsPage(QWidget):
             )
             return
 
-        # Top 6 features by overall average
+        # Top 4 features by overall average (fewer lines keeps the chart readable)
         totals: dict[str, float] = defaultdict(float)
         for d in daily_feat.values():
             for feat, rates in d.items():
                 totals[feat] += sum(rates) / len(rates)
-        top_feats = sorted(totals, key=lambda f: -totals[f])[:6]
+        top_feats = sorted(totals, key=lambda f: -totals[f])[:4]
 
         if not top_feats:
             self._c_features.no_data("No feature data available.")
@@ -475,8 +450,11 @@ class TrendsPage(QWidget):
         ax.set_ylabel("Mention Rate (%)", fontsize=9)
         ax.set_ylim(bottom=0)
         ax.set_xlim(-0.5, len(dates) - 0.5)
-        ax.set_title("Feature Mention Trends Over Time",
-                     fontsize=11, fontweight="bold", pad=8)
+        ax.set_title(
+            "Feature Mention Trends Over Time\n"
+            "(% of AI responses mentioning each feature — top 4 shown)",
+            fontsize=10, fontweight="bold", pad=8
+        )
         ax.yaxis.set_major_formatter(mticker.FormatStrFormatter("%.0f%%"))
         ax.legend(fontsize=7, loc="upper left", ncol=2)
         c.draw()
@@ -507,12 +485,12 @@ class TrendsPage(QWidget):
 
         brand = self.app.get_target_brand() or "Target Brand"
 
-        # Top 5 brands by cumulative first-mention share + target brand
+        # Top 3 competitor brands by cumulative first-mention share + target brand
         totals: dict[str, float] = defaultdict(float)
         for d in daily_pos.values():
             for b, shares in d.items():
                 totals[b] += sum(shares) / len(shares)
-        ranked = sorted(totals, key=lambda b: -totals[b])[:5]
+        ranked = sorted(totals, key=lambda b: -totals[b])[:3]
         if brand not in ranked:
             ranked.append(brand)
 
@@ -520,7 +498,6 @@ class TrendsPage(QWidget):
         c.reset()
         ax = c.ax
         xs = np.arange(len(dates))
-        colors = list(_BRAND_PALETTE)
 
         non_targets = [b for b in ranked if b != brand]
         for i, b in enumerate(non_targets):
@@ -528,11 +505,12 @@ class TrendsPage(QWidget):
                 sum(daily_pos[d][b]) / len(daily_pos[d][b]) if b in daily_pos[d] else 0
                 for d in dates
             ]
-            ax.plot(xs, daily_means, color=colors[(i + 1) % len(colors)],
+            ax.plot(xs, daily_means, color=_COMPETITOR_MUTED[i % len(_COMPETITOR_MUTED)],
                     linewidth=1.5, label=b, zorder=3,
                     marker="o" if len(dates) <= 15 else None, markersize=3.5)
 
-        # Target brand highlighted
+        # Target brand highlighted — blue is reserved for the target brand on every
+        # chart on this page, so it reads the same way no matter which tab you're on.
         target_means = [
             sum(daily_pos[d][brand]) / len(daily_pos[d][brand]) if brand in daily_pos[d] else 0
             for d in dates
@@ -549,8 +527,8 @@ class TrendsPage(QWidget):
         ax.set_ylim(bottom=0)
         ax.set_xlim(-0.5, len(dates) - 0.5)
         ax.set_title(
-            "First-Position Brand Mentions Over Time\n"
-            "(% of responses where brand is mentioned first)",
+            "Who AI Names First — Over Time\n"
+            "(% of responses naming each brand FIRST — AI's top pick)",
             fontsize=10, fontweight="bold", pad=8
         )
         ax.yaxis.set_major_formatter(mticker.FormatStrFormatter("%.0f%%"))
