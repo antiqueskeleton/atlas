@@ -19,7 +19,7 @@ class CustomerFitAgent:
 
             summary = (
                 f"Customer Fit analysis framework is ready for "
-                f"{comp_shop.firman_product} against {competitors} in {category}. "
+                f"{comp_shop.target_product} against {competitors} in {category}. "
                 f"Atlas will evaluate which product better matches customer needs, "
                 f"use case, feature expectations, and positioning."
             )

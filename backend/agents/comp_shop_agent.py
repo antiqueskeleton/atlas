@@ -26,7 +26,7 @@ class CompShopAgent:
 
         result = (
             f"Comp Shop analyzed {summary.evidence_count} responses for "
-            f"{comp_shop.firman_product} against {competitors} in {category}. "
+            f"{comp_shop.target_product} against {competitors} in {category}. "
             f"Atlas found {summary.finding_counts_by_type.get('brand', 0)} brand signals "
             f"and {summary.finding_counts_by_type.get('feature', 0)} feature signals. "
             f"This supports product-to-product comparison across features, positioning, "

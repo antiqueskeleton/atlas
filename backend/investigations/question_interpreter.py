@@ -55,7 +55,7 @@ class QuestionInterpreter:
         ]):
             request.intent = "comp_shop"
             request.comp_shop = CompShopRequest(
-                firman_product=request.target_brand or "Firman product",
+                target_product=request.target_brand or request.target_brand or "Target product",
                 competitor_products=[
                     request.competitor
                 ] if request.competitor else [],

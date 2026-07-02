@@ -277,6 +277,7 @@ class VisibilityPage(QWidget):
 
         self._ps_search = QLineEdit()
         self._ps_search.setPlaceholderText("Search families…")
+        self._ps_search.setToolTip("Filter the prompt family list below by name")
         self._ps_search.setFixedHeight(26)
         self._ps_search.setStyleSheet(
             "QLineEdit { border: 1px solid #D1D5DB; border-radius: 4px; "
@@ -353,6 +354,8 @@ class VisibilityPage(QWidget):
         btn_all.clicked.connect(self._select_all_sets)
         btn_none.clicked.connect(self._clear_sets)
         btn_top.clicked.connect(self._select_top_families)
+        btn_all.setToolTip("Select every prompt family and scenario")
+        btn_none.setToolTip("Clear all selections")
         btn_top.setToolTip("Select the 20 highest-influence prompt families")
 
         self._count_lbl = QLabel("0 sets\n0 prompts")
@@ -387,11 +390,18 @@ class VisibilityPage(QWidget):
             cb = QCheckBox()
             cb.setChecked(has_key)
             self._provider_checks[key] = cb
+            dot_tip = (
+                "API key configured — ready to collect"
+                if has_key else
+                "No API key set — add one in Settings before running this provider"
+            )
             dot = QLabel("⬤")
             dot.setFixedWidth(16)
             dot.setStyleSheet(
                 f"color: {'#16A34A' if has_key else '#DC2626'}; font-size: 14px; padding: 0 1px;"
             )
+            dot.setToolTip(dot_tip)
+            cb.setToolTip(dot_tip)
             name_lbl = QLabel(key.capitalize())
             name_lbl.setStyleSheet("font-size: 12px;")
             name_lbl.setCursor(Qt.PointingHandCursor)
@@ -415,16 +425,21 @@ class VisibilityPage(QWidget):
             "QPushButton:disabled { background: #9CA3AF; }"
         )
         self._run_btn.clicked.connect(self._start_run)
+        self._run_btn.setToolTip(
+            "Query every selected AI provider with every selected prompt and store the responses"
+        )
 
         self._pause_btn = QPushButton("Pause")
         self._pause_btn.setFixedWidth(70)
         self._pause_btn.setEnabled(False)
         self._pause_btn.clicked.connect(self._toggle_pause)
+        self._pause_btn.setToolTip("Pause the running collection — resume with the same button")
 
         self._stop_btn = QPushButton("Stop")
         self._stop_btn.setFixedWidth(70)
         self._stop_btn.setEnabled(False)
         self._stop_btn.clicked.connect(self._stop_run)
+        self._stop_btn.setToolTip("Stop the collection — responses gathered so far are kept")
 
         self._progress = QProgressBar()
         self._progress.setFixedHeight(14)
@@ -624,12 +639,14 @@ class VisibilityPage(QWidget):
         self._raw_search = QLineEdit()
         self._raw_search.setPlaceholderText("Filter by keyword in prompt, response, or family…")
         self._raw_search.textChanged.connect(self._filter_raw_data)
+        self._raw_search.setToolTip("Search the raw response text below by keyword")
         prov_lbl = QLabel("Provider:")
         prov_lbl.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self._raw_prov_filter = QComboBox()
         self._raw_prov_filter.setFixedWidth(160)
         self._raw_prov_filter.addItem("All Providers")
         self._raw_prov_filter.currentTextChanged.connect(self._filter_raw_data)
+        self._raw_prov_filter.setToolTip("Show responses from only one AI provider")
         self._raw_count_lbl = QLabel("")
         self._raw_count_lbl.setStyleSheet("color: #6B7280; font-size: 11px;")
         self._raw_count_lbl.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
@@ -687,6 +704,7 @@ class VisibilityPage(QWidget):
             "QPushButton:pressed { background: #D1D5DB; }"
         )
         self._collapse_btn.clicked.connect(self._toggle_ctrl_panel)
+        self._collapse_btn.setToolTip("Show or hide the prompt/provider selection panel")
 
         self._export_pdf_btn = QPushButton("Export PDF Report")
         self._export_pdf_btn.setFixedHeight(28)
@@ -699,11 +717,27 @@ class VisibilityPage(QWidget):
             "QPushButton:disabled { background: #9CA3AF; }"
         )
         self._export_pdf_btn.clicked.connect(self._export_pdf)
+        self._export_pdf_btn.setToolTip("Generate a formatted PDF report from the current analytics")
+
+        self._export_excel_btn = QPushButton("Export Excel")
+        self._export_excel_btn.setFixedHeight(28)
+        self._export_excel_btn.setCursor(Qt.PointingHandCursor)
+        self._export_excel_btn.setStyleSheet(
+            "QPushButton { font-size: 12px; font-weight: 600; color: #0B84FF; "
+            "background: white; border: 1.5px solid #0B84FF; border-radius: 5px; padding: 4px 14px; }"
+            "QPushButton:hover { background: #EFF6FF; }"
+            "QPushButton:pressed { background: #DBEAFE; }"
+            "QPushButton:disabled { color: #9CA3AF; border-color: #9CA3AF; }"
+        )
+        self._export_excel_btn.clicked.connect(self._export_excel)
+        self._export_excel_btn.setToolTip("Export all analytics sheets and raw responses to .xlsx")
 
         toolbar_row = QHBoxLayout()
         toolbar_row.setContentsMargins(0, 0, 0, 0)
+        toolbar_row.setSpacing(8)
         toolbar_row.addWidget(self._collapse_btn, 1)
         toolbar_row.addStretch()
+        toolbar_row.addWidget(self._export_excel_btn)
         toolbar_row.addWidget(self._export_pdf_btn)
         toolbar_widget = QWidget()
         toolbar_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -834,6 +868,66 @@ class VisibilityPage(QWidget):
         worker.finished.connect(_done)
         worker.start()
         self._pdf_worker = worker  # keep reference
+
+    def _export_excel(self):
+        default_name = (
+            f"Atlas_Visibility_Data_"
+            f"{self.app.get_target_brand() or 'Report'}_"
+            f"{__import__('datetime').date.today().isoformat()}.xlsx"
+        ).replace(" ", "_")
+        downloads = os.path.join(os.path.expanduser("~"), "Downloads")
+        default_path = os.path.join(downloads, default_name)
+
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Save Excel Report", default_path,
+            "Excel Files (*.xlsx);;All Files (*)"
+        )
+        if not path:
+            return
+
+        self._export_excel_btn.setEnabled(False)
+        self._export_excel_btn.setText("Generating…")
+
+        def _generate():
+            try:
+                from backend.reports.excel_report import VisibilityExcelReport
+                analytics = self.service.analytics_summary()
+                runs      = self.service.list_runs()
+                stats     = self.service.repository.count_stats()
+                raw       = self.service.repository.list_responses()
+                rpt = VisibilityExcelReport(
+                    analytics=analytics,
+                    runs=runs,
+                    stats=stats,
+                    target_brand=self.app.get_target_brand(),
+                    raw_responses=raw,
+                )
+                rpt.generate(path)
+                return path, None
+            except Exception as exc:
+                return None, str(exc)
+
+        def _done(result):
+            out_path, err = result
+            self._export_excel_btn.setEnabled(True)
+            self._export_excel_btn.setText("Export Excel")
+            if err:
+                QMessageBox.critical(self, "Export Failed",
+                                     f"Could not generate Excel file:\n\n{err}")
+            else:
+                reply = QMessageBox.information(
+                    self, "Export Ready",
+                    f"Excel file saved to:\n{out_path}",
+                    QMessageBox.Open | QMessageBox.Ok,
+                    QMessageBox.Ok,
+                )
+                if reply == QMessageBox.Open:
+                    os.startfile(out_path)
+
+        worker = _PDFWorker(_generate)
+        worker.finished.connect(_done)
+        worker.start()
+        self._excel_worker = worker  # keep reference
 
     def _get_selected_prompts(self) -> tuple[list, str, dict]:
         """Returns (prompts, label, prompt_families).

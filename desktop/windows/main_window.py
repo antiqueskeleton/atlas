@@ -23,6 +23,7 @@ from app.atlas_application import AtlasApplication
 from desktop.pages.home_page import HomePage
 from desktop.pages.investigation_page import InvestigationPage
 from desktop.pages.trends_page import TrendsPage
+from desktop.pages.comp_shopping_page import CompShoppingPage
 from desktop.pages.knowledge_page import KnowledgePage
 from desktop.pages.intelligence_page import IntelligencePage
 from desktop.pages.settings_page import SettingsPage
@@ -37,6 +38,7 @@ _NAV_ITEMS = [
     ("👁",  "Visibility",  "nav_visibility.png"),
     ("💡", "Intelligence", "nav_intelligence.png"),
     ("📈", "Trends",       "nav_trends.png"),
+    ("🛒", "Comp Shop",    "nav_comp.png"),
     ("🧠", "Knowledge",    "nav_knowledge.png"),
     ("⚙",  "Settings",    "nav_settings.png"),
 ]
@@ -75,6 +77,9 @@ class AtlasMainWindow(QMainWindow):
         knowledge_action.triggered.connect(lambda: self.nav.setCurrentRow(5))
 
         help_menu = menu.addMenu("Help")
+        guide_action = help_menu.addAction("Usage Guide")
+        guide_action.triggered.connect(self._show_usage_guide)
+        help_menu.addSeparator()
         about_action = help_menu.addAction("About Atlas")
         about_action.triggered.connect(self._show_about)
 
@@ -269,6 +274,8 @@ class AtlasMainWindow(QMainWindow):
         self.pages.addTab(self.visibility_page,     "Visibility")
         self.pages.addTab(self.intelligence_page,   "Intelligence")
         self.pages.addTab(TrendsPage(self.app),     "Trends")
+        self.comp_shopping_page = CompShoppingPage(self.app)
+        self.pages.addTab(self.comp_shopping_page,  "Comp Shop")
         self.pages.addTab(KnowledgePage(self.app),  "Knowledge")
         self.pages.addTab(SettingsPage(self.app),   "Settings")
 
@@ -282,6 +289,8 @@ class AtlasMainWindow(QMainWindow):
         self.pages.setCurrentIndex(row)
         if row == 0:
             self.home_page.refresh()
+        elif row == 5:   # Comp Shop
+            self.comp_shopping_page.refresh()
 
     # ── Update checker ────────────────────────────────────────────────────────
 
@@ -401,6 +410,132 @@ class AtlasMainWindow(QMainWindow):
         lay.addLayout(btn_row)
 
         dlg.setLayout(lay)
+        dlg.exec()
+
+    def _show_usage_guide(self):
+        from PySide6.QtWidgets import (
+            QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QScrollArea, QWidget,
+        )
+        from PySide6.QtCore import Qt
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Atlas — Usage Guide")
+        dlg.setFixedSize(560, 620)
+
+        outer = QVBoxLayout()
+        outer.setSpacing(0)
+        outer.setContentsMargins(0, 0, 0, 0)
+
+        # ── Header ─────────────────────────────────────────────────────────────
+        header = QWidget()
+        header.setStyleSheet("background: #111827;")
+        h_lay = QVBoxLayout()
+        h_lay.setContentsMargins(32, 22, 32, 18)
+        h_lay.setSpacing(2)
+        title_lbl = QLabel("Usage Guide")
+        title_lbl.setStyleSheet("font-size: 22px; font-weight: 700; color: white;")
+        sub_lbl = QLabel("What each page does and how they fit together.")
+        sub_lbl.setStyleSheet("font-size: 12px; color: #9CA3AF;")
+        h_lay.addWidget(title_lbl)
+        h_lay.addWidget(sub_lbl)
+        header.setLayout(h_lay)
+
+        # ── Scrollable body ────────────────────────────────────────────────────
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setStyleSheet("background: white;")
+
+        body = QWidget()
+        body.setStyleSheet("background: white;")
+        b_lay = QVBoxLayout()
+        b_lay.setContentsMargins(32, 20, 32, 20)
+        b_lay.setSpacing(16)
+
+        def _section(title: str, body_text: str) -> QWidget:
+            w = QWidget()
+            lay = QVBoxLayout()
+            lay.setContentsMargins(0, 0, 0, 0)
+            lay.setSpacing(3)
+            t = QLabel(title)
+            t.setStyleSheet("font-size: 13.5px; font-weight: 700; color: #111827;")
+            d = QLabel(body_text)
+            d.setWordWrap(True)
+            d.setStyleSheet("font-size: 12px; color: #4B5563; line-height: 1.4;")
+            lay.addWidget(t)
+            lay.addWidget(d)
+            w.setLayout(lay)
+            return w
+
+        b_lay.addWidget(_section(
+            "Recommended Workflow",
+            "1. Settings — set your Target Brand and add AI provider API keys.  "
+            "2. Visibility — run a collection to gather AI responses (this is the raw data "
+            "every other page builds on).  3. Trends &amp; Intelligence — analyze that data over "
+            "time and generate briefings.  4. Investigate — ask specific follow-up questions."
+        ))
+
+        pages = [
+            ("Home",
+             "Dashboard snapshot — mention rate, responses stored, run counts, and a recent "
+             "activity feed. No actions here, just a quick status check."),
+            ("Investigate",
+             "Ask a natural-language business question (e.g. \"Why is Honda winning on Amazon "
+             "reviews?\"). Atlas dispatches specialized AI agents to research it and returns a "
+             "synthesized answer with ranked evidence and recommendations."),
+            ("Visibility",
+             "The core data collection engine. Select prompt families and AI providers, then "
+             "Run Visibility Collection to query every selected provider with every selected "
+             "prompt and store the responses. Run this regularly — Trends and Intelligence both "
+             "depend on this data existing."),
+            ("Intelligence",
+             "Synthesizes stored Visibility responses into an executive briefing, consumer "
+             "personas, buying-journey insights, and strategic opportunities. Requires Visibility "
+             "data first. Export the result as PDF or Word."),
+            ("Trends",
+             "Charts how visibility score, brand standing, provider performance, feature "
+             "associations, and first-mention position change across multiple Visibility runs. "
+             "Time-series charts need at least 2 days of collection history to render."),
+            ("Comp Shop",
+             "Currently being rebuilt (Coming Soon) — will compare pricing and specs across "
+             "brands using an AI-assisted product catalog."),
+            ("Knowledge",
+             "Manage the reference data Atlas uses for detection: Brands, Features, Personas, "
+             "Scenarios, Stages, Prompt Families, and Prompts. \"Discover Brands\" scans AI "
+             "responses for newly-mentioned competitor brands not yet tracked."),
+            ("Settings",
+             "Configure your Target Brand, active AI provider, and per-provider API keys (use "
+             "Test to verify a key works). Run Health Check to verify the database and "
+             "configuration are sound."),
+        ]
+        for name, desc in pages:
+            b_lay.addWidget(_section(name, desc))
+
+        b_lay.addStretch()
+        body.setLayout(b_lay)
+        scroll.setWidget(body)
+
+        # ── Footer ─────────────────────────────────────────────────────────────
+        footer = QWidget()
+        footer.setStyleSheet("background: #FAFAFA; border-top: 1px solid #E5E7EB;")
+        f_lay = QHBoxLayout()
+        f_lay.setContentsMargins(32, 12, 32, 12)
+        f_lay.setAlignment(Qt.AlignCenter)
+        close_btn = QPushButton("Close")
+        close_btn.setFixedWidth(110)
+        close_btn.setStyleSheet(
+            "QPushButton { background: #111827; color: white; border: none; "
+            "border-radius: 5px; padding: 6px 16px; font-size: 12px; font-weight: 600; }"
+            "QPushButton:hover { background: #374151; }"
+        )
+        close_btn.clicked.connect(dlg.accept)
+        f_lay.addWidget(close_btn)
+        footer.setLayout(f_lay)
+
+        outer.addWidget(header)
+        outer.addWidget(scroll, 1)
+        outer.addWidget(footer)
+        dlg.setLayout(outer)
         dlg.exec()
 
     def _import_responses(self):
