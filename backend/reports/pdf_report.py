@@ -239,6 +239,8 @@ class VisibilityPDFReport:
         pos_counts  = a.get('brand_position_counts', {})
         pos_share   = a.get('brand_position_share', {})
         first_share = a.get('first_mention_share', {})
+        neg_counts  = a.get('negative_brand_counts', {})
+        neg_rate    = a.get('brand_negative_rate', {})
 
         story = [Paragraph("Brand Analysis", s['H1']), Spacer(1, 0.08 * inch)]
         story.append(Paragraph(
@@ -327,6 +329,29 @@ class VisibilityPDFReport:
                 [[b, f"{sh}%"]
                  for b, sh in sorted(first_share.items(), key=lambda x: -x[1])[:10]],
                 col_widths=[4.59, 2.6],
+            ))
+
+        # ── Brand Sentiment ────────────────────────────────────────────────────
+        if neg_counts:
+            story.append(Spacer(1, 0.2 * inch))
+            story.append(Paragraph("Brand Sentiment", s['H2']))
+            story.append(Spacer(1, 0.05 * inch))
+            story.append(Paragraph(
+                "Negative mentions are responses where a brand was cast unfavorably or lost "
+                "a direct comparison (e.g. \"unlike Firman, Honda includes electric start\"). "
+                "Negative % is of that brand's own mentions, not of all responses — it answers "
+                "\"when AI brings this brand up, how often is it unfavorable,\" independent of "
+                "how often the brand is mentioned at all. Detected via keyword/context rules, "
+                "not a language model — see Sources note below for limitations.",
+                s['Body']
+            ))
+            story.append(Spacer(1, 0.08 * inch))
+            story.append(self._section_table(
+                "Brand Sentiment",
+                ["Brand", "Mentions", "Negative", "Negative %"],
+                [[b, str(brand_cnts.get(b, 0)), str(neg_counts.get(b, 0)), f"{neg_rate.get(b, 0)}%"]
+                 for b, _ in sorted(brand_cnts.items(), key=lambda x: -x[1])[:12]],
+                col_widths=[3.19, 1.3, 1.3, 1.4],
             ))
 
         story.append(PageBreak())

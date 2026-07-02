@@ -8,8 +8,26 @@ from PySide6.QtWidgets import QApplication, QSplashScreen
 from desktop.windows.main_window import AtlasMainWindow
 from desktop.theme.styles import STYLE
 from desktop.theme.colors import STEEL
+from desktop.updater import APP_VERSION
 
-_IMAGES_DIR = Path(__file__).resolve().parent.parent / "images"
+
+def _images_dir() -> Path:
+    """
+    Frozen-aware images directory (#37). Previously always used
+    Path(__file__).resolve().parent.parent — relative-path resolution off
+    __file__ is not reliably correct for PyInstaller-frozen modules (the
+    file doesn't physically exist at that path; __file__ is a synthesized
+    compatibility value), unlike backend/services/paths.py's get_data_dir(),
+    which already correctly branches on sys.frozen. This makes main.py match
+    that same, proven-correct pattern instead of relying on __file__ behavior
+    that varies by PyInstaller version.
+    """
+    if getattr(sys, "frozen", False):
+        return Path(sys._MEIPASS) / "images"
+    return Path(__file__).resolve().parent.parent / "images"
+
+
+_IMAGES_DIR = _images_dir()
 
 
 def _make_splash() -> QSplashScreen:
@@ -42,7 +60,7 @@ def _make_splash() -> QSplashScreen:
         p.drawText(
             0, pix.height() - 26, pix.width(), 20,
             Qt.AlignHCenter | Qt.AlignVCenter,
-            "dweeb.co  ·  v0.7",
+            f"dweeb.co  ·  v{APP_VERSION}",
         )
         p.end()
 
@@ -51,14 +69,21 @@ def _make_splash() -> QSplashScreen:
 
 def main():
     app = QApplication(sys.argv)
-    app.setStyleSheet(STYLE)
 
     icon = QIcon(str(_IMAGES_DIR / "atlas_icon.png"))
     app.setWindowIcon(icon)
 
+    # Splash is created and shown BEFORE the global stylesheet is applied
+    # (#37) — QSplashScreen does its own custom pixmap painting, and applying
+    # an app-wide QWidget stylesheet switches Qt's rendering path for every
+    # QWidget subclass including QSplashScreen, which can interfere with that
+    # custom paintEvent. Showing it first, untouched by STYLE, removes that
+    # as a possible cause regardless of whether it was the actual culprit.
     splash = _make_splash()
     splash.show()
     app.processEvents()
+
+    app.setStyleSheet(STYLE)
 
     window = AtlasMainWindow()
     window.setWindowIcon(icon)

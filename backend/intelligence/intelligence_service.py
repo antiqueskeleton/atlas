@@ -7,15 +7,45 @@ from datetime import datetime
 
 from backend.intelligence.analysts import BuyingJourneyAnalyst, PersonaAnalyst, ProductAnalyst
 from backend.intelligence.intelligence_repository import IntelligenceRepository
+from backend.visibility.negation import detect_negative_brands
 from backend.visibility.visibility_repository import VisibilityRepository
 
+
+_PORTFOLIO_PROMPT_TEMPLATE = """\
+You are analyzing AI-generated research responses about the portable generator market to \
+determine what product categories {target_brand} actually competes in — based ONLY on \
+patterns in the data below, not on general knowledge you may have about the brand.
+
+RULES:
+- Base your answer strictly on the data: categories where {target_brand} is mentioned as a \
+participant/option are IN PORTFOLIO. Categories where competitors are repeatedly discussed \
+but {target_brand} is conspicuously absent across multiple responses are NOT IN PORTFOLIO.
+- If the data doesn't give a clear signal either way, mark the category UNCERTAIN — do not guess.
+- Use short category names a marketing team would recognize, e.g. "Portable Generators", \
+"Home Standby / Whole-House Backup", "Solar Generators", "Inverter Generators", \
+"Commercial/Industrial Generators", "RV-Specific Generators".
+
+RESEARCH DATA ({n_prompts} responses):
+{findings}
+
+Respond in exactly this format, one line each:
+IN PORTFOLIO: [comma-separated categories]
+NOT IN PORTFOLIO: [comma-separated categories]
+UNCERTAIN: [comma-separated categories]
+"""
 
 _OPPORTUNITY_PROMPT_TEMPLATE = """\
 You are a market intelligence analyst for the portable generator industry. \
 Your output will drive real marketing decisions, so every opportunity must be grounded in the \
 data below — not in general industry knowledge.
 
+{target_brand}'S INFERRED PRODUCT PORTFOLIO (from prior analysis of this same data):
+{portfolio_block}
+
 RULES:
+- Respond in plain text only. Do not use markdown formatting — no **bold**, no ### headers, \
+no pipe-delimited tables, no bullet characters. Atlas displays this text as-is; markdown syntax \
+would show up as literal asterisks and symbols, not formatting.
 - EVIDENCE must cite a specific count ("X of Y responses...") or quote a sentence directly from \
 the data. Do not write generic observations.
 - TACTICS must name specific platforms, programs, or content types — not vague instructions. \
@@ -24,6 +54,9 @@ Request-a-Review"; "Publish a 300-word comparison page targeting '[feature] vs [
 keyword"; "Seed 2-3 YouTube reviewers in the 50K-500K subscriber range with review units"; \
 "Post organic answers in r/preppers and r/DIY with product link in bio".
 - If an opportunity cannot be supported by the data, skip it.
+- If a gap falls in a category listed as NOT IN PORTFOLIO above, do NOT propose it as a \
+visibility opportunity — {target_brand} does not compete there, so AI absence reflects product \
+reality, not a marketing gap. Skip it entirely rather than reframing it as fixable.
 
 RESEARCH DATA ({n_prompts} responses):
 {findings}
@@ -40,6 +73,11 @@ _BRIEFING_PROMPT_TEMPLATE = """\
 You are a market intelligence analyst producing a briefing for a generator brand's marketing team.
 
 CRITICAL RULES:
+- Respond in plain text only. Do not use markdown formatting — no **bold**, no ### headers, \
+no pipe-delimited tables, no bullet characters. Atlas displays this text as-is; markdown syntax \
+would show up as literal asterisks and symbols, not formatting. Use plain section headers \
+(all-caps on their own line, exactly as shown in the section names below) and numbered or \
+dashed plain-text lists.
 - Every claim must cite a number from the quantitative data provided ("appeared in X of Y \
 responses", "mentioned by Z% of responses").
 - Do not write generic industry commentary. If the data does not support a statement, omit it.
@@ -48,6 +86,9 @@ responses", "mentioned by Z% of responses").
 than inventing an observation.
 
 TARGET BRAND: {target_brand}
+
+{target_brand}'S INFERRED PRODUCT PORTFOLIO (from prior analysis of this same data):
+{portfolio_block}
 
 QUANTITATIVE VISIBILITY DATA:
 {brand_block}
@@ -78,6 +119,13 @@ WHAT AI MODELS SAY ABOUT {target_brand}
 Quote at least one verbatim sentence from the research excerpts above. Characterize whether \
 the tone is a primary recommendation, a comparison mention, or an absence.
 
+SENTIMENT
+State how many of {target_brand}'s mentions were negative or unfavorable, citing the exact \
+count and percentage from the data above. If a competitor was favorably compared against \
+{target_brand} in one of those mentions, name that competitor and what they were favored on. \
+If zero negative mentions were detected, say so plainly — do not infer sentiment that isn't \
+in the data.
+
 KEY CONSUMER SEGMENTS
 Name 2-3 specific buyer types that appeared in the research (e.g., "homeowners preparing for \
 hurricane season", "RV owners needing <2000W"). State what purchase driver each segment cited.
@@ -88,7 +136,9 @@ appear or disappear?
 
 GAPS AND RISKS
 What is {target_brand} not mentioned for that competitors are? Name the competitor, the context, \
-and the count difference. Only include gaps visible in the data above.
+and the count difference. Only include gaps visible in the data above. If a gap falls in a \
+category listed as NOT IN PORTFOLIO above, label it "Portfolio gap — {target_brand} does not \
+compete in this category" instead of describing it as a visibility problem.
 
 RECOMMENDED ACTIONS
 For each gap named above give one specific tactic. Match the tactic type to the gap:
@@ -98,6 +148,8 @@ For each gap named above give one specific tactic. Match the tactic type to the 
   keyword, press release to trade publications
 - Channel gap → retailer co-op program, organic community presence (subreddits, forums), \
   SEO content targeting that channel name + product category
+- Portfolio gap → no marketing tactic applies; note plainly that closing this gap requires a \
+  product-line decision, not content or PR
 """
 
 # ── Family → bucket classification ────────────────────────────────────────────
@@ -110,7 +162,7 @@ _BRAND_TERMS = [
 
 _JOURNEY_TERMS = [
     "channel intelligence", "seo", "web presence", "ai knowledge", "knowledge source",
-    "brand comparison", "brand reviews", "brands to avoid", "customer service",
+    "brand reviews", "brands to avoid", "customer service",
     "rental vs", "professionals recommend", "comparison guide",
     "which generator would", "is expensive generator",
 ]
@@ -195,9 +247,13 @@ class IntelligenceService:
                 )
 
         brand_stats = self._count_brands(collected)
+        # Portfolio inference must complete first — both other passes need its
+        # output as grounding context, so it can't run inside the same pool.
+        portfolio_block = self._run_portfolio_pass(provider, collected)
         with ThreadPoolExecutor(max_workers=2) as ex:
-            f_opp = ex.submit(self._run_opportunity_pass, provider, collected)
-            f_brief = ex.submit(self._run_briefing_pass, provider, collected, brand_stats)
+            f_opp = ex.submit(self._run_opportunity_pass, provider, collected, portfolio_block)
+            f_brief = ex.submit(self._run_briefing_pass, provider, collected, brand_stats,
+                                portfolio_block)
             opportunities = f_opp.result()
             briefing = f_brief.result()
         parsed_opps = self._parse_opportunities(opportunities)
@@ -271,9 +327,13 @@ class IntelligenceService:
                 )
 
         brand_stats = self._count_brands(collected)
+        # Portfolio inference must complete first — both other passes need its
+        # output as grounding context, so it can't run inside the same pool.
+        portfolio_block = self._run_portfolio_pass(provider, collected)
         with ThreadPoolExecutor(max_workers=2) as ex:
-            f_opp = ex.submit(self._run_opportunity_pass, provider, collected)
-            f_brief = ex.submit(self._run_briefing_pass, provider, collected, brand_stats)
+            f_opp = ex.submit(self._run_opportunity_pass, provider, collected, portfolio_block)
+            f_brief = ex.submit(self._run_briefing_pass, provider, collected, brand_stats,
+                                portfolio_block)
             opportunities = f_opp.result()
             briefing = f_brief.result()
         parsed_opps = self._parse_opportunities(opportunities)
@@ -400,7 +460,41 @@ class IntelligenceService:
 
     # ── Synthesis passes ──────────────────────────────────────────────────────
 
-    def _run_opportunity_pass(self, provider, collected: dict) -> str:
+    def _run_portfolio_pass(self, provider, collected: dict) -> str:
+        """
+        Infer what product categories the target brand actually competes in,
+        from response patterns alone. Runs before the opportunity/briefing
+        passes so both can distinguish a real visibility gap from a category
+        the brand simply doesn't manufacture — self-maintaining since it
+        re-infers from live data every run, no hand-maintained product list.
+        """
+        target = self.target_brand or "the target brand"
+        all_pairs: list[tuple[str, str]] = []
+        for responses in collected.values():
+            all_pairs.extend(responses)
+
+        if not all_pairs:
+            return "No data available to infer portfolio."
+
+        findings = "\n\n".join(
+            f"Q: {p}\nA: {r[:500]}" for p, r in all_pairs
+        )
+        prompt = _PORTFOLIO_PROMPT_TEMPLATE.format(
+            target_brand=target,
+            n_prompts=len(all_pairs),
+            findings=findings,
+        )
+        try:
+            result = provider.ask(prompt)
+        except Exception as exc:
+            # Graceful degradation: a failed portfolio inference must not block
+            # the opportunity/briefing passes that run after it — they still
+            # receive this string as portfolio_block and simply proceed without
+            # portfolio grounding rather than crashing the whole run.
+            return f"[Unavailable — {provider.provider_name} request failed: {exc}]"
+        return result.executive_summary or "Could not infer portfolio from available data."
+
+    def _run_opportunity_pass(self, provider, collected: dict, portfolio_block: str) -> str:
         all_pairs: list[tuple[str, str]] = []
         for responses in collected.values():
             all_pairs.extend(responses)
@@ -409,13 +503,27 @@ class IntelligenceService:
             f"Q: {p}\nA: {r[:500]}" for p, r in all_pairs
         )
         prompt = _OPPORTUNITY_PROMPT_TEMPLATE.format(
+            target_brand=self.target_brand or "the target brand",
+            portfolio_block=portfolio_block,
             n_prompts=len(all_pairs),
             findings=findings,
         )
-        result = provider.ask(prompt)
+        try:
+            result = provider.ask(prompt)
+        except Exception as exc:
+            # Pre-formatted to match _parse_opportunities()'s expected pattern so
+            # the failure surfaces as one real, visible opportunity card instead
+            # of silently producing zero opportunities with no explanation.
+            return (
+                "OPPORTUNITY [1]: Opportunity generation failed\n"
+                f"EVIDENCE: {provider.provider_name} request failed: {exc}\n"
+                "ACTION: Run Intelligence Analysis again\n"
+                "TACTICS: If this persists, check the API key and provider status in Settings"
+            )
         return result.executive_summary or ""
 
-    def _run_briefing_pass(self, provider, collected: dict, brand_stats: dict) -> str:
+    def _run_briefing_pass(self, provider, collected: dict, brand_stats: dict,
+                           portfolio_block: str) -> str:
         def block(name):
             pairs = collected.get(name, [])
             # Include full responses but cap at 600 chars each to stay within token budget
@@ -423,23 +531,34 @@ class IntelligenceService:
 
         target = self.target_brand or "N/A"
         counts = brand_stats.get("counts", {})
+        negative_counts = brand_stats.get("negative_counts", {})
         total  = max(brand_stats.get("total_responses", 1), 1)
 
         # Ranked brand mention table with gap vs target
         target_count = counts.get(target, 0)
         target_rate  = round(target_count / total * 100) if total else 0
+        target_negative = negative_counts.get(target, 0)
         sorted_brands = sorted(counts.items(), key=lambda x: -x[1])
         rank = next((i + 1 for i, (b, _) in enumerate(sorted_brands) if b == target), None)
 
         brand_lines = "\n".join(
             f"  {'→ ' if b == target else '  '}{b}: {c} of {total} responses "
             f"({round(c / total * 100)}%)"
+            + (f" — negative in {negative_counts[b]} of those" if negative_counts.get(b) else "")
             for b, c in sorted_brands[:10]
         ) or "  No brand data."
+
+        sentiment_line = (
+            f". Negative/unfavorable context detected in {target_negative} of those "
+            f"{target_count} mentions."
+            if target_negative else
+            ". No negative-context mentions detected for this brand."
+        )
 
         brand_block = (
             f"{target}: {target_count} of {total} responses ({target_rate}%)"
             + (f", rank #{rank} of {len(sorted_brands)}" if rank else "")
+            + sentiment_line
             + f"\n\nAll tracked brands:\n{brand_lines}"
         )
 
@@ -455,6 +574,7 @@ class IntelligenceService:
         all_count = sum(len(v) for v in collected.values())
         prompt = _BRIEFING_PROMPT_TEMPLATE.format(
             target_brand=target,
+            portfolio_block=portfolio_block,
             brand_block=brand_block,
             quotes_block=quotes_block,
             product_block=block("Product Intelligence"),
@@ -462,7 +582,14 @@ class IntelligenceService:
             journey_block=block("Buying Journey"),
             web_block=self._build_web_block(),
         )
-        result = provider.ask(prompt)
+        try:
+            result = provider.ask(prompt)
+        except Exception as exc:
+            return (
+                f"⚠ Executive briefing generation failed — {provider.provider_name} "
+                f"request failed: {exc}\n\nRun Intelligence Analysis again. If this "
+                "persists, check the API key and provider status in Settings."
+            )
         return result.executive_summary or ""
 
     def _extract_brand_quotes(self, collected: dict, target: str,
@@ -548,16 +675,27 @@ class IntelligenceService:
 
     def _count_brands(self, collected: dict) -> dict:
         brand_terms = self._load_brands()
+        flat_terms = [(t, b) for b, terms in brand_terms.items() for t in terms]
         counts: Counter = Counter()
+        negative_counts: Counter = Counter()
         total = 0
         for pairs in collected.values():
             for _, text in pairs:
                 total += 1
                 lower = text.lower()
+                mentioned: set[str] = set()
                 for brand, terms in brand_terms.items():
                     if any(t in lower for t in terms):
                         counts[brand] += 1
-        return {"counts": dict(counts), "total_responses": total}
+                        mentioned.add(brand)
+                for brand in detect_negative_brands(text, flat_terms):
+                    if brand in mentioned:
+                        negative_counts[brand] += 1
+        return {
+            "counts": dict(counts),
+            "negative_counts": dict(negative_counts),
+            "total_responses": total,
+        }
 
     def _load_brands(self) -> dict[str, list[str]]:
         from backend.knowledge.knowledge_repository import KnowledgeRepository
@@ -571,7 +709,10 @@ class IntelligenceService:
     def _parse_opportunities(text: str) -> list[dict]:
         """Parse LLM opportunity text into structured dicts (title, evidence, description)."""
         pattern = re.compile(
-            r"OPPORTUNITY\s*\[?\d+\]?:\s*(.+?)\n"
+            # \d* (not \d+): the [N] numbering is optional — some providers drop
+            # it under token pressure or with certain phrasing, and a missing
+            # number shouldn't cause the whole opportunity to silently vanish.
+            r"OPPORTUNITY\s*\[?\d*\]?:\s*(.+?)\n"
             r"EVIDENCE:\s*(.*?)\n"
             r"ACTION:\s*(.*?)\n"
             r"(?:TACTICS:\s*(.*?))?(?=\nOPPORTUNITY|\Z)",
@@ -579,7 +720,9 @@ class IntelligenceService:
         )
         results = []
         for m in pattern.finditer(text):
-            title = m.group(1).strip()
+            # Strip stray markdown emphasis (**Title**, # Title) some providers
+            # wrap labels in despite the plain-text format requested.
+            title = m.group(1).strip().lstrip("*# ").rstrip("*").strip()
             if not title:
                 continue
             action  = m.group(3).strip()
@@ -593,6 +736,18 @@ class IntelligenceService:
                 "evidence":    m.group(2).strip(),
                 "description": description,
             })
+
+        if not results and text.strip():
+            # The LLM produced real content but not in the expected format —
+            # surface it as one visible card instead of silently discarding
+            # real analysis with no indication anything went wrong.
+            results.append({
+                "title": "Could not parse opportunities from AI response",
+                "evidence": "The response did not match the expected "
+                           "OPPORTUNITY/EVIDENCE/ACTION format.",
+                "description": text.strip()[:2000],
+            })
+
         return results
 
     @staticmethod

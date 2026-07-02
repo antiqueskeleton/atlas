@@ -1,3 +1,4 @@
+import sys
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QSize
@@ -9,13 +10,19 @@ from PySide6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QMainWindow,
+    QMessageBox,
     QStatusBar,
     QTabWidget,
     QVBoxLayout,
     QWidget,
 )
 
-_IMAGES_DIR = Path(__file__).resolve().parents[2] / "images"
+# Frozen-aware (#37, same fix as desktop/main.py) — __file__-based relative
+# resolution isn't reliably correct for PyInstaller-frozen modules.
+if getattr(sys, "frozen", False):
+    _IMAGES_DIR = Path(sys._MEIPASS) / "images"
+else:
+    _IMAGES_DIR = Path(__file__).resolve().parents[2] / "images"
 
 from PySide6.QtWidgets import QPushButton
 
@@ -74,11 +81,16 @@ class AtlasMainWindow(QMainWindow):
         import_action = tools_menu.addAction("Import Responses")
         import_action.triggered.connect(self._import_responses)
         knowledge_action = tools_menu.addAction("Manage Knowledge")
-        knowledge_action.triggered.connect(lambda: self.nav.setCurrentRow(5))
+        # BUG FIX: was setCurrentRow(5), which is Comp Shop — Knowledge is
+        # row 6 in _NAV_ITEMS. "Manage Knowledge" previously opened the
+        # wrong page. Confirmed 2026-07-02.
+        knowledge_action.triggered.connect(lambda: self.nav.setCurrentRow(6))
 
         help_menu = menu.addMenu("Help")
         guide_action = help_menu.addAction("Usage Guide")
         guide_action.triggered.connect(self._show_usage_guide)
+        update_action = help_menu.addAction("Check for Updates")
+        update_action.triggered.connect(self._check_for_updates_manual)
         help_menu.addSeparator()
         about_action = help_menu.addAction("About Atlas")
         about_action.triggered.connect(self._show_about)
@@ -289,6 +301,8 @@ class AtlasMainWindow(QMainWindow):
         self.pages.setCurrentIndex(row)
         if row == 0:
             self.home_page.refresh()
+        elif row == 2:   # Visibility
+            self.visibility_page.refresh_provider_status()
         elif row == 5:   # Comp Shop
             self.comp_shopping_page.refresh()
 
@@ -323,6 +337,43 @@ class AtlasMainWindow(QMainWindow):
         from PySide6.QtGui import QDesktopServices
         from PySide6.QtCore import QUrl
         QDesktopServices.openUrl(QUrl(url))
+
+    # ── Manual "Check for Updates" (Help menu) ──────────────────────────────
+    # Unlike the silent-unless-found automatic startup check, a user-triggered
+    # check must give visible feedback in all three outcomes — found, already
+    # current, or the check itself failed — not just the update-found case.
+
+    def _check_for_updates_manual(self):
+        self.statusBar().showMessage("Checking for updates…")
+        self._manual_update_checker = UpdateChecker()
+        self._manual_update_checker.update_available.connect(self._on_manual_update_available)
+        self._manual_update_checker.up_to_date.connect(self._on_manual_up_to_date)
+        self._manual_update_checker.check_failed.connect(self._on_manual_check_failed)
+        self._manual_update_checker.start()
+
+    def _on_manual_update_available(self, version: str, url: str, notes: str):
+        self.statusBar().clearMessage()
+        reply = QMessageBox.information(
+            self, "Update Available",
+            f"Atlas AI v{version} is available.\n\n{notes}",
+            QMessageBox.Open | QMessageBox.Ok, QMessageBox.Ok,
+        )
+        if reply == QMessageBox.Open and url:
+            self._open_download(url)
+
+    def _on_manual_up_to_date(self, version: str):
+        self.statusBar().clearMessage()
+        QMessageBox.information(
+            self, "Up to Date",
+            f"You're running the latest version — Atlas AI v{version}.",
+        )
+
+    def _on_manual_check_failed(self, error: str):
+        self.statusBar().clearMessage()
+        QMessageBox.warning(
+            self, "Update Check Failed",
+            f"Couldn't check for updates:\n\n{error}\n\nTry again later.",
+        )
 
     def _show_about(self):
         from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton

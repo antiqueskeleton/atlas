@@ -15,7 +15,31 @@ class IntelligenceRepository:
 
     def _initialize(self):
         with self.connect() as conn:
+            # opportunities' canonical schema lives in knowledge_repository.py —
+            # this table is also written to from here, so it must not depend on
+            # KnowledgeRepository having been constructed first. Every other
+            # table in this codebase defends itself with CREATE TABLE IF NOT
+            # EXISTS; this one previously only ALTERed a table it assumed
+            # already existed, relying on incidental page-construction order
+            # in main_window.py rather than defending itself directly.
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS opportunities (
+                    opportunity_id  INTEGER PRIMARY KEY AUTOINCREMENT,
+                    market_id       INTEGER NOT NULL DEFAULT 1,
+                    run_id          TEXT,
+                    created_date    TEXT NOT NULL,
+                    title           TEXT NOT NULL,
+                    description     TEXT DEFAULT '',
+                    evidence        TEXT DEFAULT '',
+                    confidence      REAL DEFAULT 0,
+                    priority        TEXT DEFAULT 'Medium',
+                    estimated_impact TEXT DEFAULT '',
+                    status          TEXT DEFAULT 'open'
+                )
+            """)
+
             # Migrate: add run_id to opportunities if the column doesn't exist yet
+            # (covers DBs created before this column existed)
             try:
                 conn.execute("ALTER TABLE opportunities ADD COLUMN run_id TEXT")
             except Exception:
@@ -150,6 +174,22 @@ class IntelligenceRepository:
                 SELECT opportunity_id, title, evidence, description, status
                 FROM opportunities WHERE run_id=? ORDER BY opportunity_id ASC
             """, (run_id,)).fetchall()
+
+    def get_all_opportunities(self, limit: int = 100):
+        """
+        Opportunities across ALL runs, most recent first — not scoped to a
+        single run_id. Marking one "In Progress" or "Done" must survive the
+        next Intelligence run; scoping to only the latest run silently hid
+        that status the moment a new run completed (#39). Duplicates across
+        runs aren't merged yet — the LLM phrases the "same" opportunity
+        differently each run, so this shows everything rather than risk
+        incorrectly merging two different ones.
+        """
+        with self.connect() as conn:
+            return conn.execute("""
+                SELECT opportunity_id, title, evidence, description, status, created_date
+                FROM opportunities ORDER BY created_date DESC, opportunity_id DESC LIMIT ?
+            """, (limit,)).fetchall()
 
     def get_stuck_runs(self, older_than_minutes: int = 30) -> list:
         """Return intelligence runs stuck in 'running' status beyond the threshold."""

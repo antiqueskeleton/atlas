@@ -3,6 +3,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 from backend.services.paths import get_data_dir
+from backend.visibility.negation import detect_negative_brands
 
 
 class VisibilityAnalytics:
@@ -63,6 +64,7 @@ class VisibilityAnalytics:
 
     def summarize_responses(self, responses):
         brand_counts = Counter()
+        negative_brand_counts = Counter()
         feature_counts = Counter()
         feature_brand_counts: dict[str, Counter] = defaultdict(Counter)
         provider_brand_counts = defaultdict(Counter)
@@ -106,17 +108,30 @@ class VisibilityAnalytics:
 
             brand_names_in_response = [b for _, b in mentioned_brands]
 
+            # Negative-context detection: which mentioned brands were cast
+            # unfavorably somewhere in this response ("unlike Firman, ...",
+            # "Firman lacks...", etc). See backend/visibility/negation.py.
+            negative_brands = detect_negative_brands(response[5], self._flat_brand_terms)
+            for brand in negative_brands:
+                if brand in brand_first_pos:  # only count tracked, matched mentions
+                    negative_brand_counts[brand] += 1
+
+            # Positive/neutral-only brand list — used for feature and channel
+            # association so a brand mentioned only to be criticized doesn't
+            # get credited with an association it was actually denied.
+            assoc_brand_names = [b for b in brand_names_in_response if b not in negative_brands]
+
             for feature, feature_lower in self._feature_set:
                 if feature_lower in text:
                     feature_counts[feature] += 1
-                    for brand in brand_names_in_response:
+                    for brand in assoc_brand_names:
                         feature_brand_counts[feature][brand] += 1
 
             # Channel co-occurrence: track which channels appear alongside which brands
             for ch_name, ch_terms, _ in self.channels:
                 if any(t in text for t in ch_terms):
                     channel_counts[ch_name] += 1
-                    for brand in brand_names_in_response:
+                    for brand in assoc_brand_names:
                         brand_channel_counts[brand][ch_name] += 1
                         channel_brand_counts[ch_name][brand] += 1
 
@@ -129,6 +144,24 @@ class VisibilityAnalytics:
             if total_responses and target
             else 0
         )
+
+        target_negative_mentions = negative_brand_counts.get(target, 0) if target else 0
+        target_negative_rate = (
+            round((target_negative_mentions / total_responses) * 100, 1)
+            if total_responses and target
+            else 0
+        )
+
+        # Negative rate per brand: % of that brand's OWN mentions that were
+        # negative (not % of all responses) — answers "when AI brings this
+        # brand up, how often is it unfavorable" rather than diluting by
+        # brands that are rarely mentioned at all.
+        brand_negative_rate = {}
+        for brand, mention_count in brand_counts.items():
+            neg = negative_brand_counts.get(brand, 0)
+            brand_negative_rate[brand] = (
+                round((neg / mention_count) * 100, 1) if mention_count else 0
+            )
 
         provider_visibility_scores = {}
         for provider, response_count in provider_response_counts.items():
@@ -203,6 +236,9 @@ class VisibilityAnalytics:
             },
             "brand_position_share": brand_position_share,
             "brand_counts": dict(brand_counts),
+            "negative_brand_counts": dict(negative_brand_counts),
+            "target_negative_rate": target_negative_rate,
+            "brand_negative_rate": brand_negative_rate,
             "feature_counts": dict(feature_counts),
             "feature_brand_counts": {f: dict(c) for f, c in feature_brand_counts.items()},
             "provider_brand_counts": {
