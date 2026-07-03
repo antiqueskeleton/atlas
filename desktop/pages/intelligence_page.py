@@ -122,7 +122,10 @@ class IntelligencePage(QWidget):
         subtitle.setWordWrap(True)
         subtitle.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
-        # ── Controls bar ──────────────────────────────────────────────────────
+        # ── Toolbar: Run button + status + Mode badge + Export buttons, all in
+        # one row (mirrors the Visibility page's toolbar pattern — previously
+        # split across two rows per #38, but that left a nearly-empty second
+        # row and a large dead gap in the first). ───────────────────────────────
         ctrl = QHBoxLayout()
         ctrl.setSpacing(12)
         ctrl.setContentsMargins(0, 0, 0, 0)
@@ -137,28 +140,11 @@ class IntelligencePage(QWidget):
 
         self.last_run_lbl = QLabel("No runs yet.")
         self.last_run_lbl.setStyleSheet("color:#6B7280; font-size:12px;")
-        self.last_run_lbl.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         self._mode_lbl = QLabel()
         self._mode_lbl.setStyleSheet("font-size:12px;")
         self._mode_lbl.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self._update_mode_label()
-
-        ctrl.addWidget(self.run_btn)
-        ctrl.addWidget(self.last_run_lbl)
-        ctrl.addStretch()
-        ctrl.addWidget(self._mode_lbl)
-
-        ctrl_widget = QWidget()
-        ctrl_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        ctrl_widget.setLayout(ctrl)
-
-        # ── Row 2: Export buttons — own row, matching the Visibility page's
-        # toolbar pattern (#38: this row used to be crammed into row 1
-        # alongside the Run button, status label, and Mode badge). ────────────
-        export_row = QHBoxLayout()
-        export_row.setSpacing(8)
-        export_row.setContentsMargins(0, 0, 0, 0)
 
         _export_btn_style = (
             "QPushButton { font-size: 11px; font-weight: 600; color: #0B84FF; "
@@ -181,13 +167,17 @@ class IntelligencePage(QWidget):
         self._export_docx_btn.clicked.connect(self._export_docx)
         self._export_docx_btn.setToolTip("Export the latest briefing as an editable Word document")
 
-        export_row.addStretch()
-        export_row.addWidget(self._export_docx_btn)
-        export_row.addWidget(self._export_pdf_btn)
+        ctrl.addWidget(self.run_btn)
+        ctrl.addWidget(self.last_run_lbl)
+        ctrl.addStretch()
+        ctrl.addWidget(self._mode_lbl)
+        ctrl.addSpacing(8)
+        ctrl.addWidget(self._export_docx_btn)
+        ctrl.addWidget(self._export_pdf_btn)
 
-        export_widget = QWidget()
-        export_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        export_widget.setLayout(export_row)
+        ctrl_widget = QWidget()
+        ctrl_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        ctrl_widget.setLayout(ctrl)
 
         # Status label — single compact line below controls
         self.status_lbl = QLabel("")
@@ -278,7 +268,6 @@ class IntelligencePage(QWidget):
         root.addWidget(title)
         root.addWidget(subtitle)
         root.addWidget(ctrl_widget)
-        root.addWidget(export_widget)
         root.addWidget(self.status_lbl)
         root.addWidget(kpi_widget)
         root.addWidget(h_splitter, stretch=1)

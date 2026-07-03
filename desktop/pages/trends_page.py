@@ -144,28 +144,35 @@ class TrendsPage(QWidget):
         root = QVBoxLayout()
         root.setSpacing(10)
 
-        # Header
+        # Header — status text + Refresh sit on the title row instead of their
+        # own near-empty toolbar row. Trends has no run/export controls like
+        # Visibility or Intelligence, so a dedicated row for just these two
+        # small elements left a wide dead gap across the full page width.
         title = QLabel("Trends")
         title.setStyleSheet("font-size:30px;font-weight:bold;")
-        subtitle = QLabel(
-            "How AI visibility changes over time — across providers, brands, features, and prompt sets."
-        )
-        subtitle.setStyleSheet("font-size:15px;color:#6B7280;")
-        subtitle.setWordWrap(True)
 
-        # Controls bar
-        ctrl = QHBoxLayout()
         self.status_lbl = QLabel("Loading…")
         self.status_lbl.setStyleSheet("color:#6B7280;font-size:13px;")
         refresh_btn = QPushButton("Refresh")
         refresh_btn.setFixedWidth(90)
         refresh_btn.clicked.connect(self._refresh)
         refresh_btn.setToolTip("Reload all charts from the latest Visibility run data")
-        ctrl.addWidget(self.status_lbl)
-        ctrl.addStretch()
-        ctrl.addWidget(refresh_btn)
-        ctrl_w = QWidget()
-        ctrl_w.setLayout(ctrl)
+
+        title_row = QHBoxLayout()
+        title_row.setContentsMargins(0, 0, 0, 0)
+        title_row.addWidget(title)
+        title_row.addStretch()
+        title_row.addWidget(self.status_lbl)
+        title_row.addSpacing(12)
+        title_row.addWidget(refresh_btn)
+        title_row_w = QWidget()
+        title_row_w.setLayout(title_row)
+
+        subtitle = QLabel(
+            "How AI visibility changes over time — across providers, brands, features, and prompt sets."
+        )
+        subtitle.setStyleSheet("font-size:15px;color:#6B7280;")
+        subtitle.setWordWrap(True)
 
         # KPI row
         kpi_row = QHBoxLayout()
@@ -212,9 +219,8 @@ class TrendsPage(QWidget):
         self.tabs.addTab(_tab(self._c_promptset), "Prompt Sets")
         self.tabs.currentChanged.connect(self._on_tab_changed)
 
-        root.addWidget(title)
+        root.addWidget(title_row_w)
         root.addWidget(subtitle)
-        root.addWidget(ctrl_w)
         root.addWidget(kpi_w)
         root.addWidget(self.tabs)
         self.setLayout(root)
