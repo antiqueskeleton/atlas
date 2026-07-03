@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from backend.knowledge.knowledge_repository import KnowledgeRepository
 from backend.visibility.visibility_service import VisibilityService
 from desktop.widgets.info_icon import info_icon
 
@@ -315,6 +316,30 @@ class VisibilityPage(QWidget):
                 "padding: 4px 0 1px 0; background: white;"
             )
             return lbl
+
+        # Categories — an optional tier ABOVE prompt families (assigned in
+        # Knowledge > Prompt Sets) purely for selection convenience: checking
+        # one checks every family in it. Families/prompts themselves are
+        # never touched by this — it's just a bulk-select shortcut, not part
+        # of what actually gets sent to a provider (a category name is never
+        # itself a "set" run against providers, so it stays out of
+        # self._set_checks). Same one-time-build-at-startup scope as
+        # families/scenarios below — a category added in Knowledge while this
+        # page is already open needs a restart to appear, same as a new family.
+        know_repo = KnowledgeRepository()
+        self._categories = know_repo.list_prompt_categories()
+        self._category_families: dict[int, list[str]] = {
+            cat_id: know_repo.get_families_in_category(cat_id)
+            for cat_id, _name, _count in self._categories
+        }
+        self._category_checks: dict[int, QCheckBox] = {}
+        self._cat_hdr = _hdr_label() if self._categories else None
+        for cat_id, name, count in self._categories:
+            cb = QCheckBox(f"{name}  ({count})")
+            cb.setStyleSheet("font-size: 12px; font-weight: 600;")
+            cb.setToolTip(f"Selects all {count} prompt famil{'y' if count == 1 else 'ies'} in this category")
+            cb.stateChanged.connect(lambda state, cid=cat_id: self._on_category_toggled(cid, state))
+            self._category_checks[cat_id] = cb
 
         self._fam_hdr = _hdr_label()
         self._scen_hdr = _hdr_label() if self._scenarios_ordered else None
@@ -825,6 +850,13 @@ class VisibilityPage(QWidget):
         n_sets = sum(1 for cb in self._set_checks.values() if cb.isChecked())
         self._count_lbl.setText(f"{n_sets} set{'s' if n_sets != 1 else ''} · {len(prompts)} prompts")
 
+    def _on_category_toggled(self, category_id: int, _state: int):
+        checked = self._category_checks[category_id].isChecked()
+        for family_name in self._category_families.get(category_id, []):
+            cb = self._set_checks.get(family_name)
+            if cb is not None:
+                cb.setChecked(checked)
+
     def _select_all_sets(self):
         for cb in self._set_checks.values():
             cb.setChecked(True)
@@ -847,6 +879,14 @@ class VisibilityPage(QWidget):
             self._ps_check_grid.takeAt(0)
 
         row = 0
+        if self._cat_hdr is not None:
+            self._cat_hdr.setText(f"CATEGORIES  ({len(self._categories)})")
+            self._ps_check_grid.addWidget(self._cat_hdr, row, 0, 1, 2)
+            row += 1
+            for i, (cat_id, _name, _count) in enumerate(self._categories):
+                self._ps_check_grid.addWidget(self._category_checks[cat_id], row + i // 2, i % 2)
+            row += (len(self._categories) + 1) // 2
+
         vis_fams = [n for n in self._families_ordered if not query or query in n.lower()]
         fam_count = f"{len(vis_fams)}" + (f"/{len(self._families_ordered)}" if query else "")
         self._fam_hdr.setText(f"PROMPT FAMILIES  ({fam_count})")

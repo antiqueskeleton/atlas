@@ -613,6 +613,91 @@ class KnowledgeRepository:
         with open(csv_path, "a", newline="", encoding="utf-8") as f:
             csv.writer(f).writerow([family_name, prompt_style, prompt_text, influence_score])
 
+    # ─── Prompt Categories ────────────────────────────────────────────────────
+    # A purely additive tier ABOVE prompt families, for grouping related
+    # families (e.g. "Best Generator Power Outage" + "Best Hurricane
+    # Generator" + "Emergency Preparedness Generator") so the Visibility page
+    # can select a whole cluster with one checkbox instead of many. Families
+    # themselves are untouched — this is a separate DB-backed mapping, not a
+    # change to market_questions.csv, so nothing about existing prompts,
+    # families, or historical Visibility run data is affected. A family with
+    # no row in prompt_family_categories is simply uncategorized.
+
+    def _ensure_category_tables(self):
+        with self._conn() as c:
+            c.execute("""
+                CREATE TABLE IF NOT EXISTS prompt_categories (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT UNIQUE NOT NULL
+                )
+            """)
+            c.execute("""
+                CREATE TABLE IF NOT EXISTS prompt_family_categories (
+                    family_name TEXT PRIMARY KEY,
+                    category_id INTEGER NOT NULL REFERENCES prompt_categories(id)
+                )
+            """)
+
+    def list_prompt_categories(self):
+        """Returns [(id, name, family_count)] sorted by name."""
+        self._ensure_category_tables()
+        with self._conn() as c:
+            return c.execute("""
+                SELECT pc.id, pc.name, COUNT(pfc.family_name) AS family_count
+                FROM prompt_categories pc
+                LEFT JOIN prompt_family_categories pfc ON pfc.category_id = pc.id
+                GROUP BY pc.id, pc.name
+                ORDER BY pc.name
+            """).fetchall()
+
+    def add_prompt_category(self, name: str) -> int:
+        """Creates a category if it doesn't already exist; returns its id either way."""
+        self._ensure_category_tables()
+        name = name.strip()
+        with self._conn() as c:
+            row = c.execute("SELECT id FROM prompt_categories WHERE name=?", (name,)).fetchone()
+            if row:
+                return row[0]
+            cur = c.execute("INSERT INTO prompt_categories (name) VALUES (?)", (name,))
+            return cur.lastrowid
+
+    def delete_prompt_category(self, category_id: int):
+        """Deletes a category; member families become uncategorized (not deleted)."""
+        self._ensure_category_tables()
+        with self._conn() as c:
+            c.execute("DELETE FROM prompt_family_categories WHERE category_id=?", (category_id,))
+            c.execute("DELETE FROM prompt_categories WHERE id=?", (category_id,))
+
+    def get_family_category_map(self) -> dict:
+        """Returns {family_name: category_name} for every assigned family."""
+        self._ensure_category_tables()
+        with self._conn() as c:
+            rows = c.execute("""
+                SELECT pfc.family_name, pc.name
+                FROM prompt_family_categories pfc
+                JOIN prompt_categories pc ON pc.id = pfc.category_id
+            """).fetchall()
+            return {family_name: category_name for family_name, category_name in rows}
+
+    def get_families_in_category(self, category_id: int) -> list:
+        self._ensure_category_tables()
+        with self._conn() as c:
+            return [r[0] for r in c.execute(
+                "SELECT family_name FROM prompt_family_categories WHERE category_id=?",
+                (category_id,),
+            ).fetchall()]
+
+    def set_family_category(self, family_name: str, category_id: int | None):
+        """Assigns family_name to category_id, or un-assigns it if category_id is None."""
+        self._ensure_category_tables()
+        with self._conn() as c:
+            c.execute("DELETE FROM prompt_family_categories WHERE family_name=?", (family_name,))
+            if category_id is not None:
+                c.execute(
+                    "INSERT INTO prompt_family_categories (family_name, category_id) VALUES (?,?)",
+                    (family_name, category_id),
+                )
+
     # ─── Web Intelligence ─────────────────────────────────────────────────────
 
     def _ensure_web_table(self):
@@ -653,13 +738,22 @@ class KnowledgeRepository:
                     pass
 
     def list_web_intelligence(self):
+        """
+        Returns on-page signals actually obtainable by scrape_domain() —
+        title, meta description, keywords, HTTPS/schema/sitemap, load time.
+        Deliberately does NOT return monthly_visits_est/domain_authority/
+        organic_keywords_est/backlink_count: those columns still exist for
+        potential future use, but no code path scrapes them (they're
+        proprietary metrics from paid tools like Moz/SEMrush/Ahrefs/
+        SimilarWeb) and the Knowledge page no longer displays or edits them.
+        """
         self._ensure_web_table()
         with self._conn() as c:
             return c.execute("""
                 SELECT w.id, COALESCE(b.name, '?') AS brand_name, w.domain,
-                       w.monthly_visits_est, w.domain_authority, w.organic_keywords_est,
-                       w.backlink_count, w.top_keywords, w.notes, w.data_source,
-                       w.recorded_at, w.scraped_at
+                       w.page_title, w.meta_description, w.top_keywords,
+                       w.is_https, w.has_schema, w.has_sitemap, w.load_ms,
+                       w.notes, w.data_source, w.recorded_at, w.scraped_at
                 FROM web_intelligence w
                 LEFT JOIN brands b ON b.brand_id = w.brand_id
                 ORDER BY brand_name

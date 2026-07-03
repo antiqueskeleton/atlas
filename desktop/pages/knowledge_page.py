@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import (
     QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFormLayout,
-    QHBoxLayout, QHeaderView, QLabel, QLineEdit, QListWidget,
+    QHBoxLayout, QHeaderView, QInputDialog, QLabel, QLineEdit, QListWidget,
     QListWidgetItem, QMessageBox, QPlainTextEdit, QPushButton,
     QSpinBox, QSplitter, QTableWidget, QTableWidgetItem,
     QTabWidget, QVBoxLayout, QWidget,
@@ -853,9 +853,27 @@ class KnowledgePage(QWidget):
         btn_new_fam = QPushButton("+ New Family")
         btn_new_fam.clicked.connect(self._add_family)
 
+        # Category — a purely additive tier above families, for grouping
+        # related families so the Visibility page can select a whole cluster
+        # with one checkbox. Assigning here never changes market_questions.csv.
+        cat_row = QHBoxLayout()
+        cat_row.setContentsMargins(0, 0, 0, 0)
+        cat_lbl = QLabel("Category:")
+        cat_lbl.setStyleSheet("font-size: 12px; color: #6B7280;")
+        self._category_combo = QComboBox()
+        self._category_combo.currentIndexChanged.connect(self._on_category_combo_changed)
+        btn_new_cat = QPushButton("+")
+        btn_new_cat.setFixedWidth(28)
+        btn_new_cat.setToolTip("Create a new category")
+        btn_new_cat.clicked.connect(self._add_category)
+        cat_row.addWidget(cat_lbl)
+        cat_row.addWidget(self._category_combo, 1)
+        cat_row.addWidget(btn_new_cat)
+
         left_lay.addWidget(lbl)
         left_lay.addWidget(self._family_list)
         left_lay.addWidget(btn_new_fam)
+        left_lay.addLayout(cat_row)
         left.setLayout(left_lay)
         left.setFixedWidth(240)
 
@@ -889,17 +907,22 @@ class KnowledgePage(QWidget):
         w.setLayout(main_lay)
 
         self._refresh_families()
+        if not self._current_family_name():
+            self._refresh_category_combo("")
         return w
 
     def _refresh_families(self):
         counts = self.repo.get_prompt_counts()
         families = self.repo.list_prompt_families()
+        fam_categories = self.repo.get_family_category_map()
         prev = self._current_family_name()
 
         self._family_list.clear()
         for _, fname, *_ in families:
             count = counts.get(fname, 0)
-            item = QListWidgetItem(f"{fname}  ({count})")
+            cat = fam_categories.get(fname)
+            label = f"{fname}  ({count})" + (f"  ·  {cat}" if cat else "")
+            item = QListWidgetItem(label)
             item.setData(Qt.UserRole, fname)
             self._family_list.addItem(item)
 
@@ -911,6 +934,47 @@ class KnowledgePage(QWidget):
             return
         fname = current.data(Qt.UserRole)
         self._load_prompts_for(fname)
+        self._refresh_category_combo(fname)
+
+    # ─── Categories ───────────────────────────────────────────────────────────
+
+    def _refresh_category_combo(self, fname: str):
+        """Repopulate the combo and select fname's current category, without
+        firing _on_category_combo_changed (which would re-assign fname)."""
+        self._category_combo.blockSignals(True)
+        self._category_combo.clear()
+        self._category_combo.addItem("(Uncategorized)", None)
+        categories = self.repo.list_prompt_categories()
+        current_category = self.repo.get_family_category_map().get(fname)
+        select_index = 0
+        for i, (cat_id, name, _count) in enumerate(categories, start=1):
+            self._category_combo.addItem(name, cat_id)
+            if name == current_category:
+                select_index = i
+        self._category_combo.setCurrentIndex(select_index)
+        self._category_combo.blockSignals(False)
+
+    def _on_category_combo_changed(self, _index: int):
+        fname = self._current_family_name()
+        if not fname:
+            return
+        category_id = self._category_combo.currentData()
+        self.repo.set_family_category(fname, category_id)
+        self._refresh_families()
+        self._select_family_by_name(fname)
+
+    def _add_category(self):
+        name, ok = QInputDialog.getText(self, "New Category", "Category name:")
+        if not ok or not name.strip():
+            return
+        cat_id = self.repo.add_prompt_category(name.strip())
+        fname = self._current_family_name()
+        if fname:
+            self.repo.set_family_category(fname, cat_id)
+            self._refresh_families()
+            self._select_family_by_name(fname)
+        else:
+            self._refresh_category_combo("")
 
     def _load_prompts_for(self, fname: str):
         self._family_header.setText(f"Prompts — {fname}")
@@ -991,15 +1055,19 @@ class KnowledgePage(QWidget):
         lay.setSpacing(6)
 
         note = QLabel(
-            "Track website metrics per brand — monthly visits, domain authority, backlinks, and organic keywords. "
-            "Enter data manually or import from SEO tools (SimilarWeb, SEMrush, Ahrefs, Moz)."
+            "Scrapes each brand's homepage for on-page SEO signals — title, meta description, "
+            "keywords, HTTPS/schema/sitemap presence, and load time — and feeds them into the "
+            "Intelligence briefing's competitive web analysis. Add a brand + domain, then Scrape "
+            "to pull live data. (Off-page metrics like Domain Authority or backlink counts require "
+            "a paid SEO tool subscription and aren't scraped here.)"
         )
         note.setStyleSheet("color: #6B7280; font-size: 12px;")
         note.setWordWrap(True)
 
         self._web_table = _make_table(
-            ["Brand", "Domain", "Monthly Visits", "Domain Authority", "Keywords", "Backlinks", "Source", "Updated"],
-            [120, 160, 110, 130, 90, 90, 80, 110],
+            ["Brand", "Domain", "Title", "Meta Description", "Keywords",
+             "HTTPS", "Schema", "Sitemap", "Load (ms)", "Source", "Updated"],
+            [110, 140, 160, 200, 140, 55, 60, 60, 75, 80, 90],
         )
         self._web_table.doubleClicked.connect(lambda _: self._edit_web())
 
@@ -1036,41 +1104,41 @@ class KnowledgePage(QWidget):
         rows = self.repo.list_web_intelligence()
         t = self._web_table
         t.setRowCount(0)
-        for entry_id, brand, domain, visits, da, kw, backlinks, top_kw, notes, source, recorded, scraped in rows:
+        for (entry_id, brand, domain, title, meta_desc, top_kw,
+             is_https, has_schema, has_sitemap, load_ms,
+             notes, source, recorded, scraped) in rows:
             r = t.rowCount()
             t.insertRow(r)
             t.setItem(r, 0, _cell(brand, entry_id))
             t.setItem(r, 1, _cell(domain or "—"))
-            t.setItem(r, 2, _cell(f"{visits:,}" if visits else "—"))
-            t.setItem(r, 3, _cell(f"{da}/100" if da else "—"))
-            kw_display = (top_kw or "")[:40] or (f"{kw:,}" if kw else "—")
-            t.setItem(r, 4, _cell(kw_display))
-            t.setItem(r, 5, _cell(f"{backlinks:,}" if backlinks else "—"))
-            t.setItem(r, 6, _cell(source or "manual"))
+            t.setItem(r, 2, _cell(_trunc(title or "", 30) or "—"))
+            t.setItem(r, 3, _cell(_trunc(meta_desc or "", 40) or "—"))
+            t.setItem(r, 4, _cell(_trunc(top_kw or "", 30) or "—"))
+            scraped_yet = bool(scraped)
+            t.setItem(r, 5, _cell("Yes" if is_https else ("No" if scraped_yet else "—")))
+            t.setItem(r, 6, _cell("Yes" if has_schema else ("No" if scraped_yet else "—")))
+            t.setItem(r, 7, _cell("Yes" if has_sitemap else ("No" if scraped_yet else "—")))
+            t.setItem(r, 8, _cell(f"{load_ms:,}" if load_ms else "—"))
+            t.setItem(r, 9, _cell(source or "manual"))
             date_str = (scraped or recorded or "")[:10]
-            t.setItem(r, 7, _cell(date_str))
+            t.setItem(r, 10, _cell(date_str))
         self._web_count.setText(f"{len(rows)} entries")
 
     def _web_fields(self, brands_list):
-        """Build field spec list for the web intelligence dialog."""
+        """
+        Build field spec list for the web intelligence dialog. Deliberately
+        excludes Monthly Visits/Domain Authority/Organic Keywords/Backlinks —
+        those require a paid SEO tool (Moz/SEMrush/Ahrefs/SimilarWeb) and
+        would be dead, never-displayed inputs now that the table only shows
+        signals scrape_domain() can actually produce.
+        """
         return [
-            ("Brand *",          "brand",            "combo", brands_list),
-            ("Domain",           "domain",           "text",  ""),
-            ("Monthly Visits",   "monthly_visits",   "text",  "0"),
-            ("Domain Authority", "domain_authority", "text",  "0"),
-            ("Organic Keywords", "organic_keywords", "text",  "0"),
-            ("Backlinks",        "backlinks",        "text",  "0"),
-            ("Top Keywords",     "top_keywords",     "text",  ""),
-            ("Notes",            "notes",            "area",  ""),
-            ("Source",           "data_source",      "combo", ["manual", "similarweb", "semrush", "ahrefs", "moz"]),
+            ("Brand *",       "brand",       "combo", brands_list),
+            ("Domain",        "domain",      "text",  ""),
+            ("Top Keywords",  "top_keywords","text",  ""),
+            ("Notes",         "notes",       "area",  ""),
+            ("Source",        "data_source", "combo", ["manual", "similarweb", "semrush", "ahrefs", "moz"]),
         ]
-
-    @staticmethod
-    def _safe_int(v) -> int:
-        try:
-            return max(0, int(str(v).replace(",", "").strip()))
-        except (ValueError, TypeError):
-            return 0
 
     def _add_web(self):
         brands = [(bid, bname) for bid, bname, *_ in self.repo.list_brands()]
@@ -1088,10 +1156,6 @@ class KnowledgePage(QWidget):
         self.repo.add_web_entry(
             brand_id=brand_id,
             domain=v.get("domain", ""),
-            monthly_visits=self._safe_int(v.get("monthly_visits")),
-            domain_authority=self._safe_int(v.get("domain_authority")),
-            organic_keywords=self._safe_int(v.get("organic_keywords")),
-            backlinks=self._safe_int(v.get("backlinks")),
             top_keywords=v.get("top_keywords", ""),
             notes=v.get("notes", ""),
             source=v.get("data_source", "manual"),
@@ -1106,14 +1170,14 @@ class KnowledgePage(QWidget):
         rec = self.repo.get_web_entry(entry_id)
         if not rec:
             return
-        _, brand_id, brand_name, domain, visits, da, kw, backlinks, top_kw, notes, source = rec
+        # get_web_entry() still returns the legacy visits/da/kw/backlinks columns
+        # (schema kept as-is, just unused by this dialog now — see _web_fields).
+        _, brand_id, brand_name, domain, _visits, _da, _kw, _backlinks, top_kw, notes, source = rec
 
         brands = [(bid, bname) for bid, bname, *_ in self.repo.list_brands()]
         brand_names = [bname for _, bname in brands]
         initial = {
             "brand": brand_name, "domain": domain or "",
-            "monthly_visits": str(visits or 0), "domain_authority": str(da or 0),
-            "organic_keywords": str(kw or 0), "backlinks": str(backlinks or 0),
             "top_keywords": top_kw or "", "notes": notes or "",
             "data_source": source or "manual",
         }
@@ -1127,10 +1191,6 @@ class KnowledgePage(QWidget):
             entry_id=entry_id,
             brand_id=new_brand_id,
             domain=v.get("domain", ""),
-            monthly_visits=self._safe_int(v.get("monthly_visits")),
-            domain_authority=self._safe_int(v.get("domain_authority")),
-            organic_keywords=self._safe_int(v.get("organic_keywords")),
-            backlinks=self._safe_int(v.get("backlinks")),
             top_keywords=v.get("top_keywords", ""),
             notes=v.get("notes", ""),
             source=v.get("data_source", "manual"),

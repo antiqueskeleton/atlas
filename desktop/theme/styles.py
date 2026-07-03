@@ -132,7 +132,36 @@ QLabel#CardSubtitle {{
     font-size: 12px;
 }}
 
-/* ── Primary button (app-wide accent) ───────────────────────────────────── */
+/* ── Buttons ─────────────────────────────────────────────────────────────── */
+/* Base look for any QPushButton that doesn't opt into a named/inline style —
+   covers dialog OK/Cancel (QDialogButtonBox), Knowledge's tab action bars,
+   and anything future pages add without remembering to style it by hand.
+   Buttons with their own setStyleSheet() call (page toolbars' Run/Export
+   buttons etc.) are unaffected — a widget's own inline stylesheet always
+   wins over this app-wide rule. */
+
+QPushButton {{
+    background: {CARD};
+    color: {TEXT};
+    border: 1px solid #D1D5DB;
+    border-radius: 5px;
+    padding: 6px 14px;
+}}
+QPushButton:hover {{
+    background: #F3F4F6;
+    border-color: {PRIMARY};
+    color: {PRIMARY};
+}}
+QPushButton:pressed {{
+    background: #E5E7EB;
+}}
+QPushButton:disabled {{
+    color: #9CA3AF;
+    border-color: #E5E7EB;
+    background: {BACKGROUND};
+}}
+
+/* Primary button (app-wide accent) */
 
 QPushButton#PrimaryBtn {{
     background: {PRIMARY};

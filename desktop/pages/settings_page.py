@@ -276,10 +276,10 @@ class SettingsPage(QWidget):
         save_btn = QPushButton("Save All Settings")
         save_btn.setFixedWidth(180)
         save_btn.setStyleSheet(
-            "QPushButton { background: #1D4ED8; color: white; border: none; "
-            "border-radius: 4px; padding: 7px 16px; font-size: 13px; font-weight: bold; }"
-            "QPushButton:hover { background: #1E40AF; }"
-            "QPushButton:pressed { background: #1E3A8A; }"
+            "QPushButton { background: #0B84FF; color: white; border: none; "
+            "border-radius: 5px; padding: 7px 16px; font-size: 13px; font-weight: bold; }"
+            "QPushButton:hover { background: #0056CC; }"
+            "QPushButton:pressed { background: #004BB5; }"
         )
         save_btn.clicked.connect(self._save_all)
 

@@ -1,5 +1,5 @@
 {
-  "version": "0.9.1",
-  "download_url": "https://github.com/antiqueskeleton/atlas/releases/download/v0.9.1/AtlasAI-v0.9.1-Setup.exe",
-  "release_notes": "v0.9.1 — Brand, feature, and channel additions in Knowledge now show up in Visibility and Trends immediately, no restart needed. Fixed the 'Mention Rank' denominator on the Visibility and Intelligence pages to count all tracked brands, not just ones with a mention. Added explanatory (ⓘ) info icons to every KPI tile across Home, Visibility, Intelligence, and Trends, clarifying what each number means and how it differs from similar-looking numbers elsewhere in the app. Visibility page's control panel redesigned — Providers and Run/Pause/Stop controls are now always visible, only the Prompt Sets list collapses. Cleaned up wasted header space on the Intelligence and Trends pages."
+  "version": "0.9.2",
+  "download_url": "https://github.com/antiqueskeleton/atlas/releases/download/v0.9.2/AtlasAI-v0.9.2-Setup.exe",
+  "release_notes": "v0.9.2 — Startup is roughly two-thirds faster: found and fixed a regex performance bug in sentiment detection that had been silently getting worse as the response database grew. Every button in the app now has consistent styling (previously several Knowledge screens and dialog buttons rendered as plain unstyled boxes). Web Intelligence's competitor table now shows the on-page SEO data it actually collects (title, meta description, keywords, HTTPS/schema/sitemap, load time) instead of metrics it could never fill. Added a new Category tier to Prompt Sets in Knowledge — group related prompt families together and select a whole cluster with one checkbox on the Visibility page, without touching the underlying families or any historical data."
 }

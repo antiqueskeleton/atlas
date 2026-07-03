@@ -39,6 +39,23 @@ _FORWARD_ONLY_CUES = ["unlike", "instead of", "rather than"]
 _WINDOW = 25          # chars checked on each side for symmetric cues
 _FORWARD_WINDOW = 35  # chars checked after a forward-only cue
 
+# Pre-compiled once at import time. _cue_zones() runs per-sentence, per-response
+# (tens of thousands of times on a large response set) — building/escaping a
+# fresh pattern string per cue inside that loop instead of reusing a compiled
+# Pattern turned into the dominant cost of startup analytics as the stored
+# response count grew (profiled: 2.9M redundant re.escape()/compile calls on a
+# ~3,500-response database, ~17s of an ~19s summarize_responses() call).
+_SYMMETRIC_PATTERNS = [re.compile(r'\b' + re.escape(cue) + r'\b') for cue in _SYMMETRIC_CUES]
+_FORWARD_ONLY_PATTERNS = [re.compile(r'\b' + re.escape(cue) + r'\b') for cue in _FORWARD_ONLY_CUES]
+
+# Cheap pre-filter: a plain substring check is a strict superset of the precise
+# \b-bounded patterns above (anything the precise patterns could match must
+# contain one of these substrings), so if none of them appear at all, none of
+# the 37 precise patterns can match either. Most sentences in a generator
+# Q&A response contain zero negative-cue words — skipping straight to "no
+# zones" for those avoids running all 37 compiled patterns against them.
+_ALL_CUES = _SYMMETRIC_CUES + _FORWARD_ONLY_CUES
+
 _SENTENCE_SPLIT = re.compile(r'(?<=[.!?])\s+')
 
 # Clause-boundary tokens: comparative connectors that separate one entity
@@ -65,18 +82,21 @@ def _clamp_backward(sent_lower: str, zone_start: int, cue_start: int) -> int:
 
 def _cue_zones(sent_lower: str) -> list[tuple[int, int]]:
     """Return (start, end) character ranges where a negative cue applies."""
+    if not any(cue in sent_lower for cue in _ALL_CUES):
+        return []
+
     zones = []
 
-    for cue in _SYMMETRIC_CUES:
-        for m in re.finditer(r'\b' + re.escape(cue) + r'\b', sent_lower):
+    for pattern in _SYMMETRIC_PATTERNS:
+        for m in pattern.finditer(sent_lower):
             raw_start = max(0, m.start() - _WINDOW)
             raw_end = m.end() + _WINDOW
             start = _clamp_backward(sent_lower, raw_start, m.start())
             end = _clamp_forward(sent_lower, m.end(), raw_end)
             zones.append((start, end))
 
-    for cue in _FORWARD_ONLY_CUES:
-        for m in re.finditer(r'\b' + re.escape(cue) + r'\b', sent_lower):
+    for pattern in _FORWARD_ONLY_PATTERNS:
+        for m in pattern.finditer(sent_lower):
             raw_end = m.end() + _FORWARD_WINDOW
             end = _clamp_forward(sent_lower, m.end(), raw_end)
             zones.append((m.end(), end))
