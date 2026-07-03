@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
 )
 
 from backend.intelligence.intelligence_service import IntelligenceService
+from desktop.widgets.info_icon import info_icon
 
 
 class _RunWorker(QThread):
@@ -56,7 +57,7 @@ def _section_card(title: str):
     return frame, body
 
 
-def _kpi(title, value="—", sub=""):
+def _kpi(title, value="—", sub="", info=""):
     frame = QFrame()
     frame.setObjectName("StatCard")
     frame.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -64,7 +65,15 @@ def _kpi(title, value="—", sub=""):
     layout = QVBoxLayout()
     layout.setSpacing(2)
 
-    layout.addWidget(_lbl(title, "CardTitle"))
+    title_row = QHBoxLayout()
+    title_row.setContentsMargins(0, 0, 0, 0)
+    title_row.setSpacing(4)
+    title_row.addWidget(_lbl(title, "CardTitle"))
+    if info:
+        title_row.addWidget(info_icon(info))
+    title_row.addStretch()
+
+    layout.addLayout(title_row)
     val_lbl = _lbl(value, "CardValue")
     layout.addWidget(val_lbl)
     if sub:
@@ -193,13 +202,30 @@ class IntelligencePage(QWidget):
 
         brand = self.app.get_target_brand() or "Target Brand"
         self._kpi_brand_card, self._kpi_brand_val = _kpi(
-            f"{brand} Mention Rate", "—%", "in latest intelligence analysis"
+            f"{brand} Mention Rate", "—%", "in latest intelligence analysis",
+            info=(
+                f"% of responses in your MOST RECENT Intelligence Analysis run — the "
+                f"classified sample actually used to generate that briefing (capped at 25 "
+                f"per topic bucket, not the full database) — that mention {brand}. Different "
+                f"from Visibility Score on the Visibility page, which uses your entire "
+                f"collection history."
+            ),
         )
         self._kpi_top_card, self._kpi_top_val = _kpi(
-            "Intelligence Mention Rank", "—", "in latest intelligence analysis"
+            "Intelligence Mention Rank", "—", "in latest intelligence analysis",
+            info=(
+                f"{brand}'s rank among all tracked brands by mention count, computed from "
+                f"the same latest-run sample as Mention Rate above — not the full database."
+            ),
         )
         self._kpi_prompts_card, self._kpi_prompts_val = _kpi(
-            "Responses Analyzed", "—", "total stored in database"
+            "Responses Analyzed", "—", "total stored in database",
+            info=(
+                "Total responses in your FULL Visibility database — this is NOT the number "
+                "actually used to generate the current briefing above (that's a smaller, "
+                "capped, classified sample — see Mention Rate). This tile just shows how "
+                "large your overall data reservoir is."
+            ),
         )
 
         kpi_row.addWidget(self._kpi_brand_card)
@@ -520,8 +546,9 @@ class IntelligencePage(QWidget):
 
         sorted_brands = sorted(counts.items(), key=lambda x: -x[1])
         rank = next((i + 1 for i, (b, _) in enumerate(sorted_brands) if b == target), None)
+        total_tracked = brand_stats.get("total_tracked_brands", len(sorted_brands))
         if rank and target:
-            self._kpi_top_val.setText(f"#{rank} of {len(sorted_brands)}")
+            self._kpi_top_val.setText(f"#{rank} of {total_tracked}")
         else:
             self._kpi_top_val.setText("Unranked")
 
@@ -625,4 +652,10 @@ class IntelligencePage(QWidget):
             for brand, terms in brand_terms.items():
                 if any(t in lower for t in terms):
                     counts[brand] += 1
-        return {"counts": dict(counts), "total": total}
+        return {
+            "counts": dict(counts),
+            "total": total,
+            # #48: total TRACKED brands, not just ones with ≥1 mention — same
+            # fix as visibility_page.py's Mention Rank denominator.
+            "total_tracked_brands": len(brand_terms),
+        }

@@ -15,10 +15,44 @@ class VisibilityAnalytics:
         channels_path=None,
         target_brand="",
     ):
-        data_dir = get_data_dir()
-        features_path = features_path or str(data_dir / "features.csv")
-        channels_path = channels_path or str(data_dir / "channels.csv")
         self.target_brand = target_brand
+        self._brands_path = brands_path
+        self._features_path = features_path
+        self._channels_path = channels_path
+        self.reload_terms()
+
+    def reload_terms(self) -> bool:
+        """
+        Re-fetch brand/feature/channel detection terms from Knowledge/CSV
+        sources (#35). VisibilityService and TrendsService each construct
+        ONE VisibilityAnalytics instance at app startup and keep it for the
+        whole session — without this, a brand/feature/channel added via the
+        Knowledge page mid-session would never be picked up until the app
+        restarted, silently producing incomplete Visibility/Trends/export
+        data with no indication anything was stale.
+
+        Cheap (one DB query + two small CSV reads) relative to
+        summarize_responses() (which scans every stored response), so this
+        is meant to be called once per logical user-facing refresh — NOT
+        once per summarize_responses() call, since that runs in a per-run
+        loop in TrendsService.get_run_summaries() and would otherwise reload
+        the identical term set redundantly for every historical run.
+
+        Returns True if the term set actually changed since the last load,
+        so callers with their own response-count-keyed caching (like
+        VisibilityService.analytics_summary) know to invalidate a cached
+        result computed under the old term set, even when response count
+        itself hasn't changed.
+        """
+        prev_brands = getattr(self, "brands", None)
+        prev_features = getattr(self, "features", None)
+        prev_channels = (
+            {c[0] for c in self.channels} if hasattr(self, "channels") else None
+        )
+
+        data_dir = get_data_dir()
+        features_path = self._features_path or str(data_dir / "features.csv")
+        channels_path = self._channels_path or str(data_dir / "channels.csv")
 
         # Load brands from DB (brands_path kept for backwards compat but ignored when DB has data)
         from backend.knowledge.knowledge_repository import KnowledgeRepository
@@ -29,7 +63,7 @@ class VisibilityAnalytics:
         else:
             fallback = ["Firman", "Westinghouse", "Honda", "Generac", "Yamaha", "Predator", "DuroMax"]
             self.brands = self._load_terms(
-                brands_path or str(data_dir / "brands.csv"),
+                self._brands_path or str(data_dir / "brands.csv"),
                 fallback=fallback,
             )
             self.brand_terms = {b: [b.lower()] for b in self.brands}
@@ -50,7 +84,7 @@ class VisibilityAnalytics:
 
         self.channels = self._load_channels(channels_path)
 
-        # Flat (term, brand) list — built once, used on every response.
+        # Flat (term, brand) list — rebuilt on every reload, used on every response.
         # Eliminates the double text.find() call and the nested brand/term loops.
         seen: set[str] = set()
         self._flat_brand_terms: list[tuple[str, str]] = []
@@ -61,6 +95,15 @@ class VisibilityAnalytics:
                     seen.add(term)
 
         self._feature_set = [(f, f.lower()) for f in self.features]
+
+        return (
+            prev_brands is None
+            or set(prev_brands) != set(self.brands)
+            or prev_features is None
+            or set(prev_features) != set(self.features)
+            or prev_channels is None
+            or {c[0] for c in self.channels} != prev_channels
+        )
 
     def summarize_responses(self, responses):
         brand_counts = Counter()
@@ -224,6 +267,7 @@ class VisibilityAnalytics:
 
         return {
             "total_responses": total_responses,
+            "total_tracked_brands": len(self.brands),
             "target_brand": target,
             "target_visibility_score": target_visibility_score,
             "provider_visibility_scores": provider_visibility_scores,

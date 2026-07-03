@@ -22,6 +22,11 @@ class TrendsService:
             target_score, brand_rates, feature_rates,
             brand_position_shares, first_mention_share
         """
+        # #35: reload once before the loop below, not once per run inside it —
+        # summarize_responses() runs once per historical run here, so reloading
+        # inside it would redundantly re-query Knowledge/CSVs for every run.
+        self.analytics.reload_terms()
+
         runs = self.repository.list_runs()
         summaries = []
 

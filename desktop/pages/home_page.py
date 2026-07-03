@@ -41,11 +41,39 @@ class HomePage(QWidget):
         self._subtitle.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         # KPI row
-        self._mention_card    = StatCard("Brand Mention Rate",  "—", "run Intelligence Analysis first")
-        self._responses_card  = StatCard("Responses Stored",    "—", "in visibility database")
-        self._vis_runs_card   = StatCard("Visibility Runs",     "—", "completed")
-        self._intel_runs_card = StatCard("Intelligence Runs",   "—", "completed")
-        self._brands_card     = StatCard("Brands Tracked",      "—", "active in knowledge base")
+        self._mention_card    = StatCard(
+            "Brand Mention Rate",  "—", "run Intelligence Analysis first",
+            info=(
+                "% of responses in your MOST RECENT Intelligence Analysis run that "
+                "mention your target brand. This is not the same as Visibility Score "
+                "on the Visibility page, which uses ALL collected Visibility responses "
+                "— this tile only reflects the smaller sample from the latest "
+                "Intelligence run."
+            ),
+        )
+        self._responses_card  = StatCard(
+            "Responses Stored",    "—", "in visibility database",
+            info="Total AI responses ever collected across all Visibility runs, stored in the database.",
+        )
+        self._vis_runs_card   = StatCard(
+            "Visibility Runs",     "—", "completed",
+            info="Number of completed Visibility collection runs (prompts sent to AI providers and saved).",
+        )
+        self._intel_runs_card = StatCard(
+            "Intelligence Runs",   "—", "completed",
+            info=(
+                "Number of completed Intelligence Analysis runs (executive briefing + "
+                "strategic opportunities synthesized from stored responses)."
+            ),
+        )
+        self._brands_card     = StatCard(
+            "Brands Tracked",      "—", "active in knowledge base",
+            info=(
+                "Number of brands marked ACTIVE in the Knowledge library, out of the "
+                "total tracked (inactive brands are excluded from Visibility analytics "
+                "and mention counting, but still stored)."
+            ),
+        )
 
         kpi_row = QHBoxLayout()
         kpi_row.setSpacing(12)
