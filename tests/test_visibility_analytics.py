@@ -61,6 +61,22 @@ def test_zero_responses_does_not_divide_by_zero():
     assert result["target_visibility_score"] == 0
 
 
+def test_total_tracked_brands_counts_all_tracked_brands_not_just_mentioned_ones():
+    """
+    #48: Mention Rank denominator was previously len(brand_counts) — only
+    brands with ≥1 mention — which understated the tracked competitive set
+    (e.g. 35 shown when 95 brands were actually tracked). total_tracked_brands
+    must reflect the FULL tracked list regardless of how many responses were
+    analyzed or how many brands actually appear in them.
+    """
+    a = make_analytics()  # 3 tracked brands: Firman, Honda, Generac
+    # Only Firman is ever mentioned — Honda and Generac appear zero times.
+    responses = [row(1, "openai", "Firman is a solid choice for home backup.")]
+    result = a.summarize_responses(responses)
+    assert len(result["brand_counts"]) == 1  # only Firman has a mention
+    assert result["total_tracked_brands"] == 3  # but all 3 tracked brands count
+
+
 # ── Position / first-mention share ────────────────────────────────────────────
 
 def test_first_mentioned_brand_gets_first_mention_credit():

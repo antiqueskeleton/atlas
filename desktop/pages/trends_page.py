@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
 )
 
 from backend.visibility.trends_service import TrendsService
+from desktop.widgets.info_icon import info_icon
 
 
 # ── Color palettes ─────────────────────────────────────────────────────────────
@@ -97,17 +98,26 @@ def _tab(canvas: _MplCanvas) -> QWidget:
 
 # ── KPI card ────────────────────────────────────────────────────────────────────
 
-def _kpi(title: str, value: str = "—", sub: str = "") -> tuple[QFrame, QLabel]:
+def _kpi(title: str, value: str = "—", sub: str = "", info: str = "") -> tuple[QFrame, QLabel]:
     frame = QFrame()
     frame.setObjectName("StatCard")
     frame.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
     lay = QVBoxLayout()
     lay.setSpacing(2)
+
+    title_row = QHBoxLayout()
+    title_row.setContentsMargins(0, 0, 0, 0)
+    title_row.setSpacing(4)
     t = QLabel(title)
     t.setObjectName("CardTitle")
+    title_row.addWidget(t)
+    if info:
+        title_row.addWidget(info_icon(info))
+    title_row.addStretch()
+
     v = QLabel(value)
     v.setObjectName("CardValue")
-    lay.addWidget(t)
+    lay.addLayout(title_row)
     lay.addWidget(v)
     if sub:
         s = QLabel(sub)
@@ -161,9 +171,24 @@ class TrendsPage(QWidget):
         kpi_row = QHBoxLayout()
         kpi_row.setSpacing(12)
         brand = self.app.get_target_brand() or "Target Brand"
-        self._kpi_score_card,  self._kpi_score  = _kpi(f"{brand} Avg Score", "—%", "avg across all runs")
-        self._kpi_top_ps_card, self._kpi_top_ps = _kpi("Top Prompt Set", "—", "best performing category")
-        self._kpi_best_card,   self._kpi_best   = _kpi("Best Provider", "—", "highest avg score")
+        self._kpi_score_card,  self._kpi_score  = _kpi(
+            f"{brand} Avg Score", "—%", "avg across all runs",
+            info=(
+                "Simple average of each individual run's Visibility Score — one run = one "
+                "data point, regardless of run size. This is NOT the same as the Visibility "
+                "page's overall Visibility Score, which is volume-weighted (total mentions "
+                "÷ total responses across ALL runs combined). A few small runs with high "
+                "scores can pull this average up even if your combined mention rate is lower."
+            ),
+        )
+        self._kpi_top_ps_card, self._kpi_top_ps = _kpi(
+            "Top Prompt Set", "—", "best performing category",
+            info=f"The prompt family with the highest average {brand} score across every run that used it.",
+        )
+        self._kpi_best_card,   self._kpi_best   = _kpi(
+            "Best Provider", "—", "highest avg score",
+            info=f"The AI provider with the highest average {brand} score across every run from that provider.",
+        )
         for card in (self._kpi_score_card, self._kpi_top_ps_card, self._kpi_best_card):
             kpi_row.addWidget(card)
         kpi_w = QWidget()

@@ -49,6 +49,13 @@ class VisibilityService:
         return self.repository.list_runs()
 
     def analytics_summary(self):
+        # #35: reload brand/feature/channel terms every call — cheap relative
+        # to summarize_responses(), and the response-count-keyed cache below
+        # can't tell on its own whether the term SET changed (e.g. a brand
+        # added mid-session with no new responses collected), so force a
+        # recompute whenever reload_terms() reports a real change.
+        if self.analytics.reload_terms():
+            self._analytics_cache = None
         count = self.repository.count_responses()
         if self._analytics_cache is not None and count == self._analytics_cache_count:
             return self._analytics_cache

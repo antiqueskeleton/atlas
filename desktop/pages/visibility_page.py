@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (
 )
 
 from backend.visibility.visibility_service import VisibilityService
+from desktop.widgets.info_icon import info_icon
 
 
 # ── Worker thread ─────────────────────────────────────────────────────────────
@@ -126,7 +127,7 @@ class _PDFWorker(QThread):
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def _stat_card(title, value, subtitle=""):
+def _stat_card(title, value, subtitle="", info=""):
     frame = QFrame()
     frame.setObjectName("StatCard")
     frame.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -134,9 +135,17 @@ def _stat_card(title, value, subtitle=""):
     lay.setSpacing(2)
     lay.setContentsMargins(14, 12, 14, 12)
 
+    title_row = QHBoxLayout()
+    title_row.setContentsMargins(0, 0, 0, 0)
+    title_row.setSpacing(4)
     t = QLabel(title);  t.setObjectName("CardTitle")
+    title_row.addWidget(t)
+    if info:
+        title_row.addWidget(info_icon(info))
+    title_row.addStretch()
+
     v = QLabel(value);  v.setObjectName("CardValue")
-    lay.addWidget(t)
+    lay.addLayout(title_row)
     lay.addWidget(v)
 
     if subtitle:
@@ -271,10 +280,6 @@ class VisibilityPage(QWidget):
         row1 = QHBoxLayout()
         row1.setSpacing(10)
 
-        lbl_ps = QLabel("Prompt Sets:")
-        lbl_ps.setFixedWidth(88)
-        lbl_ps.setAlignment(Qt.AlignTop | Qt.AlignLeft)
-
         self._ps_search = QLineEdit()
         self._ps_search.setPlaceholderText("Search families…")
         self._ps_search.setToolTip("Filter the prompt family list below by name")
@@ -331,7 +336,7 @@ class VisibilityPage(QWidget):
         ps_scroll = QScrollArea()
         ps_scroll.setWidget(self._ps_inner)
         ps_scroll.setWidgetResizable(True)
-        ps_scroll.setFixedHeight(340)
+        ps_scroll.setFixedHeight(170)
         ps_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         ps_scroll.setStyleSheet(
             "QScrollArea { border: 1px solid #D1D5DB; border-radius: 4px; background: white; }"
@@ -358,21 +363,14 @@ class VisibilityPage(QWidget):
         btn_none.setToolTip("Clear all selections")
         btn_top.setToolTip("Select the 20 highest-influence prompt families")
 
-        self._count_lbl = QLabel("0 sets\n0 prompts")
-        self._count_lbl.setStyleSheet("color: #6B7280; font-size: 11px;")
-        self._count_lbl.setFixedWidth(72)
-
         ps_ctrl = QVBoxLayout()
         ps_ctrl.setSpacing(4)
         ps_ctrl.setAlignment(Qt.AlignTop)
         ps_ctrl.addWidget(btn_all)
         ps_ctrl.addWidget(btn_none)
         ps_ctrl.addWidget(btn_top)
-        ps_ctrl.addSpacing(6)
-        ps_ctrl.addWidget(self._count_lbl)
         ps_ctrl.addStretch()
 
-        row1.addWidget(lbl_ps)
         row1.addWidget(ps_center_w, 1)
         row1.addLayout(ps_ctrl)
 
@@ -414,10 +412,9 @@ class VisibilityPage(QWidget):
             row2.addSpacing(10)
         row2.addStretch()
 
-        # ── Row 3: Run / Pause / Stop ─────────────────────────────────────────
-        row3 = QHBoxLayout()
-        row3.setSpacing(10)
-
+        # ── Run / Pause / Stop / progress — live in the toolbar row up top,
+        # next to the Export buttons, so they stay visible even when the
+        # Prompt Sets panel below is collapsed (see toolbar_row).
         self._run_btn = QPushButton("Run Visibility Collection")
         self._run_btn.setFixedWidth(200)
         self._run_btn.setStyleSheet(
@@ -445,6 +442,7 @@ class VisibilityPage(QWidget):
 
         self._progress = QProgressBar()
         self._progress.setFixedHeight(14)
+        self._progress.setFixedWidth(140)
         self._progress.setTextVisible(True)
         self._progress.setVisible(False)
         self._progress.setStyleSheet(
@@ -455,16 +453,16 @@ class VisibilityPage(QWidget):
         self._status_lbl = QLabel("")
         self._status_lbl.setStyleSheet("color: #6B7280; font-size: 12px;")
 
-        row3.addWidget(self._run_btn)
-        row3.addWidget(self._pause_btn)
-        row3.addWidget(self._stop_btn)
-        row3.addWidget(self._progress)
-        row3.addWidget(self._status_lbl)
-        row3.addStretch()
+        self._count_lbl = QLabel("0 sets · 0 prompts")
+        self._count_lbl.setStyleSheet("color: #6B7280; font-size: 11px;")
 
-        ctrl_lay.addLayout(row1)
+        # Prompt Sets is the only collapsible piece now — Providers (row2)
+        # always stays visible underneath the toolbar.
+        self._ps_panel = QWidget()
+        self._ps_panel.setLayout(row1)
+
         ctrl_lay.addLayout(row2)
-        ctrl_lay.addLayout(row3)
+        ctrl_lay.addWidget(self._ps_panel)
         ctrl_frame.setLayout(ctrl_lay)
 
         # ── KPI cards ─────────────────────────────────────────────────────────
@@ -472,16 +470,30 @@ class VisibilityPage(QWidget):
         kpi_row.setSpacing(10)
         brand_label = self.app.get_target_brand() or "Target Brand"
         self._score_card, self._score_title, self._score_val = _stat_card(
-            f"{brand_label} Visibility Score", "—%", f"% of responses mentioning {brand_label}"
+            f"{brand_label} Visibility Score", "—%", f"% of responses mentioning {brand_label}",
+            info=(
+                f"(Responses mentioning {brand_label}) ÷ (ALL responses collected across "
+                f"every Visibility run) × 100. This covers your FULL collection history, "
+                f"unlike the Home page's Brand Mention Rate tile, which only reflects your "
+                f"most recent Intelligence Analysis run's smaller sample."
+            ),
         )
         self._total_card, _, self._total_val = _stat_card(
-            "Responses Analyzed", "—", "across all collected runs"
+            "Responses Analyzed", "—", "across all collected runs",
+            info="Total AI responses stored across every Visibility collection run, all providers combined.",
         )
         self._top_card, self._top_title, self._top_val = _stat_card(
-            "Visibility Mention Rank", "—", "across all visibility collection responses"
+            "Visibility Mention Rank", "—", "across all visibility collection responses",
+            info=(
+                "Your target brand's position when ALL tracked active brands are ranked by "
+                "mention count, highest first. The \"of N\" denominator is the full tracked "
+                "brand count, not just brands that happen to have a mention — a brand with "
+                "zero mentions still counts toward the total, ranked at the bottom."
+            ),
         )
         self._last_card, _, self._last_val = _stat_card(
-            "Last Collection", "—", "most recent visibility run"
+            "Last Collection", "—", "most recent visibility run",
+            info="Date and time of the most recently completed Visibility collection run.",
         )
         self._last_val.setStyleSheet("QLabel#CardValue { font-size: 14px; font-weight: 600; }")
         for card in (self._score_card, self._total_card, self._top_card, self._last_card):
@@ -515,6 +527,15 @@ class VisibilityPage(QWidget):
         self._pos_tbl.setColumnWidth(2, 70)
         self._pos_tbl.setColumnWidth(3, 70)
         self._pos_tbl.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        self._pos_tbl.horizontalHeaderItem(0).setToolTip(
+            "The order this brand was named in a response — Position 1 means it was the "
+            "FIRST brand mentioned (the closest proxy to being AI's top recommendation)."
+        )
+        self._pos_tbl.horizontalHeaderItem(3).setToolTip(
+            "% of ALL responses where this brand appeared at exactly this position. Different "
+            "from Visibility Score, which counts a mention anywhere in the response — a brand "
+            "can have a high Visibility Score while rarely being mentioned first."
+        )
 
         self._brand_frame, _, self._brand_tbl = _table_section(
             "Brand Mentions by Provider",
@@ -538,6 +559,22 @@ class VisibilityPage(QWidget):
             "Negative = responses where this brand was mentioned in an unfavorable or "
             "comparative-losing context (e.g. \"unlike Firman, Honda includes...\"). "
             "Negative % is of that brand's OWN mentions, not of all responses."
+        )
+        # Per-column header tooltips (#49) — more discoverable than the whole-table
+        # tooltip above, since hovering a column HEADER is a more natural way to
+        # ask "what does this column mean" than hovering blank table space.
+        self._sentiment_tbl.horizontalHeaderItem(1).setToolTip(
+            "Number of responses mentioning this brand at all (positive, neutral, or negative)."
+        )
+        self._sentiment_tbl.horizontalHeaderItem(2).setToolTip(
+            "Number of THOSE mentions that were negative or unfavorable — e.g. the brand lost "
+            "a direct comparison or was described critically."
+        )
+        self._sentiment_tbl.horizontalHeaderItem(3).setToolTip(
+            "Negative ÷ that brand's OWN Mentions column (not ÷ all responses). This answers "
+            "\"of the times AI brings this brand up, how often is it unfavorable\" — a brand "
+            "mentioned rarely but always negatively will show a high % here even though its "
+            "overall Visibility Score is low."
         )
 
         # Features tab — two tables side by side
@@ -712,7 +749,7 @@ class VisibilityPage(QWidget):
 
         self._ctrl_frame = ctrl_frame
 
-        self._collapse_btn = QPushButton("▲  Hide Controls")
+        self._collapse_btn = QPushButton("▲  Hide Prompt Sets")
         self._collapse_btn.setCursor(Qt.PointingHandCursor)
         self._collapse_btn.setFixedHeight(28)
         self._collapse_btn.setStyleSheet(
@@ -723,7 +760,7 @@ class VisibilityPage(QWidget):
             "QPushButton:pressed { background: #D1D5DB; }"
         )
         self._collapse_btn.clicked.connect(self._toggle_ctrl_panel)
-        self._collapse_btn.setToolTip("Show or hide the prompt/provider selection panel")
+        self._collapse_btn.setToolTip("Show or hide the prompt family/scenario selection list")
 
         self._export_pdf_btn = QPushButton("Export PDF Report")
         self._export_pdf_btn.setFixedHeight(28)
@@ -754,7 +791,14 @@ class VisibilityPage(QWidget):
         toolbar_row = QHBoxLayout()
         toolbar_row.setContentsMargins(0, 0, 0, 0)
         toolbar_row.setSpacing(8)
-        toolbar_row.addWidget(self._collapse_btn, 1)
+        toolbar_row.addWidget(self._collapse_btn)
+        toolbar_row.addSpacing(4)
+        toolbar_row.addWidget(self._run_btn)
+        toolbar_row.addWidget(self._pause_btn)
+        toolbar_row.addWidget(self._stop_btn)
+        toolbar_row.addWidget(self._progress)
+        toolbar_row.addWidget(self._status_lbl)
+        toolbar_row.addWidget(self._count_lbl)
         toolbar_row.addStretch()
         toolbar_row.addWidget(self._export_excel_btn)
         toolbar_row.addWidget(self._export_pdf_btn)
@@ -779,7 +823,7 @@ class VisibilityPage(QWidget):
     def _on_sets_changed(self):
         prompts, _, _fam = self._get_selected_prompts()
         n_sets = sum(1 for cb in self._set_checks.values() if cb.isChecked())
-        self._count_lbl.setText(f"{n_sets} set{'s' if n_sets != 1 else ''}\n{len(prompts)} prompts")
+        self._count_lbl.setText(f"{n_sets} set{'s' if n_sets != 1 else ''} · {len(prompts)} prompts")
 
     def _select_all_sets(self):
         for cb in self._set_checks.values():
@@ -827,9 +871,9 @@ class VisibilityPage(QWidget):
         self._ps_inner.adjustSize()
 
     def _toggle_ctrl_panel(self):
-        visible = not self._ctrl_frame.isVisible()
-        self._ctrl_frame.setVisible(visible)
-        self._collapse_btn.setText("▲  Hide Controls" if visible else "▼  Show Controls")
+        visible = not self._ps_panel.isVisible()
+        self._ps_panel.setVisible(visible)
+        self._collapse_btn.setText("▲  Hide Prompt Sets" if visible else "▼  Show Prompt Sets")
 
     def _export_pdf(self):
         default_name = (
@@ -1104,12 +1148,17 @@ class VisibilityPage(QWidget):
         # Responses analyzed
         self._total_val.setText(str(total))
 
-        # Brand Mention Rank
+        # Brand Mention Rank — denominator is ALL tracked brands (#48), not just
+        # brands with ≥1 mention. A brand with 0 mentions can only rank at or
+        # below one with actual mentions, so the numeric rank is unaffected;
+        # only the "of N" denominator changes, from a misleadingly small
+        # mentioned-only count to the true size of the tracked competitive set.
         sorted_brands = sorted(brand_counts.items(), key=lambda x: -x[1])
         rank = next((i + 1 for i, (b, _) in enumerate(sorted_brands) if b == brand_label), None)
+        total_tracked = summary.get("total_tracked_brands", len(sorted_brands))
         if rank:
             self._top_title.setText(f"Visibility Mention Rank  —  {brand_label}")
-            self._top_val.setText(f"#{rank} of {len(sorted_brands)}")
+            self._top_val.setText(f"#{rank} of {total_tracked}")
         else:
             self._top_title.setText("Visibility Mention Rank")
             self._top_val.setText("Unranked")
