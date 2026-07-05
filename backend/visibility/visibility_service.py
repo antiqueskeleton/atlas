@@ -27,6 +27,7 @@ class VisibilityService:
         paused: Callable[[], bool] | None = None,
         prompts: list[str] | None = None,
         prompt_families: dict[str, str] | None = None,
+        logger=None,
     ) -> dict:
         if prompts is None:
             prompts = self.prompt_library.get(prompt_set)
@@ -39,6 +40,7 @@ class VisibilityService:
             progress_callback=progress_callback,
             cancelled=cancelled,
             paused=paused,
+            logger=logger,
         )
         self.repository.save_run(result["run"])
         self.repository.save_responses(result["responses"])

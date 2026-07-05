@@ -29,6 +29,7 @@ from PySide6.QtWidgets import (
 
 from backend.knowledge.knowledge_repository import KnowledgeRepository
 from backend.visibility.visibility_service import VisibilityService
+from desktop.run_logger import RunLogger
 from desktop.sleep_guard import allow_sleep, prevent_sleep
 from desktop.widgets.info_icon import info_icon
 
@@ -42,13 +43,14 @@ class _RunWorker(QThread):
     error    = Signal(str)
 
     def __init__(self, service: VisibilityService, prompts: list, label: str,
-                 providers: list, prompt_families: dict):
+                 providers: list, prompt_families: dict, logger=None):
         super().__init__()
         self.service = service
         self.prompts = prompts
         self.label = label
         self.providers = providers
         self.prompt_families = prompt_families
+        self.logger = logger  # #75: desktop/run_logger.py's RunLogger, or None
         self._cancelled = False
         self._pause_event = threading.Event()
         self._pause_event.set()
@@ -57,6 +59,10 @@ class _RunWorker(QThread):
     def cancel(self):
         self._cancelled = True
         self._pause_event.set()
+
+    @property
+    def is_cancelled(self) -> bool:
+        return self._cancelled
 
     def pause(self):
         self._pause_event.clear()
@@ -99,9 +105,12 @@ class _RunWorker(QThread):
                     cancelled=lambda: self._cancelled,
                     paused=lambda: not self._pause_event.is_set(),
                     prompt_families=self.prompt_families,
+                    logger=self.logger,
                 )
                 self.run_done.emit(result)
             except Exception as exc:
+                if self.logger:
+                    self.logger.error(f"[{provider_name}] thread-level exception: {exc}")
                 self.error.emit(f"{provider_name}: {exc}")
 
         with ThreadPoolExecutor(max_workers=len(self.providers)) as pool:
@@ -110,6 +119,8 @@ class _RunWorker(QThread):
                 try:
                     future.result()
                 except Exception as exc:
+                    if self.logger:
+                        self.logger.error(f"Thread pool exception: {exc}")
                     self.error.emit(f"Thread error: {exc}")
 
         self.all_done.emit()
@@ -259,6 +270,7 @@ class VisibilityPage(QWidget):
             target_brand=self.app.get_target_brand(),
         )
         self._worker: _RunWorker | None = None
+        self._run_logger: RunLogger | None = None
 
         root = QVBoxLayout()
         root.setContentsMargins(16, 12, 16, 12)
@@ -1148,9 +1160,17 @@ class VisibilityPage(QWidget):
         self._progress.setVisible(True)
         self._progress.setRange(0, total)
         self._progress.setValue(0)
-        self._status_lbl.setText("Starting…")
 
-        self._worker = _RunWorker(self.service, prompts, label, providers, prompt_families)
+        # #75: a real log file, flushed per line, that survives a crash/stall —
+        # so if a run silently stops responding there's something to inspect
+        # afterward instead of just a vanished progress bar.
+        self._run_logger = RunLogger()
+        log_path = self._run_logger.start(providers, n_prompts, label)
+        self._status_lbl.setText("Starting…")
+        self._status_lbl.setToolTip(f"Run log: {log_path}")
+
+        self._worker = _RunWorker(self.service, prompts, label, providers, prompt_families,
+                                   logger=self._run_logger)
         self._worker.progress.connect(self._on_progress)
         self._worker.run_done.connect(self._on_run_done)
         self._worker.all_done.connect(self._on_all_done)
@@ -1179,6 +1199,8 @@ class VisibilityPage(QWidget):
     def _stop_run(self):
         if self._worker:
             self._worker.cancel()
+        if self._run_logger:
+            self._run_logger.info("Stop requested by user")
         self._status_lbl.setText("Stopping after current prompt…")
         self._stop_btn.setEnabled(False)
         self._pause_btn.setEnabled(False)
@@ -1205,16 +1227,27 @@ class VisibilityPage(QWidget):
         # cancelled via _stop_run — so this is the one correct place to
         # release the sleep-prevention requested in _start_run().
         allow_sleep()
+        if self._run_logger:
+            status = "cancelled" if (self._worker and self._worker.is_cancelled) else "completed"
+            self._run_logger.close(status)
+            log_path = self._run_logger.log_path
+            self._run_logger = None
+        else:
+            log_path = None
         self._run_btn.setEnabled(True)
         self._pause_btn.setEnabled(False)
         self._pause_btn.setText("Pause")
         self._stop_btn.setEnabled(False)
         self._progress.setVisible(False)
         self._status_lbl.setText("Done.")
+        if log_path:
+            self._status_lbl.setToolTip(f"Run log: {log_path}")
         self.refresh()
 
     def _on_error(self, msg: str):
         self._status_lbl.setText(f"Error: {msg}")
+        if self._run_logger:
+            self._run_logger.error(msg)
 
     # ── Refresh ───────────────────────────────────────────────────────────────
 

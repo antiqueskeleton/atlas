@@ -85,6 +85,12 @@ class AtlasMainWindow(QMainWindow):
         # row 6 in _NAV_ITEMS. "Manage Knowledge" previously opened the
         # wrong page. Confirmed 2026-07-02.
         knowledge_action.triggered.connect(lambda: self.nav.setCurrentRow(6))
+        logs_action = tools_menu.addAction("Open Logs Folder")
+        logs_action.setToolTip(
+            "Diagnostic logs from Visibility Collection runs (#75) — useful if a run "
+            "silently stalls and you want to see exactly where it stopped."
+        )
+        logs_action.triggered.connect(self._open_logs_folder)
 
         help_menu = menu.addMenu("Help")
         guide_action = help_menu.addAction("Usage Guide")
@@ -596,3 +602,8 @@ class AtlasMainWindow(QMainWindow):
             "AI responses are now collected directly through the Visibility page.\n\n"
             "Navigate to Visibility → select a prompt set → Run to collect and store responses.",
         )
+
+    def _open_logs_folder(self):
+        import os
+        from backend.services.paths import get_logs_dir
+        os.startfile(get_logs_dir())

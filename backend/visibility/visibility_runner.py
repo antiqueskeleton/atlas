@@ -21,7 +21,16 @@ class VisibilityRunner:
         progress_callback: Callable[[int, int], None] | None = None,
         cancelled: Callable[[], bool] | None = None,
         paused: Callable[[], bool] | None = None,
+        logger=None,
     ) -> dict:
+        """
+        logger (#75): optional object with .info(str)/.error(str) — e.g.
+        desktop/run_logger.py's RunLogger. Duck-typed rather than imported
+        directly so this backend module has no dependency on the desktop
+        layer. Every prompt's outcome is logged (not just errors) so a
+        silent stall's LAST log line pinpoints exactly which prompt/provider
+        it died on, and roughly when.
+        """
         if provider is None:
             provider_name = provider_name or self.provider_manager.active_provider_name
             provider = self.provider_manager.get_provider(provider_name)
@@ -34,6 +43,9 @@ class VisibilityRunner:
             started_at=datetime.now(),
         )
 
+        if logger:
+            logger.info(f"[{provider.provider_name}] starting {len(prompts)} prompts (run_id={run.run_id})")
+
         responses = []
         error_count = 0
 
@@ -44,12 +56,21 @@ class VisibilityRunner:
                     time.sleep(0.05)
 
             if cancelled and cancelled():
+                if logger:
+                    logger.info(f"[{provider.provider_name}] cancelled at prompt {i + 1}/{len(prompts)}")
                 break
 
+            t0 = datetime.now()
             reasoning = provider.ask(prompt)
+            elapsed = (datetime.now() - t0).total_seconds()
 
             if reasoning.is_error:
                 error_count += 1
+                if logger:
+                    logger.error(
+                        f"[{provider.provider_name}] prompt {i + 1}/{len(prompts)} ERROR "
+                        f"({elapsed:.1f}s): {prompt[:80]!r}"
+                    )
             else:
                 family = (prompt_families or {}).get(prompt, "")
                 responses.append(
@@ -63,9 +84,18 @@ class VisibilityRunner:
                         family_name=family,
                     )
                 )
+                if logger:
+                    logger.info(
+                        f"[{provider.provider_name}] prompt {i + 1}/{len(prompts)} ok ({elapsed:.1f}s)"
+                    )
 
             if progress_callback:
                 progress_callback(i + 1, len(prompts))
+
+        if logger:
+            logger.info(
+                f"[{provider.provider_name}] finished — {len(responses)} ok, {error_count} error(s)"
+            )
 
         run.completed_at = datetime.now()
         run.status = "completed" if not (cancelled and cancelled()) else "cancelled"

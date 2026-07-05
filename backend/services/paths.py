@@ -27,6 +27,15 @@ def get_db_path() -> Path:
     return db_dir / "atlas.db"
 
 
+def get_logs_dir() -> Path:
+    """Directory for diagnostic run logs (#75) — a sibling of the database
+    file, so it's %APPDATA%\\Atlas\\logs when frozen, or database/logs when
+    running from source."""
+    d = get_db_path().parent / "logs"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
 def get_data_dir() -> Path:
     """Return the bundled data directory.
 
