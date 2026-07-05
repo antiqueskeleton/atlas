@@ -10,7 +10,15 @@ class ExecutiveConsensusEngine:
                 overall_read="No agent findings are available for consensus."
             )
 
-        completed = [r for r in task_results if r.confidence != "Pending"]
+        # #77 fix: exclude is_error results (a failed/unparsed agent
+        # response) from "completed" — these were previously still counted
+        # toward confidence_score and areas_of_agreement even though they
+        # carry no real analysis, since only confidence == "Pending" was
+        # excluded.
+        completed = [
+            r for r in task_results
+            if r.confidence != "Pending" and not getattr(r, "is_error", False)
+        ]
 
         if not completed:
             return ExecutiveConsensus(
@@ -21,12 +29,20 @@ class ExecutiveConsensusEngine:
             f"{r.task}: {r.summary[:220]}…" for r in completed
         ]
 
-        # Attempt LLM synthesis — falls back to rule-based if unavailable
+        # Attempt LLM synthesis — falls back to rule-based if unavailable OR
+        # if the response couldn't be parsed (#77: this previously only
+        # checked for a raised exception, but AIReasoningParser's JSON-parse
+        # failure never raises — it "succeeds" with is_error=True and
+        # placeholder content, which used to render as a fake high-confidence
+        # consensus instead of falling back to the honest rule-based path
+        # below).
         if provider_manager:
             try:
-                prompt = ExecutivePromptBuilder().build(task_results)
+                prompt = ExecutivePromptBuilder().build(completed)
                 provider = provider_manager.get_active_provider()
                 reasoning = provider.ask(prompt=prompt, context=None)
+                if reasoning.is_error:
+                    raise ValueError(f"Executive synthesis failed: {reasoning.executive_summary}")
                 return ExecutiveConsensus(
                     overall_read=reasoning.executive_summary or "",
                     confidence_score=min(100, len(completed) * 25),

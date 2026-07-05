@@ -25,9 +25,13 @@ class TaskResultsPanel(QFrame):
             self.body.setPlainText("No investigation tasks completed.")
             return
 
+        # #77: mark a failed/unparsed agent result clearly — previously
+        # rendered identically to a real finding, with nothing distinguishing
+        # "the AI's response could not be parsed" from actual analysis.
         text = "\n\n".join(
-            f"{result.task}\n"
-            f"Confidence: {result.confidence}\n"
+            f"{result.task}"
+            + ("  ⚠ FAILED — not a real analysis" if getattr(result, "is_error", False) else "")
+            + f"\nConfidence: {result.confidence}\n"
             f"Provider: {result.provider or 'Atlas'}\n"
             f"{result.summary}"
             for result in task_results

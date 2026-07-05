@@ -8,3 +8,4 @@ class TaskResult:
     confidence: str
     provider: str = ""
     raw_response: str = ""
+    is_error: bool = False

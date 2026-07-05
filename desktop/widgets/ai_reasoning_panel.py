@@ -22,7 +22,21 @@ class AIReasoningPanel(QFrame):
         self.setLayout(layout)
 
     def set_reasoning(self, reasoning):
-        text = reasoning.executive_summary
+        # #77: an error result (no API key, request failed, or a response
+        # that couldn't be parsed) was previously rendered identically to a
+        # real, successful analysis — nothing here ever checked is_error, so
+        # a technical failure was visually indistinguishable from genuine
+        # findings. Style it as a clear warning instead.
+        if getattr(reasoning, "is_error", False):
+            self.body.setStyleSheet(
+                "QTextEdit { background-color: #FEF2F2; border: 1px solid #FCA5A5; "
+                "color: #7F1D1D; }"
+            )
+            text = "⚠ This request did not complete successfully — the text below is NOT a real analysis.\n\n"
+            text += reasoning.executive_summary
+        else:
+            self.body.setStyleSheet("")
+            text = reasoning.executive_summary
 
         if reasoning.opportunities:
             text += "\n\nOpportunities:\n"

@@ -20,6 +20,11 @@ class AIReasoningParser:
             )
 
         except Exception:
+            # is_error=True is the critical part here — without it, this parse
+            # failure is indistinguishable from a real, successful response to
+            # any caller that only looks at executive_summary/risks/opportunities
+            # (which is exactly what let a broken response render as a fake
+            # high-confidence "executive consensus" — see #77).
             return AIReasoning(
                 executive_summary=text,
                 confidence="Low",
@@ -35,4 +40,5 @@ class AIReasoningParser:
                     "Should Atlas retry with stricter JSON instructions?"
                 ],
                 provider=provider,
+                is_error=True,
             )

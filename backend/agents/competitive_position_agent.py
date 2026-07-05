@@ -29,7 +29,8 @@ class CompetitivePositionAgent(BaseAgent):
                 summary=reasoning.executive_summary,
                 confidence=reasoning.confidence,
                 provider=reasoning.provider,
-                raw_response=reasoning.raw_response
+                raw_response=reasoning.raw_response,
+                is_error=reasoning.is_error,
             )
 
         summary = analysis["summary"]
