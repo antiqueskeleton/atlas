@@ -5,6 +5,7 @@ from backend.ai.gemini_provider import GeminiProvider
 from backend.ai.perplexity_provider import PerplexityProvider
 from backend.ai.grok_provider import GrokProvider
 from backend.ai.mistral_provider import MistralProvider
+from backend.ai.deepseek_provider import DeepSeekProvider
 
 
 class ProviderRegistry:
@@ -17,6 +18,7 @@ class ProviderRegistry:
             "perplexity": PerplexityProvider,
             "grok": GrokProvider,
             "mistral": MistralProvider,
+            "deepseek": DeepSeekProvider,
         }
 
     def create_provider(self, provider_key):

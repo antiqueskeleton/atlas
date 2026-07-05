@@ -39,6 +39,8 @@ _PROVIDER_COLORS = {
     "grok":       "#111827",
     "Mistral":    "#FF7000",
     "mistral":    "#FF7000",
+    "DeepSeek":   "#4D6BFE",
+    "deepseek":   "#4D6BFE",
     "Mock":       "#6B7280",
     "mock":       "#6B7280",
 }

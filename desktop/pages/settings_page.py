@@ -30,6 +30,28 @@ _PROVIDERS = {
     "perplexity": ("Perplexity",    "pplx-...",   "sonar",                "sonar / sonar-pro / sonar-reasoning",         "www.perplexity.ai/settings/api"),
     "grok":       ("Grok (xAI)",    "xai-...",    "grok-3",               "grok-3 / grok-3-mini",                        "console.x.ai"),
     "mistral":    ("Mistral",       "...",        "mistral-large-latest", "mistral-large-latest / mistral-small-latest", "console.mistral.ai"),
+    "deepseek":   ("DeepSeek",      "sk-...",     "deepseek-chat",        "deepseek-chat / deepseek-reasoner",           "platform.deepseek.com"),
+}
+
+# Providers Atlas intends to add, but deliberately does NOT support yet (#62,
+# 2026-07-05) because the actual consumer product has no public developer
+# API — the only technical proxies available (Azure OpenAI for Copilot, a
+# third-party Llama host for Meta AI) call a DIFFERENT underlying model than
+# the real product, which would be a factual-accuracy problem in its own
+# right (the exact kind of issue #77 already flagged elsewhere in Atlas).
+# label -> why it's not buildable yet
+_COMING_SOON_PROVIDERS = {
+    "Microsoft Copilot": (
+        "No public API for the Copilot consumer product. Azure OpenAI Service calls the "
+        "same underlying GPT models Atlas already queries directly via OpenAI — it would not "
+        "reflect Copilot's real Bing-grounded behavior, so Atlas isn't building a proxy for it."
+    ),
+    "Meta AI (Llama)": (
+        "No direct developer API for the Meta AI consumer product. A third-party Llama host "
+        "(Together.ai, Groq, etc.) only serves the base open-weight model — without whatever "
+        "system prompt, fine-tuning, or live web-search grounding Meta applies to the real "
+        "product, so Atlas isn't building a proxy for it."
+    ),
 }
 
 _CARD_SS = """
@@ -132,6 +154,7 @@ class SettingsPage(QWidget):
         root.addWidget(self._brand_card())
         root.addWidget(self._provider_card())
         root.addWidget(self._keys_card())
+        root.addWidget(self._coming_soon_card())
         root.addWidget(self._volume_providers_card())
         root.addWidget(self._health_card())
         root.addStretch()
@@ -325,6 +348,30 @@ class SettingsPage(QWidget):
         save_row.addWidget(self.status)
         save_row.addStretch()
         lay.addLayout(save_row)
+
+        return card
+
+    def _coming_soon_card(self) -> QFrame:
+        card, lay = self._card("Coming Soon")
+        lay.addWidget(self._note(
+            "Providers Atlas plans to add once a real, direct public API for the actual "
+            "consumer product exists — not shown as selectable providers yet, since the only "
+            "technical workarounds available today would measure a different product than the "
+            "one people actually use."
+        ))
+        lay.addSpacing(8)
+
+        for label, reason in _COMING_SOON_PROVIDERS.items():
+            row = QHBoxLayout()
+            row.setSpacing(10)
+            name_lbl = QLabel(label)
+            name_lbl.setStyleSheet("font-size: 13px; font-weight: bold; color: #9CA3AF;")
+            name_lbl.setFixedWidth(150)
+            reason_lbl = self._note(reason)
+            row.addWidget(name_lbl)
+            row.addWidget(reason_lbl, 1)
+            lay.addLayout(row)
+            lay.addWidget(self._hsep())
 
         return card
 

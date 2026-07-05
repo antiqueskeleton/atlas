@@ -17,6 +17,7 @@ _PROVIDER_INFO = {
     "perplexity": ("Perplexity",    "sonar"),
     "grok":       ("Grok (xAI)",    "grok-3"),
     "mistral":    ("Mistral",       "mistral-large-latest"),
+    "deepseek":   ("DeepSeek",      "deepseek-chat"),
 }
 
 _BRAND_FIELDS = [
@@ -479,10 +480,7 @@ class KnowledgePage(QWidget):
         if not pm:
             QMessageBox.warning(self, "Not Ready", "App not fully initialized.")
             return
-        active = [
-            name for name in ("openai", "anthropic", "gemini", "perplexity", "grok", "mistral")
-            if pm.get_provider_api_key(name)
-        ]
+        active = [name for name in pm.list_providers() if pm.get_provider_api_key(name)]
         if not active:
             QMessageBox.warning(
                 self, "No Providers",
