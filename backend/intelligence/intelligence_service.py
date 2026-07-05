@@ -646,7 +646,8 @@ class IntelligenceService:
         if not rows:
             return "No web presence data available."
         lines = []
-        for brand, domain, title, meta, h1s_json, keywords, da, visits, schema, sitemap, https, scraped in rows:
+        for (brand, domain, title, meta, h1s_json, keywords, da, visits, schema, sitemap, https,
+             scraped, is_own_site, blocks_ai_crawlers, blocked_crawler_names) in rows:
             if not scraped:
                 continue  # skip unscraped manual entries — they have no on-page data
             import json
@@ -663,14 +664,18 @@ class IntelligenceService:
                 signals.append("Sitemap")
             if schema:
                 signals.append("Schema.org")
-            lines.append(
-                f"  {brand} ({domain})\n"
+            label = f"{brand} ({domain})" + (" — YOUR SITE" if is_own_site else "")
+            block = (
+                f"  {label}\n"
                 f"    Title: {title or '—'}\n"
                 f"    Meta: {meta[:120] if meta else '—'}\n"
                 f"    H1(s): {h1_str}\n"
                 f"    Top keywords: {kw_str}\n"
                 f"    Signals: {', '.join(signals) or 'none'}"
             )
+            if is_own_site and blocks_ai_crawlers:
+                block += f"\n    ⚠ robots.txt BLOCKS these AI crawlers: {blocked_crawler_names}"
+            lines.append(block)
         return "\n\n".join(lines) if lines else "No scraped web data yet — run Scrape All on Knowledge → Web Intelligence tab."
 
     def _count_brands(self, collected: dict) -> dict:

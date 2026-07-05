@@ -43,6 +43,29 @@ class ConfigService:
         self.settings["models"][provider_name] = model
         self._save()
 
+    def get_volume_credential(self, provider_name: str) -> str:
+        """Returns the stored credential for a volume provider — for
+        Google Search Console this is a file PATH to a service-account
+        JSON key, not the key contents itself (keeps the private key out
+        of settings.json; the user manages that file like any other
+        credential file on disk)."""
+        return self.settings.get("volume_credentials", {}).get(provider_name, "")
+
+    def set_volume_credential(self, provider_name: str, credential: str):
+        if "volume_credentials" not in self.settings:
+            self.settings["volume_credentials"] = {}
+        self.settings["volume_credentials"][provider_name] = credential
+        self._save()
+
+    def get_volume_site_url(self, provider_name: str) -> str:
+        return self.settings.get("volume_site_urls", {}).get(provider_name, "")
+
+    def set_volume_site_url(self, provider_name: str, site_url: str):
+        if "volume_site_urls" not in self.settings:
+            self.settings["volume_site_urls"] = {}
+        self.settings["volume_site_urls"][provider_name] = site_url
+        self._save()
+
     def get_user_config_path(self) -> Path:
         return self._user_config_path
 
@@ -73,7 +96,7 @@ class ConfigService:
 
     def _save(self):
         # Only write user-owned keys to user config (never back to project config)
-        user_keys = {"target_brand", "api_keys", "models"}
+        user_keys = {"target_brand", "api_keys", "models", "volume_credentials", "volume_site_urls"}
         user_data = {k: v for k, v in self.settings.items() if k in user_keys}
         with self._user_config_path.open("w", encoding="utf-8") as f:
             json.dump(user_data, f, indent=2)

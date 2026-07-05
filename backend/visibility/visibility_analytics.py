@@ -106,6 +106,17 @@ class VisibilityAnalytics:
             or {c[0] for c in self.channels} != prev_channels
         )
 
+    def detect_mentioned_brands(self, text: str) -> list[str]:
+        """
+        Returns tracked brand names (sorted) whose any known term appears in
+        text, case-insensitive. Used by the Raw Data tab's "Brands Mentioned"
+        column (#68) — a lighter-weight query than summarize_responses() for
+        when only a single response's mentions are needed, not aggregate
+        counts across many responses.
+        """
+        lower = text.lower()
+        return sorted({brand for term, brand in self._flat_brand_terms if term in lower})
+
     def summarize_responses(self, responses):
         brand_counts = Counter()
         negative_brand_counts = Counter()

@@ -176,6 +176,22 @@ class TrendsPage(QWidget):
         subtitle.setStyleSheet("font-size:15px;color:#6B7280;")
         subtitle.setWordWrap(True)
 
+        # #59: visibility-drop banner — hidden by default, shown only when
+        # detect_visibility_drops() finds a provider whose latest run scored
+        # meaningfully below its own trailing baseline.
+        self._drop_banner = QFrame()
+        self._drop_banner.setStyleSheet(
+            "QFrame { background-color:#FEF2F2; border:1px solid #FCA5A5; border-radius:6px; }"
+        )
+        drop_lay = QHBoxLayout()
+        drop_lay.setContentsMargins(12, 8, 12, 8)
+        self._drop_lbl = QLabel("")
+        self._drop_lbl.setStyleSheet("color:#991B1B; font-size:13px;")
+        self._drop_lbl.setWordWrap(True)
+        drop_lay.addWidget(self._drop_lbl)
+        self._drop_banner.setLayout(drop_lay)
+        self._drop_banner.setVisible(False)
+
         # KPI row
         kpi_row = QHBoxLayout()
         kpi_row.setSpacing(12)
@@ -223,6 +239,7 @@ class TrendsPage(QWidget):
 
         root.addWidget(title_row_w)
         root.addWidget(subtitle)
+        root.addWidget(self._drop_banner)
         root.addWidget(kpi_w)
         root.addWidget(self.tabs)
         self.setLayout(root)
@@ -239,6 +256,7 @@ class TrendsPage(QWidget):
 
         if n == 0:
             self.status_lbl.setText("No visibility runs yet.")
+            self._drop_banner.setVisible(False)
             for c in (self._c_score, self._c_brands, self._c_provider,
                       self._c_features, self._c_position, self._c_promptset):
                 c.no_data()
@@ -264,6 +282,19 @@ class TrendsPage(QWidget):
         self._kpi_score.setText(f"{avg}%")
         self._kpi_top_ps.setText(top_ps_display)
         self._kpi_best.setText(best_prov)
+
+        # #59: visibility-drop banner
+        drops = self.service.detect_visibility_drops(self._summaries)
+        if drops:
+            parts = [
+                f"{d['provider']} dropped {d['drop']} pts "
+                f"({d['baseline_score']}% → {d['latest_score']}%) as of {d['latest_date']}"
+                for d in drops
+            ]
+            self._drop_lbl.setText("⚠ Visibility drop detected — " + "; ".join(parts))
+            self._drop_banner.setVisible(True)
+        else:
+            self._drop_banner.setVisible(False)
 
         # Draw active tab + pre-draw score tab
         self._draw_score()

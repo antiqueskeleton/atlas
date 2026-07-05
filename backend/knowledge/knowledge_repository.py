@@ -795,7 +795,11 @@ class KnowledgeRepository:
                     has_sitemap INTEGER DEFAULT 0,
                     is_https INTEGER DEFAULT 0,
                     load_ms INTEGER DEFAULT 0,
-                    scraped_at TEXT
+                    scraped_at TEXT,
+                    is_own_site INTEGER DEFAULT 0,
+                    has_robots_txt INTEGER DEFAULT 0,
+                    blocks_ai_crawlers INTEGER DEFAULT 0,
+                    blocked_crawler_names TEXT DEFAULT ''
                 )
             """)
             for col in (
@@ -803,6 +807,10 @@ class KnowledgeRepository:
                 "h2_tags TEXT", "has_schema INTEGER DEFAULT 0",
                 "has_sitemap INTEGER DEFAULT 0", "is_https INTEGER DEFAULT 0",
                 "load_ms INTEGER DEFAULT 0", "scraped_at TEXT",
+                "is_own_site INTEGER DEFAULT 0",
+                "has_robots_txt INTEGER DEFAULT 0",
+                "blocks_ai_crawlers INTEGER DEFAULT 0",
+                "blocked_crawler_names TEXT DEFAULT ''",
             ):
                 try:
                     c.execute(f"ALTER TABLE web_intelligence ADD COLUMN {col}")
@@ -812,7 +820,10 @@ class KnowledgeRepository:
     def list_web_intelligence(self):
         """
         Returns on-page signals actually obtainable by scrape_domain() —
-        title, meta description, keywords, HTTPS/schema/sitemap, load time.
+        title, meta description, keywords, HTTPS/schema/sitemap, load time,
+        AI-crawler robots.txt status, plus whether the entry is flagged as
+        the user's own site (own-site entries sort first, so a self-audit
+        row is naturally prominent above the competitor comparison rows).
         Deliberately does NOT return monthly_visits_est/domain_authority/
         organic_keywords_est/backlink_count: those columns still exist for
         potential future use, but no code path scrapes them (they're
@@ -825,10 +836,12 @@ class KnowledgeRepository:
                 SELECT w.id, COALESCE(b.name, '?') AS brand_name, w.domain,
                        w.page_title, w.meta_description, w.top_keywords,
                        w.is_https, w.has_schema, w.has_sitemap, w.load_ms,
-                       w.notes, w.data_source, w.recorded_at, w.scraped_at
+                       w.notes, w.data_source, w.recorded_at, w.scraped_at,
+                       w.is_own_site, w.has_robots_txt, w.blocks_ai_crawlers,
+                       w.blocked_crawler_names
                 FROM web_intelligence w
                 LEFT JOIN brands b ON b.brand_id = w.brand_id
-                ORDER BY brand_name
+                ORDER BY w.is_own_site DESC, brand_name
             """).fetchall()
 
     def get_web_entry(self, entry_id):
@@ -837,37 +850,42 @@ class KnowledgeRepository:
             return c.execute("""
                 SELECT w.id, w.brand_id, COALESCE(b.name,'?') AS brand_name, w.domain,
                        w.monthly_visits_est, w.domain_authority, w.organic_keywords_est,
-                       w.backlink_count, w.top_keywords, w.notes, w.data_source
+                       w.backlink_count, w.top_keywords, w.notes, w.data_source, w.is_own_site
                 FROM web_intelligence w
                 LEFT JOIN brands b ON b.brand_id = w.brand_id
                 WHERE w.id=?
             """, (entry_id,)).fetchone()
 
     def add_web_entry(self, brand_id, domain, monthly_visits=0, domain_authority=0,
-                      organic_keywords=0, backlinks=0, top_keywords="", notes="", source="manual"):
+                      organic_keywords=0, backlinks=0, top_keywords="", notes="", source="manual",
+                      is_own_site=False):
         self._ensure_web_table()
         with self._conn() as c:
             cur = c.execute("""
                 INSERT INTO web_intelligence
                     (brand_id, domain, monthly_visits_est, domain_authority,
-                     organic_keywords_est, backlink_count, top_keywords, notes, data_source)
-                VALUES (?,?,?,?,?,?,?,?,?)
+                     organic_keywords_est, backlink_count, top_keywords, notes, data_source,
+                     is_own_site)
+                VALUES (?,?,?,?,?,?,?,?,?,?)
             """, (brand_id, domain.strip(), monthly_visits, domain_authority,
-                  organic_keywords, backlinks, top_keywords.strip(), notes.strip(), source))
+                  organic_keywords, backlinks, top_keywords.strip(), notes.strip(), source,
+                  int(is_own_site)))
             return cur.lastrowid
 
     def update_web_entry(self, entry_id, brand_id, domain, monthly_visits=0, domain_authority=0,
-                          organic_keywords=0, backlinks=0, top_keywords="", notes="", source="manual"):
+                          organic_keywords=0, backlinks=0, top_keywords="", notes="", source="manual",
+                          is_own_site=False):
         self._ensure_web_table()
         with self._conn() as c:
             c.execute("""
                 UPDATE web_intelligence
                 SET brand_id=?, domain=?, monthly_visits_est=?, domain_authority=?,
                     organic_keywords_est=?, backlink_count=?, top_keywords=?, notes=?,
-                    data_source=?, recorded_at=datetime('now')
+                    data_source=?, is_own_site=?, recorded_at=datetime('now')
                 WHERE id=?
             """, (brand_id, domain.strip(), monthly_visits, domain_authority,
-                  organic_keywords, backlinks, top_keywords.strip(), notes.strip(), source, entry_id))
+                  organic_keywords, backlinks, top_keywords.strip(), notes.strip(), source,
+                  int(is_own_site), entry_id))
 
     def delete_web_entry(self, entry_id):
         self._ensure_web_table()
@@ -886,7 +904,8 @@ class KnowledgeRepository:
                 UPDATE web_intelligence
                 SET page_title=?, meta_description=?, h1_tags=?, h2_tags=?,
                     top_keywords=?, has_schema=?, has_sitemap=?, is_https=?,
-                    load_ms=?, data_source='scraped', scraped_at=?
+                    load_ms=?, data_source='scraped', scraped_at=?,
+                    has_robots_txt=?, blocks_ai_crawlers=?, blocked_crawler_names=?
                 WHERE id=?
             """, (
                 scrape.get("title", "")[:200],
@@ -898,22 +917,32 @@ class KnowledgeRepository:
                 int(scrape.get("is_https", False)),
                 scrape.get("load_ms", 0),
                 datetime.now().isoformat(),
+                int(scrape.get("has_robots_txt", False)),
+                int(scrape.get("blocks_ai_crawlers", False)),
+                ", ".join(scrape.get("blocked_crawler_names", [])),
                 entry_id,
             ))
 
     def list_web_intelligence_for_briefing(self) -> list:
-        """Return scraped/manual entries suitable for feeding into the intelligence briefing."""
+        """
+        Return scraped/manual entries suitable for feeding into the
+        intelligence briefing. is_own_site/blocks_ai_crawlers/
+        blocked_crawler_names are appended at the end (not inserted earlier
+        in the SELECT) so existing positional unpacking of the first 12
+        columns keeps working unchanged.
+        """
         self._ensure_web_table()
         with self._conn() as c:
             return c.execute("""
                 SELECT COALESCE(b.name, '?') AS brand_name, w.domain,
                        w.page_title, w.meta_description, w.h1_tags,
                        w.top_keywords, w.domain_authority, w.monthly_visits_est,
-                       w.has_schema, w.has_sitemap, w.is_https, w.scraped_at
+                       w.has_schema, w.has_sitemap, w.is_https, w.scraped_at,
+                       w.is_own_site, w.blocks_ai_crawlers, w.blocked_crawler_names
                 FROM web_intelligence w
                 LEFT JOIN brands b ON b.brand_id = w.brand_id
                 WHERE w.domain IS NOT NULL AND w.domain != ''
-                ORDER BY brand_name
+                ORDER BY w.is_own_site DESC, brand_name
             """).fetchall()
 
     def filter_new_brands(self, candidates: list[str]) -> list[str]:

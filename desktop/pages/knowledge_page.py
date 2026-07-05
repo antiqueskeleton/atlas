@@ -96,6 +96,32 @@ class _BrandDiscoveryWorker(QThread):
             self.error.emit(str(exc))
 
 
+class _VolumeComparisonWorker(QThread):
+    """Fetches real query-volume data from a VolumeProvider (#61) and
+    compares it against the prompt library — runs off the UI thread since
+    it makes a real network call."""
+    done  = Signal(list)   # list of per-family result dicts
+    error = Signal(str)
+
+    def __init__(self, volume_provider, knowledge_repo):
+        super().__init__()
+        self._provider = volume_provider
+        self._knowledge_repo = knowledge_repo
+
+    def run(self):
+        from backend.knowledge.prompt_volume_service import PromptVolumeService
+        try:
+            data = self._provider.get_query_volumes(days=90)
+            if data["error"]:
+                self.error.emit(data["error"])
+                return
+            svc = PromptVolumeService(knowledge_repo=self._knowledge_repo)
+            results = svc.compare_families_to_queries(data["queries"])
+            self.done.emit(results)
+        except Exception as exc:
+            self.error.emit(str(exc))
+
+
 class _BrandDiscoveryDialog(QDialog):
     def __init__(self, new_brands: list, providers_queried: list, parent=None):
         super().__init__(parent)
@@ -309,6 +335,7 @@ class KnowledgePage(QWidget):
         self._tabs.addTab(self._scenarios_tab(),"Scenarios")
         self._tabs.addTab(self._stages_tab(),   "Buying Stages")
         self._tabs.addTab(self._prompt_sets_tab(), "Prompt Sets")
+        self._tabs.addTab(self._search_volume_tab(), "Search Volume")
         self._tabs.addTab(self._web_tab(),      "Web Intelligence")
         self._tabs.addTab(self._providers_tab(),"Providers")
 
@@ -1046,6 +1073,105 @@ class KnowledgePage(QWidget):
         self._refresh_families()
         self._select_family_by_name(fname)
 
+    # ─── Search Volume ────────────────────────────────────────────────────────
+    # #61: sanity-checks the hand-curated prompt library (168 families) against
+    # real search-query volume from a VolumeProvider (Settings > Keyword Volume
+    # Providers), distinguishing families with genuine real-world query
+    # backing from ones that are just a reasonable-sounding guess.
+
+    def _search_volume_tab(self) -> QWidget:
+        w = QWidget()
+        lay = QVBoxLayout()
+        lay.setContentsMargins(0, 8, 0, 0)
+        lay.setSpacing(6)
+
+        note = QLabel(
+            "Compares every prompt family against real search queries from a configured "
+            "Keyword Volume Provider (Settings), to show which families reflect genuine "
+            "real-world search demand versus a reasonable-sounding guess — useful when "
+            "deciding which families deserve the Visibility page's \"Top 20\" treatment. "
+            "Configure a provider in Settings first, then Run Comparison."
+        )
+        note.setStyleSheet("color: #6B7280; font-size: 12px;")
+        note.setWordWrap(True)
+
+        self._volume_table = _make_table(
+            ["Family", "Influence Score", "Real Search Backing", "Matched Queries",
+             "Real Impressions", "Real Clicks"],
+            [220, 100, 130, 110, 110, 90],
+        )
+        self._volume_table.horizontalHeaderItem(2).setToolTip(
+            "Whether at least one real search query meaningfully overlaps with this "
+            "family's prompt text (word-overlap match, not fuzzy/ML matching)."
+        )
+
+        self._volume_run_btn = QPushButton("Run Comparison")
+        self._volume_run_btn.clicked.connect(self._run_volume_comparison)
+        self._volume_status_lbl = QLabel("")
+        self._volume_status_lbl.setStyleSheet("color:#6B7280; font-size:11px;")
+
+        bar = _action_bar(self._volume_run_btn, "stretch", self._volume_status_lbl)
+
+        lay.addWidget(note)
+        lay.addWidget(self._volume_table)
+        lay.addLayout(bar)
+        w.setLayout(lay)
+        self._volume_worker = None
+        return w
+
+    def _run_volume_comparison(self):
+        if self._volume_worker and self._volume_worker.isRunning():
+            return
+        vpm = self.app.volume_provider_manager if self.app else None
+        if not vpm:
+            QMessageBox.warning(self, "Not Ready", "App not fully initialized.")
+            return
+        provider_keys = vpm.list_providers()
+        if not provider_keys:
+            QMessageBox.information(self, "No Volume Providers", "No volume providers are registered.")
+            return
+        # Only one provider exists today (Google Search Console); once a
+        # second is added, this should become a combo like the Web
+        # Intelligence source selector rather than always using the first.
+        provider = vpm.get_provider(provider_keys[0])
+        if not provider.credential or not provider.site_url:
+            QMessageBox.information(
+                self, "Not Configured",
+                f"Configure a credential and site URL for {provider.provider_name} "
+                "in Settings first.",
+            )
+            return
+
+        self._volume_run_btn.setEnabled(False)
+        self._volume_status_lbl.setText(f"Fetching real query data from {provider.provider_name}…")
+        self._volume_worker = _VolumeComparisonWorker(provider, self.repo)
+        self._volume_worker.done.connect(self._on_volume_comparison_done)
+        self._volume_worker.error.connect(self._on_volume_comparison_error)
+        self._volume_worker.finished.connect(lambda: self._volume_run_btn.setEnabled(True))
+        self._volume_worker.start()
+
+    def _on_volume_comparison_done(self, results: list):
+        t = self._volume_table
+        t.setSortingEnabled(False)
+        t.setRowCount(len(results))
+        for r, res in enumerate(results):
+            t.setItem(r, 0, _cell(res["family_name"]))
+            t.setItem(r, 1, _cell(res["prompt_influence_score"]))
+            backed_item = _cell("✓ Backed" if res["has_real_backing"] else "No real queries found")
+            backed_item.setForeground(QColor("#16a34a") if res["has_real_backing"] else QColor("#dc2626"))
+            t.setItem(r, 2, backed_item)
+            t.setItem(r, 3, _cell(res["matched_query_count"]))
+            t.setItem(r, 4, _cell(f"{res['real_search_impressions']:,}"))
+            t.setItem(r, 5, _cell(f"{res['real_search_clicks']:,}"))
+        t.setSortingEnabled(True)
+        backed_count = sum(1 for r in results if r["has_real_backing"])
+        self._volume_status_lbl.setText(
+            f"{backed_count} of {len(results)} families have real search-query backing."
+        )
+
+    def _on_volume_comparison_error(self, message: str):
+        self._volume_status_lbl.setText(f"Error: {message}")
+
     # ─── Web Intelligence ─────────────────────────────────────────────────────
 
     def _web_tab(self) -> QWidget:
@@ -1056,20 +1182,32 @@ class KnowledgePage(QWidget):
 
         note = QLabel(
             "Scrapes each brand's homepage for on-page SEO signals — title, meta description, "
-            "keywords, HTTPS/schema/sitemap presence, and load time — and feeds them into the "
-            "Intelligence briefing's competitive web analysis. Add a brand + domain, then Scrape "
-            "to pull live data. (Off-page metrics like Domain Authority or backlink counts require "
-            "a paid SEO tool subscription and aren't scraped here.)"
+            "keywords, HTTPS/schema/sitemap presence, load time, and whether robots.txt blocks "
+            "known AI crawlers (GPTBot, ClaudeBot, PerplexityBot, Google-Extended, Bingbot, CCBot) "
+            "— and feeds them into the Intelligence briefing's competitive web analysis. Mark one "
+            "entry as your own site (checkbox in Add/Edit) to audit it directly — it's sorted to "
+            "the top and shown in bold, and scraping it will warn immediately if it's blocking an "
+            "AI crawler. (Off-page metrics like Domain Authority or backlink counts require a paid "
+            "SEO tool subscription and aren't scraped here.)"
         )
         note.setStyleSheet("color: #6B7280; font-size: 12px;")
         note.setWordWrap(True)
 
         self._web_table = _make_table(
-            ["Brand", "Domain", "Title", "Meta Description", "Keywords",
-             "HTTPS", "Schema", "Sitemap", "Load (ms)", "Source", "Updated"],
-            [110, 140, 160, 200, 140, 55, 60, 60, 75, 80, 90],
+            ["Brand", "Domain", "Own Site", "Title", "Meta Description", "Keywords",
+             "HTTPS", "Schema", "Sitemap", "Load (ms)", "AI Crawlers", "Source", "Updated"],
+            [110, 140, 70, 150, 190, 130, 55, 60, 60, 75, 120, 80, 90],
         )
         self._web_table.doubleClicked.connect(lambda _: self._edit_web())
+        self._web_table.horizontalHeaderItem(2).setToolTip(
+            "Flags this entry as your own company's site rather than a competitor. "
+            "Own-site entries sort to the top and appear in bold."
+        )
+        self._web_table.horizontalHeaderItem(10).setToolTip(
+            "Whether this domain's robots.txt blocks a known AI crawler (GPTBot, ClaudeBot, "
+            "PerplexityBot, Google-Extended, Bingbot, CCBot) from the entire site. Blocking one "
+            "of these on your OWN site can directly suppress AI visibility."
+        )
 
         self._web_count = QLabel()
         self._web_scrape_lbl = QLabel("")
@@ -1106,22 +1244,41 @@ class KnowledgePage(QWidget):
         t.setRowCount(0)
         for (entry_id, brand, domain, title, meta_desc, top_kw,
              is_https, has_schema, has_sitemap, load_ms,
-             notes, source, recorded, scraped) in rows:
+             notes, source, recorded, scraped,
+             is_own_site, has_robots_txt, blocks_ai_crawlers, blocked_names) in rows:
             r = t.rowCount()
             t.insertRow(r)
             t.setItem(r, 0, _cell(brand, entry_id))
             t.setItem(r, 1, _cell(domain or "—"))
-            t.setItem(r, 2, _cell(_trunc(title or "", 30) or "—"))
-            t.setItem(r, 3, _cell(_trunc(meta_desc or "", 40) or "—"))
-            t.setItem(r, 4, _cell(_trunc(top_kw or "", 30) or "—"))
+            t.setItem(r, 2, _cell("Yes" if is_own_site else "—"))
+            t.setItem(r, 3, _cell(_trunc(title or "", 30) or "—"))
+            t.setItem(r, 4, _cell(_trunc(meta_desc or "", 40) or "—"))
+            t.setItem(r, 5, _cell(_trunc(top_kw or "", 30) or "—"))
             scraped_yet = bool(scraped)
-            t.setItem(r, 5, _cell("Yes" if is_https else ("No" if scraped_yet else "—")))
-            t.setItem(r, 6, _cell("Yes" if has_schema else ("No" if scraped_yet else "—")))
-            t.setItem(r, 7, _cell("Yes" if has_sitemap else ("No" if scraped_yet else "—")))
-            t.setItem(r, 8, _cell(f"{load_ms:,}" if load_ms else "—"))
-            t.setItem(r, 9, _cell(source or "manual"))
+            t.setItem(r, 6, _cell("Yes" if is_https else ("No" if scraped_yet else "—")))
+            t.setItem(r, 7, _cell("Yes" if has_schema else ("No" if scraped_yet else "—")))
+            t.setItem(r, 8, _cell("Yes" if has_sitemap else ("No" if scraped_yet else "—")))
+            t.setItem(r, 9, _cell(f"{load_ms:,}" if load_ms else "—"))
+            if not scraped_yet:
+                crawler_item = _cell("—")
+            elif blocks_ai_crawlers:
+                crawler_item = _cell(f"Blocked: {_trunc(blocked_names or '', 22)}")
+                crawler_item.setForeground(QColor("#dc2626"))
+            elif has_robots_txt:
+                crawler_item = _cell("OK")
+                crawler_item.setForeground(QColor("#16a34a"))
+            else:
+                crawler_item = _cell("No robots.txt")
+            t.setItem(r, 10, crawler_item)
+            t.setItem(r, 11, _cell(source or "manual"))
             date_str = (scraped or recorded or "")[:10]
-            t.setItem(r, 10, _cell(date_str))
+            t.setItem(r, 12, _cell(date_str))
+            if is_own_site:
+                for col in range(t.columnCount()):
+                    item = t.item(r, col)
+                    font = item.font()
+                    font.setBold(True)
+                    item.setFont(font)
         self._web_count.setText(f"{len(rows)} entries")
 
     def _web_fields(self, brands_list):
@@ -1135,6 +1292,7 @@ class KnowledgePage(QWidget):
         return [
             ("Brand *",       "brand",       "combo", brands_list),
             ("Domain",        "domain",      "text",  ""),
+            ("Own Site (Your Company)", "is_own_site", "check", False),
             ("Top Keywords",  "top_keywords","text",  ""),
             ("Notes",         "notes",       "area",  ""),
             ("Source",        "data_source", "combo", ["manual", "similarweb", "semrush", "ahrefs", "moz"]),
@@ -1159,6 +1317,7 @@ class KnowledgePage(QWidget):
             top_keywords=v.get("top_keywords", ""),
             notes=v.get("notes", ""),
             source=v.get("data_source", "manual"),
+            is_own_site=v.get("is_own_site", False),
         )
         self._refresh_web()
 
@@ -1172,12 +1331,14 @@ class KnowledgePage(QWidget):
             return
         # get_web_entry() still returns the legacy visits/da/kw/backlinks columns
         # (schema kept as-is, just unused by this dialog now — see _web_fields).
-        _, brand_id, brand_name, domain, _visits, _da, _kw, _backlinks, top_kw, notes, source = rec
+        (_, brand_id, brand_name, domain, _visits, _da, _kw, _backlinks, top_kw, notes, source,
+         is_own_site) = rec
 
         brands = [(bid, bname) for bid, bname, *_ in self.repo.list_brands()]
         brand_names = [bname for _, bname in brands]
         initial = {
             "brand": brand_name, "domain": domain or "",
+            "is_own_site": bool(is_own_site),
             "top_keywords": top_kw or "", "notes": notes or "",
             "data_source": source or "manual",
         }
@@ -1194,6 +1355,7 @@ class KnowledgePage(QWidget):
             top_keywords=v.get("top_keywords", ""),
             notes=v.get("notes", ""),
             source=v.get("data_source", "manual"),
+            is_own_site=v.get("is_own_site", False),
         )
         self._refresh_web()
 
@@ -1240,6 +1402,9 @@ class KnowledgePage(QWidget):
     def _start_scrape(self, entries):
         if self._web_worker and self._web_worker.isRunning():
             return
+        self._web_own_site_map = {
+            row[0]: bool(row[14]) for row in self.repo.list_web_intelligence()
+        }
         self._btn_scrape.setEnabled(False)
         self._btn_scrape_all.setEnabled(False)
         self._web_scrape_lbl.setText(f"Starting scrape of {len(entries)} domain(s)…")
@@ -1257,6 +1422,16 @@ class KnowledgePage(QWidget):
             self._web_scrape_lbl.setText(f"Error on entry {entry_id}: {result['error']}")
         self.repo.update_web_scrape_result(entry_id, result)
         self._refresh_web()
+        is_own_site = getattr(self, "_web_own_site_map", {}).get(entry_id, False)
+        if is_own_site and result.get("blocks_ai_crawlers"):
+            blocked = ", ".join(result.get("blocked_crawler_names", []))
+            QMessageBox.warning(
+                self, "Your Site Blocks AI Crawlers",
+                f"robots.txt on this domain blocks: {blocked}\n\n"
+                "This directly prevents that AI provider from crawling your site, which can "
+                "suppress AI visibility. Review robots.txt and update it if this wasn't "
+                "intentional."
+            )
 
     def _on_scrape_finished(self):
         self._btn_scrape.setEnabled(True)

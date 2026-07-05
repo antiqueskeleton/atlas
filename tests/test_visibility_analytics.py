@@ -246,3 +246,26 @@ def test_channel_association_excludes_negatively_mentioned_brands():
     # Firman was the one denied the Amazon association ("unlike Firman")
     assert "Firman" not in result["channel_brand_counts"].get("Amazon", {})
     assert result["channel_brand_counts"]["Amazon"]["Generac"] == 1
+
+
+# ── detect_mentioned_brands (#68 Raw Data "Brands Mentioned" column) ────────────
+
+def test_detect_mentioned_brands_finds_all_tracked_brands_in_text():
+    a = make_analytics()
+    assert a.detect_mentioned_brands("Firman and Honda are both solid choices.") == \
+        ["Firman", "Honda"]
+
+
+def test_detect_mentioned_brands_is_case_insensitive():
+    a = make_analytics()
+    assert a.detect_mentioned_brands("FIRMAN is a great option.") == ["Firman"]
+
+
+def test_detect_mentioned_brands_returns_empty_list_when_none_mentioned():
+    a = make_analytics()
+    assert a.detect_mentioned_brands("Generators are useful during outages.") == []
+
+
+def test_detect_mentioned_brands_counts_each_brand_once_even_with_repeats():
+    a = make_analytics()
+    assert a.detect_mentioned_brands("Firman is great. I'd pick Firman again.") == ["Firman"]

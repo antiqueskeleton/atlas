@@ -1,6 +1,7 @@
 from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtWidgets import (
     QComboBox,
+    QFileDialog,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -11,6 +12,15 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
+# key -> (label, site_url_placeholder, setup_url)
+_VOLUME_PROVIDERS = {
+    "google_search_console": (
+        "Google Search Console",
+        "https://www.firmanpowerequipment.com/  or  sc-domain:firmanpowerequipment.com",
+        "console.cloud.google.com",
+    ),
+}
 
 # key -> (label, key_placeholder, default_model, model_hint, console_url)
 _PROVIDERS = {
@@ -66,6 +76,26 @@ class _TestWorker(QThread):
             self.result.emit(f"Error: {exc}")
 
 
+class _VolumeTestWorker(QThread):
+    result = Signal(str)
+
+    def __init__(self, provider):
+        super().__init__()
+        self.provider = provider
+
+    def run(self):
+        try:
+            data = self.provider.get_query_volumes(days=90)
+            if data["error"]:
+                self.result.emit(f"Error: {data['error']}")
+            else:
+                self.result.emit(
+                    f"Connected — retrieved {len(data['queries'])} queries from the last 90 days."
+                )
+        except Exception as exc:
+            self.result.emit(f"Error: {exc}")
+
+
 class SettingsPage(QWidget):
     def __init__(self, app):
         super().__init__()
@@ -74,6 +104,9 @@ class SettingsPage(QWidget):
         self._model_inputs: dict[str, QLineEdit] = {}
         self._show_btns: dict[str, QPushButton] = {}
         self._test_workers: list = []
+        self._volume_cred_inputs: dict[str, QLineEdit] = {}
+        self._volume_site_inputs: dict[str, QLineEdit] = {}
+        self._volume_test_workers: list = []
         self._build_ui()
 
     def _build_ui(self):
@@ -99,6 +132,7 @@ class SettingsPage(QWidget):
         root.addWidget(self._brand_card())
         root.addWidget(self._provider_card())
         root.addWidget(self._keys_card())
+        root.addWidget(self._volume_providers_card())
         root.addWidget(self._health_card())
         root.addStretch()
 
@@ -291,6 +325,88 @@ class SettingsPage(QWidget):
         save_row.addWidget(self.status)
         save_row.addStretch()
         lay.addLayout(save_row)
+
+        return card
+
+    def _volume_providers_card(self) -> QFrame:
+        card, lay = self._card("Keyword Volume Providers")
+        lay.addWidget(self._note(
+            "Real search-query volume, used to sanity-check the prompt library against "
+            "genuine query demand (Knowledge → Prompt Sets). Configured the same way as "
+            "AI providers above — add a credential, then Test."
+        ))
+        lay.addSpacing(10)
+
+        for key, (label, site_ph, setup_url) in _VOLUME_PROVIDERS.items():
+            row = QHBoxLayout()
+            row.setSpacing(8)
+
+            name_col = QVBoxLayout()
+            name_col.setSpacing(2)
+            name_col.setContentsMargins(0, 0, 0, 0)
+            name_lbl = QLabel(label)
+            name_lbl.setStyleSheet("font-size: 13px; font-weight: bold; color: #111827;")
+            link_lbl = QLabel(
+                f'<a href="https://{setup_url}" style="color:#2563EB;text-decoration:none;'
+                f'font-size:11px;">Set up →</a>'
+            )
+            link_lbl.setOpenExternalLinks(True)
+            name_col.addWidget(name_lbl)
+            name_col.addWidget(link_lbl)
+            name_widget = QWidget()
+            name_widget.setFixedWidth(150)
+            name_widget.setLayout(name_col)
+            row.addWidget(name_widget)
+
+            cred_inp = QLineEdit()
+            cred_inp.setPlaceholderText("Path to service-account JSON key…")
+            cred_inp.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+            saved_cred = self.app.config_service.get_volume_credential(key)
+            if saved_cred:
+                cred_inp.setText(saved_cred)
+            cred_inp.setToolTip(
+                "A Google Cloud service-account JSON key that has been added as a "
+                "Restricted (read-only) user on this property in Search Console"
+            )
+
+            browse_btn = QPushButton("Browse…")
+            browse_btn.setFixedWidth(75)
+            browse_btn.clicked.connect(lambda _, ci=cred_inp: self._browse_volume_credential(ci))
+
+            site_inp = QLineEdit()
+            site_inp.setPlaceholderText(site_ph)
+            site_inp.setFixedWidth(230)
+            saved_site = self.app.config_service.get_volume_site_url(key)
+            if saved_site:
+                site_inp.setText(saved_site)
+            site_inp.setToolTip(
+                "The exact property identifier as it appears in Search Console — "
+                "a URL-prefix property (https://example.com/) or a domain property (sc-domain:example.com)"
+            )
+
+            test_btn = QPushButton("Test")
+            test_btn.setFixedWidth(70)
+            test_btn.clicked.connect(
+                lambda checked, k=key, ci=cred_inp, si=site_inp: self._test_volume_provider(k, ci, si)
+            )
+            test_btn.setToolTip("Fetch a small sample of real query data to verify the credential and site URL work")
+
+            row.addWidget(cred_inp)
+            row.addWidget(browse_btn)
+            row.addWidget(site_inp)
+            row.addWidget(test_btn)
+
+            lay.addLayout(row)
+            lay.addWidget(self._hsep())
+
+            self._volume_cred_inputs[key] = cred_inp
+            self._volume_site_inputs[key] = site_inp
+
+        lay.addSpacing(4)
+        self.volume_status = QLabel("")
+        self.volume_status.setStyleSheet("font-size: 12px; color: #6B7280;")
+        self.volume_status.setWordWrap(True)
+        lay.addWidget(self.volume_status)
 
         return card
 
@@ -595,8 +711,52 @@ class SettingsPage(QWidget):
             self.app.provider_manager.set_provider_model(key, model)
             self.app.config_service.set_model(key, model)
 
+        for key, cred_inp in self._volume_cred_inputs.items():
+            credential = cred_inp.text().strip()
+            site_url = self._volume_site_inputs[key].text().strip()
+
+            self.app.volume_provider_manager.set_provider_credential(key, credential)
+            self.app.config_service.set_volume_credential(key, credential)
+
+            self.app.volume_provider_manager.set_provider_site_url(key, site_url)
+            self.app.config_service.set_volume_site_url(key, site_url)
+
         path = self.app.config_service.get_user_config_path()
         self.status.setText(f"Saved — {path}")
+
+    def _browse_volume_credential(self, cred_input: QLineEdit):
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Select Service Account JSON Key", "", "JSON Files (*.json);;All Files (*)"
+        )
+        if path:
+            cred_input.setText(path)
+
+    def _test_volume_provider(self, provider_key: str, cred_input: QLineEdit, site_input: QLineEdit):
+        credential = cred_input.text().strip()
+        site_url = site_input.text().strip()
+        if not credential:
+            self.volume_status.setText(f"No credential set for {provider_key}.")
+            return
+        if not site_url:
+            self.volume_status.setText(f"No site URL set for {provider_key}.")
+            return
+
+        provider = self.app.volume_provider_manager.registry.create_provider(provider_key)
+        provider.set_credential(credential)
+        provider.set_site_url(site_url)
+
+        label = _VOLUME_PROVIDERS.get(provider_key, (provider_key,))[0]
+        self.volume_status.setText(f"Testing {label}…")
+
+        worker = _VolumeTestWorker(provider)
+        self._volume_test_workers.append(worker)
+        worker.result.connect(
+            lambda text, lbl=label: self.volume_status.setText(f"{lbl}: {text}")
+        )
+        worker.finished.connect(
+            lambda w=worker: self._volume_test_workers.remove(w) if w in self._volume_test_workers else None
+        )
+        worker.start()
 
     def _test_provider(self, provider_key: str, key_input: QLineEdit, model_input: QLineEdit):
         api_key = key_input.text().strip()

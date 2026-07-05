@@ -11,6 +11,7 @@ from backend.engines.relationship_engine import RelationshipEngine
 from backend.models.run_summary import RunSummary
 from backend.models.dataset import Dataset
 from backend.ai.provider_manager import ProviderManager
+from backend.volume.volume_provider_manager import VolumeProviderManager
 
 
 class AtlasApplication:
@@ -18,7 +19,9 @@ class AtlasApplication:
         self.config_service = ConfigService()
         self.dataset_manager = DatasetManager()
         self.provider_manager = ProviderManager()
+        self.volume_provider_manager = VolumeProviderManager()
         self._load_saved_keys()
+        self._load_saved_volume_credentials()
         self.current_results = []
         self.current_summary = None
         self.current_insights = []
@@ -32,6 +35,15 @@ class AtlasApplication:
             saved_model = self.config_service.get_model(key)
             if saved_model:
                 self.provider_manager.set_provider_model(key, saved_model)
+
+    def _load_saved_volume_credentials(self):
+        for key in self.volume_provider_manager.list_providers():
+            saved_cred = self.config_service.get_volume_credential(key)
+            if saved_cred:
+                self.volume_provider_manager.set_provider_credential(key, saved_cred)
+            saved_site = self.config_service.get_volume_site_url(key)
+            if saved_site:
+                self.volume_provider_manager.set_provider_site_url(key, saved_site)
 
     def get_target_brand(self) -> str:
         return self.config_service.get_target_brand()

@@ -40,6 +40,8 @@ class VisibilityRepository:
                     response TEXT,
                     collected_at TEXT,
                     family_name TEXT DEFAULT '',
+                    review_status TEXT DEFAULT '',
+                    review_note TEXT DEFAULT '',
                     FOREIGN KEY(run_id) REFERENCES visibility_runs(run_id)
                 )
             """)
@@ -48,6 +50,8 @@ class VisibilityRepository:
             for ddl in (
                 "ALTER TABLE visibility_runs ADD COLUMN error_count INTEGER DEFAULT 0",
                 "ALTER TABLE visibility_responses ADD COLUMN family_name TEXT DEFAULT ''",
+                "ALTER TABLE visibility_responses ADD COLUMN review_status TEXT DEFAULT ''",
+                "ALTER TABLE visibility_responses ADD COLUMN review_note TEXT DEFAULT ''",
             ):
                 try:
                     conn.execute(ddl)
@@ -116,10 +120,14 @@ class VisibilityRepository:
             return cursor.fetchall()
 
     def list_responses(self, limit: int = 0, offset: int = 0,
-                       search: str = "", provider: str = ""):
+                       search: str = "", provider: str = "", review_status: str = ""):
         """Fetch responses with optional DB-side filtering and pagination.
         Pass limit=0 (default) to fetch all rows — used by analytics.
         Pass limit>0 for the Raw Data tab display.
+        review_status: "" (no filter), "unreviewed", "flagged", or "reviewed".
+        review_status/review_note are appended at the END of the SELECT
+        (not inserted earlier) so existing positional indexing elsewhere
+        (excel_report.py, intelligence_service.py) keeps working unchanged.
         """
         clauses, params = [], []
         if provider:
@@ -132,6 +140,11 @@ class VisibilityRepository:
                 " OR INSTR(LOWER(vresp.response), LOWER(?)) > 0)"
             )
             params.extend([search, search, search])
+        if review_status == "unreviewed":
+            clauses.append("COALESCE(vresp.review_status, '') = ''")
+        elif review_status:
+            clauses.append("vresp.review_status = ?")
+            params.append(review_status)
         where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
         pagination = f"LIMIT {int(limit)} OFFSET {int(offset)}" if limit > 0 else ""
         with self.connect() as conn:
@@ -144,7 +157,9 @@ class VisibilityRepository:
                     vresp.prompt,
                     vresp.response,
                     vresp.collected_at,
-                    COALESCE(NULLIF(vresp.family_name, ''), vrun.prompt_set) AS family_display
+                    COALESCE(NULLIF(vresp.family_name, ''), vrun.prompt_set) AS family_display,
+                    COALESCE(vresp.review_status, '') AS review_status,
+                    COALESCE(vresp.review_note, '') AS review_note
                 FROM visibility_responses vresp
                 LEFT JOIN visibility_runs vrun ON vresp.run_id = vrun.run_id
                 {where}
@@ -153,7 +168,8 @@ class VisibilityRepository:
             """, params)
             return cursor.fetchall()
 
-    def count_responses_filtered(self, search: str = "", provider: str = "") -> int:
+    def count_responses_filtered(self, search: str = "", provider: str = "",
+                                  review_status: str = "") -> int:
         clauses, params = [], []
         if provider:
             clauses.append("provider = ?")
@@ -165,11 +181,31 @@ class VisibilityRepository:
                 " OR INSTR(LOWER(response), LOWER(?)) > 0)"
             )
             params.extend([search, search, search])
+        if review_status == "unreviewed":
+            clauses.append("COALESCE(review_status, '') = ''")
+        elif review_status:
+            clauses.append("review_status = ?")
+            params.append(review_status)
         where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
         with self.connect() as conn:
             return conn.execute(
                 f"SELECT COUNT(*) FROM visibility_responses {where}", params
             ).fetchone()[0]
+
+    def set_review_status(self, response_id: int, status: str, note: str = "") -> None:
+        """
+        status must be one of '' (clear/unreviewed), 'flagged' (extraction
+        looks wrong, needs attention), or 'reviewed' (a human confirmed it's
+        correct). note is an optional free-text explanation, most useful
+        when flagging.
+        """
+        if status not in ("", "flagged", "reviewed"):
+            raise ValueError(f"Invalid review status: {status!r}")
+        with self.connect() as conn:
+            conn.execute(
+                "UPDATE visibility_responses SET review_status=?, review_note=? WHERE id=?",
+                (status, note.strip(), response_id),
+            )
 
     def get_responses_for_run(self, run_id):
         with self.connect() as conn:
@@ -196,7 +232,8 @@ class VisibilityRepository:
                     COUNT(*)                                                          AS total,
                     COUNT(DISTINCT vr.provider)                                       AS providers,
                     COUNT(DISTINCT vr.run_id)                                         AS runs,
-                    COUNT(DISTINCT COALESCE(NULLIF(vr.family_name, ''), vs.prompt_set, '?')) AS families
+                    COUNT(DISTINCT COALESCE(NULLIF(vr.family_name, ''), vs.prompt_set, '?')) AS families,
+                    COUNT(CASE WHEN vr.review_status = 'flagged' THEN 1 END)          AS flagged
                 FROM visibility_responses vr
                 LEFT JOIN visibility_runs vs ON vr.run_id = vs.run_id
             """).fetchone()
@@ -205,4 +242,5 @@ class VisibilityRepository:
             "providers": row[1] or 0,
             "runs":      row[2] or 0,
             "families":  row[3] or 0,
+            "flagged":   row[4] or 0,
         }

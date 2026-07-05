@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
     QGridLayout,
     QHBoxLayout,
     QHeaderView,
+    QInputDialog,
     QLabel,
     QLineEdit,
     QMessageBox,
@@ -720,8 +721,9 @@ class VisibilityPage(QWidget):
         self._raw_prov_card,  _, self._raw_prov_val  = _compact_card("Providers", "—")
         self._raw_runs_card,  _, self._raw_runs_val  = _compact_card("Runs", "—")
         self._raw_fam_card,   _, self._raw_fam_val   = _compact_card("Prompt Families", "—")
+        self._raw_flagged_card, _, self._raw_flagged_val = _compact_card("Flagged for Review", "—")
         for card in (self._raw_total_card, self._raw_prov_card,
-                     self._raw_runs_card, self._raw_fam_card):
+                     self._raw_runs_card, self._raw_fam_card, self._raw_flagged_card):
             raw_kpi_row.addWidget(card)
         raw_kpi_widget = QWidget()
         raw_kpi_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -743,6 +745,16 @@ class VisibilityPage(QWidget):
         self._raw_prov_filter.addItem("All Providers")
         self._raw_prov_filter.currentTextChanged.connect(self._filter_raw_data)
         self._raw_prov_filter.setToolTip("Show responses from only one AI provider")
+        review_lbl = QLabel("Review:")
+        review_lbl.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self._raw_review_filter = QComboBox()
+        self._raw_review_filter.setFixedWidth(130)
+        self._raw_review_filter.addItems(["All", "Unreviewed", "Flagged", "Reviewed"])
+        self._raw_review_filter.currentTextChanged.connect(self._filter_raw_data)
+        self._raw_review_filter.setToolTip(
+            "Show only responses with a given review status — useful for working "
+            "through everything flagged for a second look."
+        )
         self._raw_count_lbl = QLabel("")
         self._raw_count_lbl.setStyleSheet("color: #6B7280; font-size: 11px;")
         self._raw_count_lbl.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
@@ -750,6 +762,8 @@ class VisibilityPage(QWidget):
         filter_row.addWidget(self._raw_search, 1)
         filter_row.addWidget(prov_lbl)
         filter_row.addWidget(self._raw_prov_filter)
+        filter_row.addWidget(review_lbl)
+        filter_row.addWidget(self._raw_review_filter)
         filter_row.addWidget(self._raw_count_lbl)
         filter_widget = QWidget()
         filter_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -757,13 +771,16 @@ class VisibilityPage(QWidget):
 
         # Response table — Family now shows the per-response family name
         self._raw_frame, _, self._raw_tbl = _table_section(
-            "Responses", ["Date", "Provider", "Family", "Prompt", "Response Preview"],
+            "Responses",
+            ["Date", "Provider", "Family", "Prompt", "Brands Mentioned", "Review", "Response Preview"],
             stretch_last=True,
         )
-        self._raw_tbl.setColumnWidth(0, 130)
-        self._raw_tbl.setColumnWidth(1, 100)
-        self._raw_tbl.setColumnWidth(2, 200)
-        self._raw_tbl.setColumnWidth(3, 220)
+        self._raw_tbl.setColumnWidth(0, 120)
+        self._raw_tbl.setColumnWidth(1, 90)
+        self._raw_tbl.setColumnWidth(2, 150)
+        self._raw_tbl.setColumnWidth(3, 170)
+        self._raw_tbl.setColumnWidth(4, 150)
+        self._raw_tbl.setColumnWidth(5, 90)
         self._raw_tbl.currentCellChanged.connect(lambda row, *_: self._on_raw_row_selected(row))
 
         self._raw_detail_frame, self._raw_detail_body = _section("Full Response")
@@ -774,9 +791,33 @@ class VisibilityPage(QWidget):
         raw_split.addWidget(self._raw_detail_frame)
         raw_split.setSizes([420, 200])
 
+        # Review action bar — acts on the currently selected row above.
+        review_bar = QHBoxLayout()
+        review_bar.setSpacing(8)
+        self._raw_flag_btn = QPushButton("🚩 Flag for Review")
+        self._raw_reviewed_btn = QPushButton("✓ Mark Reviewed")
+        self._raw_clear_review_btn = QPushButton("↺ Clear Review Status")
+        self._raw_flag_btn.clicked.connect(self._flag_raw_response)
+        self._raw_reviewed_btn.clicked.connect(self._mark_raw_response_reviewed)
+        self._raw_clear_review_btn.clicked.connect(self._clear_raw_response_review)
+        self._raw_flag_btn.setToolTip(
+            "Flag this response if its brand/sentiment extraction looks wrong — "
+            "builds a reviewable audit trail instead of silently trusting automated "
+            "extraction forever."
+        )
+        self._raw_reviewed_btn.setToolTip("Mark this response as manually reviewed and confirmed correct.")
+        self._raw_clear_review_btn.setToolTip("Clear this response's review status back to unreviewed.")
+        for btn in (self._raw_flag_btn, self._raw_reviewed_btn, self._raw_clear_review_btn):
+            btn.setEnabled(False)
+            review_bar.addWidget(btn)
+        review_bar.addStretch()
+        review_bar_widget = QWidget()
+        review_bar_widget.setLayout(review_bar)
+
         raw_lay.addWidget(raw_kpi_widget)
         raw_lay.addWidget(filter_widget)
         raw_lay.addWidget(raw_split, 1)
+        raw_lay.addWidget(review_bar_widget)
 
         self._raw_page_rows: list = []  # current page (≤ RAW_PAGE_SIZE rows) for row-click detail
         self._RAW_PAGE_SIZE = 2000
@@ -1370,6 +1411,7 @@ class VisibilityPage(QWidget):
         self._raw_prov_val.setText(str(stats["providers"]))
         self._raw_runs_val.setText(str(stats["runs"]))
         self._raw_fam_val.setText(str(stats["families"]))
+        self._raw_flagged_val.setText(str(stats["flagged"]))
 
         # Rebuild provider filter dropdown without triggering a re-query
         current_prov = self._raw_prov_filter.currentText()
@@ -1387,27 +1429,38 @@ class VisibilityPage(QWidget):
 
         self._filter_raw_data()
 
+    _REVIEW_FILTER_VALUES = {
+        "All": "", "Unreviewed": "unreviewed", "Flagged": "flagged", "Reviewed": "reviewed",
+    }
+    _REVIEW_DISPLAY = {"flagged": "🚩 Flagged", "reviewed": "✓ Reviewed"}
+
     def _filter_raw_data(self):
         search = self._raw_search.text().strip()
         prov   = self._raw_prov_filter.currentText()
         prov_filter = "" if prov == "All Providers" else prov
+        review_filter = self._REVIEW_FILTER_VALUES.get(self._raw_review_filter.currentText(), "")
 
         total_matching = self.service.repository.count_responses_filtered(
-            search=search, provider=prov_filter
+            search=search, provider=prov_filter, review_status=review_filter
         )
         rows = self.service.repository.list_responses(
             limit=self._RAW_PAGE_SIZE, offset=0,
-            search=search, provider=prov_filter,
+            search=search, provider=prov_filter, review_status=review_filter,
         )
 
-        # Tuple: (id, run_id, provider, model, prompt, response, collected_at, family_display)
+        # Tuple: (id, run_id, provider, model, prompt, response, collected_at,
+        #         family_display, review_status, review_note)
         self._raw_page_rows = [
             (
+                r[0],
                 (r[6] or "")[:16],
                 r[2] or "",
                 r[7] or "—",
                 r[4] or "",
                 r[5] or "",
+                ", ".join(self.service.analytics.detect_mentioned_brands(r[5] or "")),
+                r[8] or "",
+                r[9] or "",
             )
             for r in rows
         ]
@@ -1422,22 +1475,78 @@ class VisibilityPage(QWidget):
 
         self._raw_tbl.setSortingEnabled(False)
         self._raw_tbl.setRowCount(showing)
-        for row_idx, (date, provider, family, prompt, response) in enumerate(self._raw_page_rows):
-            for col, val in enumerate((date, provider, family, prompt[:120], response[:120])):
+        for row_idx, (_id, date, provider, family, prompt, response,
+                       brands, review_status, _note) in enumerate(self._raw_page_rows):
+            review_display = self._REVIEW_DISPLAY.get(review_status, "—")
+            cells = (date, provider, family, prompt[:120], brands or "—", review_display, response[:120])
+            for col, val in enumerate(cells):
                 item = QTableWidgetItem(str(val))
                 item.setFlags(item.flags() & ~Qt.ItemIsEditable)
                 self._raw_tbl.setItem(row_idx, col, item)
         self._raw_tbl.setSortingEnabled(True)
         self._raw_detail_body.clear()
+        self._on_raw_row_selected(-1)  # no selection after a re-filter — disable review buttons
 
     def _on_raw_row_selected(self, row_idx: int):
-        if row_idx < 0 or row_idx >= len(self._raw_page_rows):
+        valid = 0 <= row_idx < len(self._raw_page_rows)
+        for btn in (self._raw_flag_btn, self._raw_reviewed_btn, self._raw_clear_review_btn):
+            btn.setEnabled(valid)
+        if not valid:
             return
-        date, provider, family, prompt, response = self._raw_page_rows[row_idx]
+        (_id, date, provider, family, prompt, response,
+         brands, review_status, review_note) = self._raw_page_rows[row_idx]
+        review_line = f"Review: {self._REVIEW_DISPLAY.get(review_status, 'Unreviewed')}"
+        if review_note:
+            review_line += f"  —  {review_note}"
         self._raw_detail_body.setPlainText(
             f"Provider: {provider}  |  Family: {family}  |  Date: {date}\n"
+            f"Brands Mentioned: {brands or '—'}\n"
+            f"{review_line}\n"
             f"{'─' * 60}\n"
             f"PROMPT:\n{prompt}\n\n"
             f"{'─' * 60}\n"
             f"RESPONSE:\n{response}"
         )
+
+    def _current_raw_response_id(self):
+        row_idx = self._raw_tbl.currentRow()
+        if not (0 <= row_idx < len(self._raw_page_rows)):
+            return None
+        return self._raw_page_rows[row_idx][0]
+
+    def _flag_raw_response(self):
+        response_id = self._current_raw_response_id()
+        if response_id is None:
+            return
+        note, ok = QInputDialog.getText(
+            self, "Flag for Review",
+            "What looks wrong with this response? (optional)",
+        )
+        if not ok:
+            return
+        self.service.repository.set_review_status(response_id, "flagged", note or "")
+        self._filter_raw_data()
+        self._refresh_raw_data_kpis_only()
+
+    def _mark_raw_response_reviewed(self):
+        response_id = self._current_raw_response_id()
+        if response_id is None:
+            return
+        self.service.repository.set_review_status(response_id, "reviewed")
+        self._filter_raw_data()
+        self._refresh_raw_data_kpis_only()
+
+    def _clear_raw_response_review(self):
+        response_id = self._current_raw_response_id()
+        if response_id is None:
+            return
+        self.service.repository.set_review_status(response_id, "")
+        self._filter_raw_data()
+        self._refresh_raw_data_kpis_only()
+
+    def _refresh_raw_data_kpis_only(self):
+        """Updates just the Flagged-for-Review KPI tile after a status change,
+        without re-querying the provider-filter dropdown or resetting scroll
+        position the way a full _refresh_raw_data() would."""
+        stats = self.service.repository.count_stats()
+        self._raw_flagged_val.setText(str(stats["flagged"]))

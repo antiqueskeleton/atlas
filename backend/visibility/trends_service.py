@@ -3,6 +3,16 @@ from collections import defaultdict
 from backend.visibility.visibility_analytics import VisibilityAnalytics
 from backend.visibility.visibility_repository import VisibilityRepository
 
+# #59: thresholds for flagging a meaningful visibility drop. Deliberately a
+# simple, tunable fixed-point threshold rather than anything statistical —
+# "cheap first version" per the original backlog note. Compared per-PROVIDER
+# (not pooled across all providers) since different providers have very
+# different baseline visibility levels on their own — pooling would make a
+# provider mix shift look like a real drop.
+_DROP_THRESHOLD_POINTS = 15.0
+_MIN_PRIOR_RUNS = 3
+_BASELINE_WINDOW = 5
+
 
 class TrendsService:
     """Aggregates per-run visibility data into time-series structures for charting."""
@@ -145,6 +155,41 @@ class TrendsService:
         if self.target_brand and self.target_brand not in ranked:
             ranked.append(self.target_brand)
         return {b: avgs.get(b, 0.0) for b in ranked}
+
+    def detect_visibility_drops(self, summaries: list[dict]) -> list[dict]:
+        """
+        Flags providers whose MOST RECENT run's target_score dropped
+        meaningfully below their own trailing baseline (last _BASELINE_WINDOW
+        runs before that one, or however many are available). Requires at
+        least _MIN_PRIOR_RUNS prior runs for that provider before flagging
+        anything — too little history makes any "drop" just noise, not a
+        real signal.
+
+        Returns a list of dicts (most severe drop first), each:
+            provider, latest_score, baseline_score, drop, latest_date
+        """
+        by_provider: dict[str, list[dict]] = defaultdict(list)
+        for s in summaries:  # summaries are already chronological
+            by_provider[s["provider"]].append(s)
+
+        drops = []
+        for provider, runs in by_provider.items():
+            if len(runs) < _MIN_PRIOR_RUNS + 1:
+                continue
+            latest = runs[-1]
+            prior = runs[:-1][-_BASELINE_WINDOW:]
+            baseline = sum(r["target_score"] for r in prior) / len(prior)
+            drop = baseline - latest["target_score"]
+            if baseline > 0 and drop >= _DROP_THRESHOLD_POINTS:
+                drops.append({
+                    "provider": provider,
+                    "latest_score": latest["target_score"],
+                    "baseline_score": round(baseline, 1),
+                    "drop": round(drop, 1),
+                    "latest_date": latest["date"],
+                })
+
+        return sorted(drops, key=lambda d: -d["drop"])
 
     def position_time_series(self, summaries: list[dict], top_n: int = 5) -> dict:
         """
