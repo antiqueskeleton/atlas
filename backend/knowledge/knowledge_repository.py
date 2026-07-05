@@ -290,7 +290,7 @@ class KnowledgeRepository:
             ).fetchall()}
         for entry in _FULL_BRAND_LIST:
             if entry[0].lower() not in existing_names:
-                self.add_brand(*entry)
+                self.add_brand(*entry, _log_event=False)
 
     def list_brands(self):
         self._migrate_brands_table()
@@ -312,8 +312,57 @@ class KnowledgeRepository:
                 (brand_id,),
             ).fetchone()
 
+    # ─── Trend event log ──────────────────────────────────────────────────────
+    # A lightweight record of changes that can shift a Trends chart's numbers
+    # without any real change in AI behavior (a brand added/removed, an alias
+    # list edited, a prompt family added). Trends annotates its time-series
+    # charts with these so a viewer can tell "the AI's actual behavior moved"
+    # apart from "we changed what we're measuring" (#67) — right now those two
+    # look identical on a chart, which risks a real, silently wrong conclusion.
+
+    def _ensure_events_table(self):
+        with self._conn() as c:
+            c.execute("""
+                CREATE TABLE IF NOT EXISTS atlas_events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    event_type TEXT NOT NULL,
+                    description TEXT NOT NULL,
+                    occurred_at TEXT DEFAULT (datetime('now'))
+                )
+            """)
+
+    def log_event(self, event_type: str, description: str):
+        self._ensure_events_table()
+        with self._conn() as c:
+            c.execute(
+                "INSERT INTO atlas_events (event_type, description) VALUES (?, ?)",
+                (event_type, description),
+            )
+
+    def list_events(self, since: str = None) -> list:
+        """Returns [(event_type, description, occurred_at)] ordered oldest
+        first. since, if given, is an ISO date/datetime string — only events
+        at or after it are returned."""
+        self._ensure_events_table()
+        with self._conn() as c:
+            if since:
+                return c.execute(
+                    "SELECT event_type, description, occurred_at FROM atlas_events "
+                    "WHERE occurred_at >= ? ORDER BY occurred_at",
+                    (since,),
+                ).fetchall()
+            return c.execute(
+                "SELECT event_type, description, occurred_at FROM atlas_events "
+                "ORDER BY occurred_at"
+            ).fetchall()
+
     def add_brand(self, name, website="", description="", aliases="", tier=0,
-                  product_types="", country="US", parent_company="", active=1):
+                  product_types="", country="US", parent_company="", active=1,
+                  _log_event=True):
+        # _log_event=False is used by _seed_full_brand_list() when populating
+        # the ~90-brand default list on a fresh DB (or one with <20 brands) —
+        # that's initial setup, not a real, trend-relevant user action, so it
+        # must not flood the event log with 90 "brand added" markers (#67).
         self._migrate_brands_table()
         with self._conn() as c:
             cur = c.execute(
@@ -329,18 +378,23 @@ class KnowledgeRepository:
             )
             row_id = cur.lastrowid
         self.export_brands_csv()
+        if _log_event:
+            self.log_event("brand_added", f"Brand added: {name.strip()}")
         return row_id
 
     def update_brand(self, brand_id, name, website="", description="", active=1,
                      aliases="", tier=0, product_types="", country="US", parent_company=""):
         self._migrate_brands_table()
+        prev = self.get_brand(brand_id)
+        prev_aliases = (prev[5] or "") if prev else ""
+        new_aliases = aliases.strip() if aliases else ""
         with self._conn() as c:
             c.execute(
                 "UPDATE brands SET name=?, website=?, description=?, active=?, "
                 "aliases=?, tier=?, product_types=?, country=?, parent_company=? "
                 "WHERE brand_id=?",
                 (name.strip(), website.strip(), description.strip(), int(active),
-                 aliases.strip() if aliases else "",
+                 new_aliases,
                  int(tier) if tier else 0,
                  product_types.strip() if product_types else "",
                  country.strip() if country else "US",
@@ -348,12 +402,17 @@ class KnowledgeRepository:
                  brand_id),
             )
         self.export_brands_csv()
+        if prev_aliases != new_aliases:
+            self.log_event("brand_aliases_changed", f"Alias list changed for brand: {name.strip()}")
 
     def delete_brand(self, brand_id):
         self._migrate_brands_table()
+        prev = self.get_brand(brand_id)
+        brand_name = prev[1] if prev else f"id {brand_id}"
         with self._conn() as c:
             c.execute("DELETE FROM brands WHERE brand_id=?", (brand_id,))
         self.export_brands_csv()
+        self.log_event("brand_removed", f"Brand removed: {brand_name}")
 
     def export_brands_csv(self):
         self._migrate_brands_table()
@@ -568,14 +627,27 @@ class KnowledgeRepository:
         name = family_name.strip()
         if not name:
             return
+        needs_header = not csv_path.exists()
         # Check if already exists
-        if csv_path.exists():
+        if not needs_header:
             with open(csv_path, newline="", encoding="utf-8") as f:
                 for row in csv.DictReader(f):
                     if row.get("family_name", "").strip() == name:
                         return
         with open(csv_path, "a", newline="", encoding="utf-8") as f:
-            csv.writer(f).writerow([name, "", "", "0"])
+            writer = csv.writer(f)
+            if needs_header:
+                # A file created fresh (rather than the checked-in, already-
+                # populated market_questions.csv every real install ships
+                # with) had no header row at all, so the NEXT call's
+                # DictReader-based duplicate check above would silently
+                # misread the first data row as column names and never
+                # detect a real duplicate. Only matters for a from-scratch
+                # CSV — the shipped one already has a header — but cheap
+                # to guard against unconditionally.
+                writer.writerow(["family_name", "prompt_style", "prompt_text", "prompt_influence_score"])
+            writer.writerow([name, "", "", "0"])
+        self.log_event("family_added", f"Prompt family added: {name}")
 
     def get_prompt_counts(self):
         """Returns {family_name: count} from market_questions.csv."""

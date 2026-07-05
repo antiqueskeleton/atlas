@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from backend.knowledge.knowledge_repository import KnowledgeRepository
 from backend.visibility.trends_service import TrendsService
 from desktop.widgets.info_icon import info_icon
 
@@ -134,6 +135,7 @@ class TrendsPage(QWidget):
         super().__init__()
         self.app = app
         self.service = TrendsService(target_brand=app.get_target_brand())
+        self._know_repo = KnowledgeRepository()
         self._summaries: list[dict] = []
         self._build_ui()
         self._refresh()
@@ -283,6 +285,45 @@ class TrendsPage(QWidget):
 
     # ── Charts ─────────────────────────────────────────────────────────────────
 
+    def _add_event_markers(self, ax, dates: list[str]):
+        """Draws a dotted vertical line at each date where a tracked change
+        happened (a brand added/removed, an alias list edited, a prompt
+        family added — see KnowledgeRepository.log_event, #67) — so a real
+        shift in AI behavior can be told apart from a chart moving just
+        because what's being measured changed. dates is the same sorted
+        list of day-strings the calling chart already plots against — the
+        x-axis here is a categorical index into it, not a continuous date
+        scale, so each event is snapped to the nearest date actually present
+        rather than its own literal position.
+        """
+        import bisect
+
+        if len(dates) < 2:
+            return
+        try:
+            events = self._know_repo.list_events(since=dates[0])
+        except Exception:
+            return
+        if not events:
+            return
+
+        range_start, range_end = dates[0], dates[-1]
+        drawn_x = set()
+        first = True
+        for _event_type, _description, occurred_at in events:
+            event_date = (occurred_at or "")[:10]
+            if not event_date or event_date < range_start or event_date > range_end:
+                continue
+            x = min(bisect.bisect_left(dates, event_date), len(dates) - 1)
+            if x in drawn_x:
+                continue
+            drawn_x.add(x)
+            ax.axvline(
+                x, color="#9CA3AF", linewidth=1, linestyle=":", alpha=0.8, zorder=1,
+                label="Data/config change" if first else None,
+            )
+            first = False
+
     def _draw_score(self):
         import numpy as np
         from collections import defaultdict
@@ -341,6 +382,7 @@ class TrendsPage(QWidget):
         ax.set_title(f"{brand} Visibility Score Over Time",
                      fontsize=11, fontweight="bold", pad=8)
         ax.yaxis.set_major_formatter(mticker.FormatStrFormatter("%.0f%%"))
+        self._add_event_markers(ax, dates)
 
         # Per-provider breakdown lives on its own "By Provider" tab — this chart
         # stays focused on the single trend line + volatility band + direction.
@@ -487,6 +529,7 @@ class TrendsPage(QWidget):
             fontsize=10, fontweight="bold", pad=8
         )
         ax.yaxis.set_major_formatter(mticker.FormatStrFormatter("%.0f%%"))
+        self._add_event_markers(ax, dates)
         ax.legend(fontsize=7, loc="upper left", ncol=2)
         c.draw()
 
@@ -563,6 +606,7 @@ class TrendsPage(QWidget):
             fontsize=10, fontweight="bold", pad=8
         )
         ax.yaxis.set_major_formatter(mticker.FormatStrFormatter("%.0f%%"))
+        self._add_event_markers(ax, dates)
         ax.legend(fontsize=7, loc="upper left", ncol=2)
         c.draw()
 

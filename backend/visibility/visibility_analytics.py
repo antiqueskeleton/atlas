@@ -4,6 +4,7 @@ from pathlib import Path
 
 from backend.services.paths import get_data_dir
 from backend.visibility.negation import detect_negative_brands
+from backend.visibility.recommendation import detect_recommended_brands
 
 
 class VisibilityAnalytics:
@@ -108,6 +109,8 @@ class VisibilityAnalytics:
     def summarize_responses(self, responses):
         brand_counts = Counter()
         negative_brand_counts = Counter()
+        recommended_brand_counts = Counter()
+        first_recommended_brands = Counter()
         feature_counts = Counter()
         feature_brand_counts: dict[str, Counter] = defaultdict(Counter)
         provider_brand_counts = defaultdict(Counter)
@@ -164,6 +167,26 @@ class VisibilityAnalytics:
             # get credited with an association it was actually denied.
             assoc_brand_names = [b for b in brand_names_in_response if b not in negative_brands]
 
+            # Recommendation detection (#65): distinguishes "Firman is one of
+            # several options AI listed" from "I'd specifically recommend the
+            # Firman." recommendation.py only detects endorsement LANGUAGE and
+            # has no negation-awareness of its own — "I would NOT recommend
+            # Firman" contains the literal cue phrase "recommend" — so exclude
+            # anything also flagged negative in this response, same pattern as
+            # assoc_brand_names above.
+            recommended_raw = detect_recommended_brands(response[5], self._flat_brand_terms)
+            genuinely_recommended = recommended_raw - negative_brands
+            for brand in genuinely_recommended:
+                if brand in brand_first_pos:  # only count tracked, matched mentions
+                    recommended_brand_counts[brand] += 1
+
+            if mentioned_brands:
+                recommended_positions = [
+                    (pos, b) for pos, b in mentioned_brands if b in genuinely_recommended
+                ]
+                if recommended_positions:
+                    first_recommended_brands[recommended_positions[0][1]] += 1
+
             for feature, feature_lower in self._feature_set:
                 if feature_lower in text:
                     feature_counts[feature] += 1
@@ -204,6 +227,32 @@ class VisibilityAnalytics:
             neg = negative_brand_counts.get(brand, 0)
             brand_negative_rate[brand] = (
                 round((neg / mention_count) * 100, 1) if mention_count else 0
+            )
+
+        target_recommended_mentions = recommended_brand_counts.get(target, 0) if target else 0
+        target_recommendation_rate = (
+            round((target_recommended_mentions / total_responses) * 100, 1)
+            if total_responses and target
+            else 0
+        )
+
+        # Recommendation rate per brand: % of that brand's OWN mentions that
+        # were an active recommendation, not just a mention — same "of its
+        # own mentions" framing as brand_negative_rate above, answering "when
+        # AI brings this brand up, how often does it actually endorse it."
+        brand_recommendation_rate = {}
+        for brand, mention_count in brand_counts.items():
+            rec = recommended_brand_counts.get(brand, 0)
+            brand_recommendation_rate[brand] = (
+                round((rec / mention_count) * 100, 1) if mention_count else 0
+            )
+
+        first_recommendation_share = {}
+        for brand, count in first_recommended_brands.items():
+            first_recommendation_share[brand] = (
+                round((count / total_responses) * 100, 1)
+                if total_responses
+                else 0
             )
 
         provider_visibility_scores = {}
@@ -283,6 +332,11 @@ class VisibilityAnalytics:
             "negative_brand_counts": dict(negative_brand_counts),
             "target_negative_rate": target_negative_rate,
             "brand_negative_rate": brand_negative_rate,
+            "recommended_brand_counts": dict(recommended_brand_counts),
+            "target_recommendation_rate": target_recommendation_rate,
+            "brand_recommendation_rate": brand_recommendation_rate,
+            "first_recommended_brands": dict(first_recommended_brands),
+            "first_recommendation_share": first_recommendation_share,
             "feature_counts": dict(feature_counts),
             "feature_brand_counts": {f: dict(c) for f, c in feature_brand_counts.items()},
             "provider_brand_counts": {

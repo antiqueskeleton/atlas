@@ -28,6 +28,7 @@ from PySide6.QtWidgets import (
 
 from backend.knowledge.knowledge_repository import KnowledgeRepository
 from backend.visibility.visibility_service import VisibilityService
+from desktop.sleep_guard import allow_sleep, prevent_sleep
 from desktop.widgets.info_icon import info_icon
 
 
@@ -572,18 +573,22 @@ class VisibilityPage(QWidget):
         self._brand_tbl.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
 
         self._sentiment_frame, _, self._sentiment_tbl = _table_section(
-            "Brand Sentiment",
-            ["Brand", "Mentions", "Negative", "Negative %"],
+            "Brand Sentiment & Recommendations",
+            ["Brand", "Mentions", "Recommended", "Recommended %", "Negative", "Negative %"],
             stretch_last=False,
         )
         self._sentiment_tbl.setColumnWidth(1, 80)
-        self._sentiment_tbl.setColumnWidth(2, 80)
-        self._sentiment_tbl.setColumnWidth(3, 90)
+        self._sentiment_tbl.setColumnWidth(2, 90)
+        self._sentiment_tbl.setColumnWidth(3, 100)
+        self._sentiment_tbl.setColumnWidth(4, 80)
+        self._sentiment_tbl.setColumnWidth(5, 90)
         self._sentiment_tbl.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         self._sentiment_tbl.setToolTip(
+            "Recommended = responses where AI actively endorsed this brand (\"I recommend "
+            "the...\", \"the best choice would be...\"), not just mentioned it alongside others. "
             "Negative = responses where this brand was mentioned in an unfavorable or "
-            "comparative-losing context (e.g. \"unlike Firman, Honda includes...\"). "
-            "Negative % is of that brand's OWN mentions, not of all responses."
+            "comparative-losing context (e.g. \"unlike Firman, Honda includes...\"). Both "
+            "percentages are of that brand's OWN mentions, not of all responses."
         )
         # Per-column header tooltips (#49) — more discoverable than the whole-table
         # tooltip above, since hovering a column HEADER is a more natural way to
@@ -592,10 +597,20 @@ class VisibilityPage(QWidget):
             "Number of responses mentioning this brand at all (positive, neutral, or negative)."
         )
         self._sentiment_tbl.horizontalHeaderItem(2).setToolTip(
+            "Number of THOSE mentions where AI actively recommended this brand — e.g. \"I'd "
+            "recommend the...\" or \"the best choice would be...\" — not just listed it among "
+            "other options."
+        )
+        self._sentiment_tbl.horizontalHeaderItem(3).setToolTip(
+            "Recommended ÷ that brand's OWN Mentions column (not ÷ all responses). This answers "
+            "\"of the times AI brings this brand up, how often does it actually endorse it\" — "
+            "distinct from Visibility Score, which only measures being mentioned at all."
+        )
+        self._sentiment_tbl.horizontalHeaderItem(4).setToolTip(
             "Number of THOSE mentions that were negative or unfavorable — e.g. the brand lost "
             "a direct comparison or was described critically."
         )
-        self._sentiment_tbl.horizontalHeaderItem(3).setToolTip(
+        self._sentiment_tbl.horizontalHeaderItem(5).setToolTip(
             "Negative ÷ that brand's OWN Mentions column (not ÷ all responses). This answers "
             "\"of the times AI brings this brand up, how often is it unfavorable\" — a brand "
             "mentioned rarely but always negatively will show a high % here even though its "
@@ -1099,6 +1114,13 @@ class VisibilityPage(QWidget):
         self._worker.run_done.connect(self._on_run_done)
         self._worker.all_done.connect(self._on_all_done)
         self._worker.error.connect(self._on_error)
+        # #56: a long collection (hundreds+ of prompts) can outlast Windows'
+        # idle-sleep timer if left unattended — confirmed this isn't
+        # hypothetical, the v0.9.2 build hit the identical failure mode.
+        # Released in _on_all_done(), which fires exactly once at the true
+        # end of the worker's run() regardless of success/error/cancel — see
+        # that method's comment for why no other release hook is needed.
+        prevent_sleep()
         self._worker.start()
 
     def _toggle_pause(self):
@@ -1136,6 +1158,12 @@ class VisibilityPage(QWidget):
         self.refresh()
 
     def _on_all_done(self):
+        # #56: always fires exactly once here regardless of whether the run
+        # finished normally, hit a per-provider error (those go through
+        # _on_error but don't stop the ThreadPoolExecutor loop early), or was
+        # cancelled via _stop_run — so this is the one correct place to
+        # release the sleep-prevention requested in _start_run().
+        allow_sleep()
         self._run_btn.setEnabled(True)
         self._pause_btn.setEnabled(False)
         self._pause_btn.setText("Pause")
@@ -1228,11 +1256,17 @@ class VisibilityPage(QWidget):
                 prov_rows.append([provider, brand, count])
         _set_tbl(self._brand_tbl, prov_rows)
 
-        # ── Brand Sentiment → sortable table ───────────────────────────────────
+        # ── Brand Sentiment & Recommendations → sortable table ────────────────
         negative_counts = summary.get("negative_brand_counts", {})
         negative_rates = summary.get("brand_negative_rate", {})
+        recommended_counts = summary.get("recommended_brand_counts", {})
+        recommended_rates = summary.get("brand_recommendation_rate", {})
         sentiment_rows = [
-            [brand, count, negative_counts.get(brand, 0), f"{negative_rates.get(brand, 0)}%"]
+            [
+                brand, count,
+                recommended_counts.get(brand, 0), f"{recommended_rates.get(brand, 0)}%",
+                negative_counts.get(brand, 0), f"{negative_rates.get(brand, 0)}%",
+            ]
             for brand, count in sorted(brand_counts.items(), key=lambda x: -x[1])
         ]
         _set_tbl(self._sentiment_tbl, sentiment_rows)

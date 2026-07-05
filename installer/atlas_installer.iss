@@ -6,7 +6,7 @@
 ; (or use build.bat which runs ICO generation, PyInstaller, and ISCC)
 
 #define AppName      "Atlas AI"
-#define AppVersion   "0.9.2"
+#define AppVersion   "0.9.3"
 #define AppPublisher "dweeb.co"
 #define AppExeName   "Atlas AI.exe"
 #define BuildDir     "..\dist\Atlas AI"
@@ -33,6 +33,9 @@ PrivilegesRequired=admin
 ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0
 UninstallDisplayIcon={app}\{#AppExeName}
+CloseApplications=yes
+ForceCloseApplications=yes
+RestartApplications=yes
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"

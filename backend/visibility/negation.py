@@ -22,6 +22,8 @@ the common, high-value cases, not every case.
 """
 import re
 
+from backend.visibility.clause_boundaries import SENTENCE_SPLIT, clamp_backward, clamp_forward
+
 # Modify a brand mentioned on either side, within _WINDOW characters.
 _SYMMETRIC_CUES = [
     "not", "isn't", "aren't", "doesn't", "don't", "won't", "wouldn't",
@@ -56,30 +58,6 @@ _FORWARD_ONLY_PATTERNS = [re.compile(r'\b' + re.escape(cue) + r'\b') for cue in 
 # zones" for those avoids running all 37 compiled patterns against them.
 _ALL_CUES = _SYMMETRIC_CUES + _FORWARD_ONLY_CUES
 
-_SENTENCE_SPLIT = re.compile(r'(?<=[.!?])\s+')
-
-# Clause-boundary tokens: comparative connectors that separate one entity
-# from another within the same sentence ("not AS reliable AS Honda",
-# "worse THAN Honda", "unlike Honda, Firman..."). A cue's reach is clamped
-# at the nearest one of these rather than the raw character window, so a
-# negation aimed at one brand doesn't bleed onto a different brand named
-# on the other side of the comparison. This only ever shrinks a zone —
-# never grows it — so it can suppress false positives but not create them.
-_BOUNDARY_RE = re.compile(r',|\bthan\b|\bas\b')
-
-
-def _clamp_forward(sent_lower: str, cue_end: int, zone_end: int) -> int:
-    m = _BOUNDARY_RE.search(sent_lower, cue_end, zone_end)
-    return m.start() if m else zone_end
-
-
-def _clamp_backward(sent_lower: str, zone_start: int, cue_start: int) -> int:
-    last_end = zone_start
-    for m in _BOUNDARY_RE.finditer(sent_lower, zone_start, cue_start):
-        last_end = m.end()
-    return last_end
-
-
 def _cue_zones(sent_lower: str) -> list[tuple[int, int]]:
     """Return (start, end) character ranges where a negative cue applies."""
     if not any(cue in sent_lower for cue in _ALL_CUES):
@@ -91,14 +69,14 @@ def _cue_zones(sent_lower: str) -> list[tuple[int, int]]:
         for m in pattern.finditer(sent_lower):
             raw_start = max(0, m.start() - _WINDOW)
             raw_end = m.end() + _WINDOW
-            start = _clamp_backward(sent_lower, raw_start, m.start())
-            end = _clamp_forward(sent_lower, m.end(), raw_end)
+            start = clamp_backward(sent_lower, raw_start, m.start())
+            end = clamp_forward(sent_lower, m.end(), raw_end)
             zones.append((start, end))
 
     for pattern in _FORWARD_ONLY_PATTERNS:
         for m in pattern.finditer(sent_lower):
             raw_end = m.end() + _FORWARD_WINDOW
-            end = _clamp_forward(sent_lower, m.end(), raw_end)
+            end = clamp_forward(sent_lower, m.end(), raw_end)
             zones.append((m.end(), end))
 
     return zones
@@ -117,7 +95,7 @@ def detect_negative_brands(response_text: str,
         return set()
 
     negative: set[str] = set()
-    for sentence in _SENTENCE_SPLIT.split(response_text):
+    for sentence in SENTENCE_SPLIT.split(response_text):
         sent_lower = sentence.lower()
         zones = _cue_zones(sent_lower)
         if not zones:

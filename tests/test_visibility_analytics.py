@@ -133,6 +133,80 @@ def test_no_negative_context_yields_zero_negative_rate():
     assert result["brand_negative_rate"]["Firman"] == 0
 
 
+# ── Recommendation detection (#65) ────────────────────────────────────────────
+
+def test_recommended_brand_counted_separately_from_plain_mention():
+    a = make_analytics()
+    responses = [
+        row(1, "openai", "Generac and Firman are both solid choices."),  # mention only
+        row(2, "openai", "For home backup, I recommend the Firman."),   # genuine recommendation
+    ]
+    result = a.summarize_responses(responses)
+    assert result["brand_counts"]["Firman"] == 2       # mentioned in both
+    assert result["recommended_brand_counts"]["Firman"] == 1  # recommended in only one
+    assert "Generac" not in result["recommended_brand_counts"]
+
+
+def test_recommendation_rate_is_relative_to_that_brands_own_mentions():
+    a = make_analytics()
+    responses = [
+        row(1, "openai", "Firman is a great value pick."),        # mention, no endorsement
+        row(2, "openai", "I recommend the Firman for reliability."),  # mention + endorsement
+    ]
+    result = a.summarize_responses(responses)
+    # Firman: 2 mentions, 1 recommendation -> 50%, not 25% (vs total responses)
+    assert result["brand_counts"]["Firman"] == 2
+    assert result["recommended_brand_counts"]["Firman"] == 1
+    assert result["brand_recommendation_rate"]["Firman"] == 50.0
+
+
+def test_target_recommendation_rate_is_percent_of_all_responses():
+    a = make_analytics()
+    responses = [
+        row(1, "openai", "I recommend the Firman for home backup."),
+        row(2, "openai", "Honda is well known for reliability."),
+    ]
+    result = a.summarize_responses(responses)
+    assert result["target_recommendation_rate"] == 50.0
+
+
+def test_no_endorsement_language_yields_zero_recommendation_rate():
+    a = make_analytics()
+    responses = [row(1, "openai", "Firman and Generac are both solid choices.")]
+    result = a.summarize_responses(responses)
+    assert result["recommended_brand_counts"] == {}
+    assert result["brand_recommendation_rate"]["Firman"] == 0
+
+
+def test_negated_recommendation_phrase_is_not_credited_as_a_recommendation():
+    """The core #65 correctness requirement: recommendation.py alone would
+    flag Firman here (it matches the literal cue phrase "recommend the"),
+    but visibility_analytics must exclude it since negation.py ALSO flags
+    Firman negative in the same response ("not... recommend")."""
+    a = make_analytics()
+    responses = [row(1, "openai", "I would not recommend the Firman for whole-home backup.")]
+    result = a.summarize_responses(responses)
+    assert result["brand_counts"]["Firman"] == 1
+    assert result["negative_brand_counts"]["Firman"] == 1
+    assert "Firman" not in result["recommended_brand_counts"]
+    assert result["brand_recommendation_rate"]["Firman"] == 0
+
+
+def test_first_recommended_position_differs_from_first_mentioned_position():
+    """A brand can be mentioned first without being the first one actually
+    recommended — first_recommended_brands must track that distinctly from
+    the existing first_mentioned_brands."""
+    a = make_analytics()
+    responses = [row(
+        1, "openai",
+        "Honda is a well-known name, but I'd recommend the Firman for better value.",
+    )]
+    result = a.summarize_responses(responses)
+    assert result["first_mentioned_brands"]["Honda"] == 1       # mentioned first
+    assert "Honda" not in result.get("first_recommended_brands", {})
+    assert result["first_recommended_brands"]["Firman"] == 1    # recommended first (and only)
+
+
 # ── Channel co-occurrence / gap math ──────────────────────────────────────────
 
 def test_channel_gap_only_reported_when_competitor_leads():

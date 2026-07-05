@@ -1,5 +1,5 @@
 {
-  "version": "0.9.2",
-  "download_url": "https://github.com/antiqueskeleton/atlas/releases/download/v0.9.2/AtlasAI-v0.9.2-Setup.exe",
-  "release_notes": "v0.9.2 — Startup is roughly two-thirds faster: found and fixed a regex performance bug in sentiment detection that had been silently getting worse as the response database grew. Every button in the app now has consistent styling (previously several Knowledge screens and dialog buttons rendered as plain unstyled boxes). Web Intelligence's competitor table now shows the on-page SEO data it actually collects (title, meta description, keywords, HTTPS/schema/sitemap, load time) instead of metrics it could never fill. Added a new Category tier to Prompt Sets in Knowledge — group related prompt families together and select a whole cluster with one checkbox on the Visibility page, without touching the underlying families or any historical data."
+  "version": "0.9.3",
+  "download_url": "https://github.com/antiqueskeleton/atlas/releases/download/v0.9.3/AtlasAI-v0.9.3-Setup.exe",
+  "release_notes": "v0.9.3 — Trends charts now mark the dates when a brand, alias, or prompt family changed, so a real shift in AI visibility can be told apart from a chart moving just because what's being tracked changed. Visibility Collection now stays awake through a long run instead of letting Windows put the PC to sleep mid-collection. New Brand Sentiment & Recommendations columns distinguish AI actively recommending a brand from just mentioning it alongside others. Home's Recent Activity no longer floods with a wall of prompt-set names for large collection runs. Expanded automated test coverage across PDF/Excel/Word report generation."
 }

@@ -10,6 +10,21 @@ from desktop.widgets.activity_feed import ActivityFeed
 from desktop.widgets.stat_card import StatCard
 
 
+def _summarize_prompt_set(prompt_set: str) -> str:
+    """A Visibility run's prompt_set field is a comma-joined string of every
+    selected family name (visibility_page.py's _get_selected_prompts) —
+    selecting 20+ families is the normal case for a real collection run, so
+    that field can be a multi-hundred-character wall of text with no place
+    in a short activity feed. Show a count once there's more than one; a
+    single family name is still short and worth showing as-is."""
+    if not prompt_set:
+        return "—"
+    n = prompt_set.count(",") + 1
+    if n == 1:
+        return prompt_set
+    return f"{n} prompt sets"
+
+
 class HomePage(QWidget):
     def __init__(self, app):
         super().__init__()
@@ -169,7 +184,8 @@ class HomePage(QWidget):
         for r in completed_vis[:6]:
             _id, provider, _model, prompt_set, started_at, *_ = r
             date = started_at[:10] if started_at else "?"
-            events.append((started_at or "", f"Visibility · {prompt_set} · {provider} · {date}"))
+            label = _summarize_prompt_set(prompt_set)
+            events.append((started_at or "", f"Visibility · {label} · {provider} · {date}"))
         for r in completed_intel[:4]:
             _id, provider, _model, _brand, started_at, *_ = r
             date = started_at[:10] if started_at else "?"
