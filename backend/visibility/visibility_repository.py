@@ -106,6 +106,34 @@ class VisibilityRepository:
                 for r in responses
             ])
 
+    def find_recent_matching_runs(self, providers: list[str], prompt_set: str,
+                                   within_minutes: int = 60) -> list:
+        """
+        Returns visibility_runs rows for any of `providers` whose prompt_set
+        exactly matches `prompt_set` and started within the last
+        `within_minutes` minutes (#76) — used to warn before starting a
+        likely-redundant rerun of the same collection (e.g. after an
+        apparent crash/stall that actually finished, or simple double-click
+        impatience).
+
+        Returns (run_id, provider, prompt_set, started_at, status,
+        response_count) tuples, most recent first.
+        """
+        if not providers:
+            return []
+        from datetime import datetime, timedelta
+        cutoff = (datetime.now() - timedelta(minutes=within_minutes)).isoformat()
+        placeholders = ",".join("?" for _ in providers)
+        with self.connect() as conn:
+            return conn.execute(f"""
+                SELECT run_id, provider, prompt_set, started_at, status, response_count
+                FROM visibility_runs
+                WHERE provider IN ({placeholders})
+                  AND prompt_set = ?
+                  AND started_at >= ?
+                ORDER BY started_at DESC
+            """, (*providers, prompt_set, cutoff)).fetchall()
+
     def list_runs(self):
         with self.connect() as conn:
             cursor = conn.execute("""

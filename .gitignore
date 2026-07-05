@@ -4,6 +4,7 @@ __pycache__/
 
 # Database
 database/*.db
+database/logs/
 
 # Reports
 reports/*.json

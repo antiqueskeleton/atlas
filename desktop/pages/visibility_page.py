@@ -1136,6 +1136,26 @@ class VisibilityPage(QWidget):
             QMessageBox.warning(self, "No Prompts", "Select at least one prompt set.")
             return
 
+        # #76: warn before starting a likely-redundant rerun — e.g. a prior
+        # run appeared to hang/crash but actually finished, or a simple
+        # double-click. Checked BEFORE the cost-confirmation dialog below so
+        # a redundant run doesn't even get that far.
+        recent = self.service.repository.find_recent_matching_runs(providers, label, within_minutes=60)
+        if recent:
+            lines = [
+                f"• {prov} — {(started_at or '')[:16].replace('T', ' ')} "
+                f"({resp_count} responses, {status})"
+                for _run_id, prov, _ps, started_at, status, resp_count in recent
+            ]
+            reply = QMessageBox.question(
+                self, "Recent Run Detected",
+                "This exact prompt set was already run against the following provider(s) "
+                "in the last hour:\n\n" + "\n".join(lines) + "\n\nRun it again anyway?",
+                QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
+            )
+            if reply != QMessageBox.Yes:
+                return
+
         n_prompts = len(prompts)
         total = n_prompts * len(providers)
 
