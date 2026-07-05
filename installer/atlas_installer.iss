@@ -34,7 +34,6 @@ ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0
 UninstallDisplayIcon={app}\{#AppExeName}
 CloseApplications=yes
-ForceCloseApplications=yes
 RestartApplications=yes
 
 [Languages]
