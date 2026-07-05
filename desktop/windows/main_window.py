@@ -45,7 +45,7 @@ _NAV_ITEMS = [
     ("👁",  "Visibility",  "nav_visibility.png"),
     ("💡", "Intelligence", "nav_intelligence.png"),
     ("📈", "Trends",       "nav_trends.png"),
-    ("🛒", "Comp Shop",    "nav_comp.png"),
+    ("🛒", "Price Comparison", "nav_comp.png"),
     ("🧠", "Knowledge",    "nav_knowledge.png"),
     ("⚙",  "Settings",    "nav_settings.png"),
 ]
@@ -81,7 +81,7 @@ class AtlasMainWindow(QMainWindow):
         import_action = tools_menu.addAction("Import Responses")
         import_action.triggered.connect(self._import_responses)
         knowledge_action = tools_menu.addAction("Manage Knowledge")
-        # BUG FIX: was setCurrentRow(5), which is Comp Shop — Knowledge is
+        # BUG FIX: was setCurrentRow(5), which is Price Comparison — Knowledge is
         # row 6 in _NAV_ITEMS. "Manage Knowledge" previously opened the
         # wrong page. Confirmed 2026-07-02.
         knowledge_action.triggered.connect(lambda: self.nav.setCurrentRow(6))
@@ -293,7 +293,7 @@ class AtlasMainWindow(QMainWindow):
         self.pages.addTab(self.intelligence_page,   "Intelligence")
         self.pages.addTab(TrendsPage(self.app),     "Trends")
         self.comp_shopping_page = CompShoppingPage(self.app)
-        self.pages.addTab(self.comp_shopping_page,  "Comp Shop")
+        self.pages.addTab(self.comp_shopping_page,  "Price Comparison")
         self.pages.addTab(KnowledgePage(self.app),  "Knowledge")
         self.pages.addTab(SettingsPage(self.app),   "Settings")
 
@@ -309,7 +309,7 @@ class AtlasMainWindow(QMainWindow):
             self.home_page.refresh()
         elif row == 2:   # Visibility
             self.visibility_page.refresh_provider_status()
-        elif row == 5:   # Comp Shop
+        elif row == 5:   # Price Comparison
             self.comp_shopping_page.refresh()
 
     # ── Update checker ────────────────────────────────────────────────────────
@@ -553,7 +553,7 @@ class AtlasMainWindow(QMainWindow):
              "Charts how visibility score, brand standing, provider performance, feature "
              "associations, and first-mention position change across multiple Visibility runs. "
              "Time-series charts need at least 2 days of collection history to render."),
-            ("Comp Shop",
+            ("Price Comparison",
              "Currently being rebuilt (Coming Soon) — will compare pricing and specs across "
              "brands using an AI-assisted product catalog."),
             ("Knowledge",

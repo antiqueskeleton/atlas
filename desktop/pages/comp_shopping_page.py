@@ -1,5 +1,5 @@
 """
-Competitive Shopping page — compare pricing and specs across tracked brands.
+Price Comparison page — compare pricing and specs across tracked brands.
 
 Data sources (highest to lowest reliability):
   1. Shopify JSON endpoint — manufacturer MSRP, direct and confirmed
@@ -95,7 +95,7 @@ class CompShoppingPage(QWidget):
         root.setSpacing(16)
 
         # Title row
-        title = QLabel("Competitive Shopping")
+        title = QLabel("Price Comparison")
         title.setStyleSheet("font-size: 28px; font-weight: 700; color: #111827;")
         subtitle = QLabel(
             "Compare real-time pricing and confirmed product specs across tracked brands."
@@ -116,7 +116,7 @@ class CompShoppingPage(QWidget):
         banner_icon.setStyleSheet("font-size: 20px;")
         banner_icon.setFixedWidth(28)
         banner_text = QLabel(
-            "<b>Coming Soon</b> — Competitive Shopping is being redesigned with "
+            "<b>Coming Soon</b> — Price Comparison is being redesigned with "
             "AI-assisted product discovery, spec lookup by wattage/fuel type/start type, "
             "and retailer pricing. This page is view-only in the current build."
         )
