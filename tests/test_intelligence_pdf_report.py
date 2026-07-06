@@ -7,7 +7,7 @@ pypdf-extracted text instead of python-docx paragraphs.
 """
 from pypdf import PdfReader
 
-from backend.reports.intelligence_pdf_report import IntelligencePDFReport
+from backend.reports.intelligence_pdf_report import IntelligencePDFReport, _pdf_safe
 
 _RUN = ("run-1", "openai", "gpt-4.1-mini", "Firman", "2026-07-01T10:00:00", None, None, 26.4)
 _BRIEFING = ("product summary", "persona summary", "journey summary",
@@ -65,3 +65,37 @@ def test_generate_does_not_crash_with_all_empty_inputs(tmp_path):
     IntelligencePDFReport(run=None, briefing=None, results=None, opportunities=None).generate(str(out))
     assert out.exists() and out.stat().st_size > 0
     assert "Target Brand" in _extract_text(out)
+
+
+# ── Regression: opportunity label must match the screen (intelligence_page.py
+# labels this field "Action", not "Description") ──────────────────────────────
+
+def test_opportunity_section_labels_field_action_not_description(tmp_path):
+    out = tmp_path / "labels.pdf"
+    IntelligencePDFReport(_RUN, _BRIEFING, _RESULTS, _OPPORTUNITIES, "Firman").generate(str(out))
+    text = _extract_text(out)
+    assert "Action:" in text
+    assert "Description:" not in text
+
+
+# ── Regression: emoji in AI response text must not render as broken glyph
+# boxes (reportlab's Helvetica has no emoji support) ──────────────────────────
+
+def test_pdf_safe_strips_emoji_but_keeps_normal_punctuation():
+    text = "Portable Generator — Best For: ✅ High power needs, “quoted” text"
+    safe = _pdf_safe(text)
+    assert "✅" not in safe
+    assert "—" in safe  # em dash is in WinAnsiEncoding, must survive
+    assert "quoted" in safe
+
+
+def test_generate_strips_emoji_from_analyst_responses(tmp_path):
+    results = [
+        ("Product Intelligence", "Best for tailgating?",
+         "✅ Great for tailgating\n✅ Quiet operation", "2026-07-01T10:00:05"),
+    ]
+    out = tmp_path / "emoji.pdf"
+    IntelligencePDFReport(_RUN, _BRIEFING, results, [], "Firman").generate(str(out))
+    text = _extract_text(out)
+    assert "■" not in text  # the broken-glyph box character
+    assert "Great for tailgating" in text

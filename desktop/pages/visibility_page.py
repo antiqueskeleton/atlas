@@ -31,7 +31,7 @@ from backend.knowledge.knowledge_repository import KnowledgeRepository
 from backend.visibility.visibility_service import VisibilityService
 from desktop.run_logger import RunLogger
 from desktop.sleep_guard import allow_sleep, prevent_sleep
-from desktop.widgets.info_icon import info_icon
+from desktop.widgets.stat_card import StatCard
 
 
 # ── Worker thread ─────────────────────────────────────────────────────────────
@@ -140,35 +140,6 @@ class _PDFWorker(QThread):
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
-
-def _stat_card(title, value, subtitle="", info=""):
-    frame = QFrame()
-    frame.setObjectName("StatCard")
-    frame.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-    lay = QVBoxLayout()
-    lay.setSpacing(2)
-    lay.setContentsMargins(14, 12, 14, 12)
-
-    title_row = QHBoxLayout()
-    title_row.setContentsMargins(0, 0, 0, 0)
-    title_row.setSpacing(4)
-    t = QLabel(title);  t.setObjectName("CardTitle")
-    title_row.addWidget(t)
-    if info:
-        title_row.addWidget(info_icon(info))
-    title_row.addStretch()
-
-    v = QLabel(value);  v.setObjectName("CardValue")
-    lay.addLayout(title_row)
-    lay.addWidget(v)
-
-    if subtitle:
-        s = QLabel(subtitle); s.setObjectName("CardSubtitle")
-        lay.addWidget(s)
-
-    frame.setLayout(lay)
-    return frame, t, v
-
 
 def _compact_card(title, value):
     """Single-row compact card: Title: Value — for dense KPI rows."""
@@ -508,7 +479,7 @@ class VisibilityPage(QWidget):
         kpi_row = QHBoxLayout()
         kpi_row.setSpacing(10)
         brand_label = self.app.get_target_brand() or "Target Brand"
-        self._score_card, self._score_title, self._score_val = _stat_card(
+        self._score_card = StatCard(
             f"{brand_label} Visibility Score", "—%", f"% of responses mentioning {brand_label}",
             info=(
                 f"(Responses mentioning {brand_label}) ÷ (ALL responses collected across "
@@ -516,12 +487,17 @@ class VisibilityPage(QWidget):
                 f"unlike the Home page's Brand Mention Rate tile, which only reflects your "
                 f"most recent Intelligence Analysis run's smaller sample."
             ),
+            expanding=True, spacing=2, margins=(14, 12, 14, 12), always_show_subtitle=False,
         )
-        self._total_card, _, self._total_val = _stat_card(
+        self._score_title = self._score_card.title
+        self._score_val = self._score_card.value
+        self._total_card = StatCard(
             "Responses Analyzed", "—", "across all collected runs",
             info="Total AI responses stored across every Visibility collection run, all providers combined.",
+            expanding=True, spacing=2, margins=(14, 12, 14, 12), always_show_subtitle=False,
         )
-        self._top_card, self._top_title, self._top_val = _stat_card(
+        self._total_val = self._total_card.value
+        self._top_card = StatCard(
             "Visibility Mention Rank", "—", "across all visibility collection responses",
             info=(
                 "Your target brand's position when ALL tracked active brands are ranked by "
@@ -529,11 +505,16 @@ class VisibilityPage(QWidget):
                 "brand count, not just brands that happen to have a mention — a brand with "
                 "zero mentions still counts toward the total, ranked at the bottom."
             ),
+            expanding=True, spacing=2, margins=(14, 12, 14, 12), always_show_subtitle=False,
         )
-        self._last_card, _, self._last_val = _stat_card(
+        self._top_title = self._top_card.title
+        self._top_val = self._top_card.value
+        self._last_card = StatCard(
             "Last Collection", "—", "most recent visibility run",
             info="Date and time of the most recently completed Visibility collection run.",
+            expanding=True, spacing=2, margins=(14, 12, 14, 12), always_show_subtitle=False,
         )
+        self._last_val = self._last_card.value
         self._last_val.setStyleSheet("QLabel#CardValue { font-size: 14px; font-weight: 600; }")
         for card in (self._score_card, self._total_card, self._top_card, self._last_card):
             kpi_row.addWidget(card)

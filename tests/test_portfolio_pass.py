@@ -22,7 +22,7 @@ class _FakeProvider:
     def ask(self, prompt):
         self.calls.append(prompt)
         text = self.canned[len(self.calls) - 1]
-        return SimpleNamespace(executive_summary=text)
+        return SimpleNamespace(executive_summary=text, is_error=False)
 
 
 class _FailingProvider:
@@ -37,6 +37,25 @@ class _FailingProvider:
     def ask(self, prompt):
         self.calls.append(prompt)
         raise RuntimeError(self.message)
+
+
+class _ErroringProvider:
+    """
+    Simulates the more common real-world failure shape: providers don't raise,
+    they catch their own exceptions and return is_error=True with the failure
+    text as executive_summary (see backend/ai/*_provider.py). Distinct from
+    _FailingProvider above, which exercises the raising path.
+    """
+    provider_name = "fake"
+    model = "fake-model"
+
+    def __init__(self, message="simulated rate limit error"):
+        self.message = message
+        self.calls: list[str] = []
+
+    def ask(self, prompt):
+        self.calls.append(prompt)
+        return SimpleNamespace(executive_summary=self.message, is_error=True)
 
 
 class _FakePM:
@@ -136,6 +155,38 @@ def test_opportunity_pass_failure_still_produces_a_parseable_card():
 def test_briefing_pass_survives_provider_failure():
     svc = _service()
     provider = _FailingProvider("connection timed out")
+    brand_stats = svc._count_brands(_collected())
+    result = svc._run_briefing_pass(provider, _collected(), brand_stats, "IN PORTFOLIO: Portables")
+    assert "connection timed out" in result
+    assert "fake" in result
+
+
+def test_portfolio_pass_survives_non_raising_provider_error():
+    """A provider that fails without raising (is_error=True) must degrade the
+    same way as one that raises — this is the actual shape every real
+    AIProvider subclass uses (see backend/ai/*_provider.py)."""
+    svc = _service()
+    provider = _ErroringProvider("rate limit exceeded")
+    result = svc._run_portfolio_pass(provider, _collected())
+    assert "rate limit exceeded" in result
+    assert "fake" in result
+
+
+def test_opportunity_pass_non_raising_error_still_produces_a_parseable_card():
+    svc = _service()
+    provider = _ErroringProvider("invalid API key")
+    result = svc._run_opportunity_pass(provider, _collected(), "IN PORTFOLIO: Portables")
+    assert "invalid API key" in result
+
+    parsed = IntelligenceService._parse_opportunities(result)
+    assert len(parsed) == 1
+    assert "failed" in parsed[0]["title"].lower()
+    assert "invalid API key" in parsed[0]["evidence"]
+
+
+def test_briefing_pass_survives_non_raising_provider_error():
+    svc = _service()
+    provider = _ErroringProvider("connection timed out")
     brand_stats = svc._count_brands(_collected())
     result = svc._run_briefing_pass(provider, _collected(), brand_stats, "IN PORTFOLIO: Portables")
     assert "connection timed out" in result

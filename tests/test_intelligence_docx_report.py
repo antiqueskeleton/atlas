@@ -95,6 +95,18 @@ def test_opportunity_status_labels_render_correctly(tmp_path):
     assert "Fix spec accuracy" in text
 
 
+def test_opportunity_section_labels_field_action_not_description(tmp_path):
+    """Regression: this field was labeled "Description" here but "Action" on
+    the Intelligence page's opportunity cards — same underlying data, two
+    different labels depending on where you looked."""
+    out = tmp_path / "labels.docx"
+    IntelligenceDocxReport(_RUN, _BRIEFING, [], _OPPORTUNITIES, "Firman").generate(str(out))
+    text = _all_paragraph_text(Document(str(out)))
+
+    assert "Action" in text
+    assert "Description" not in text
+
+
 def test_missing_briefing_text_skips_section_without_crashing(tmp_path):
     empty_briefing = ("", "", "", "", "", "")  # executive_briefing (index 4) blank
     out = tmp_path / "no_briefing.docx"

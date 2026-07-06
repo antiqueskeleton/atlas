@@ -231,11 +231,20 @@ class IntelligenceService:
         )
 
         collected: dict[str, list[tuple[str, str]]] = {}
+        error_count = 0
 
         for analyst in self._analysts:
             collected[analyst.name] = []
             for prompt in analyst.prompts:
                 response = provider.ask(prompt)
+                # A failed request's executive_summary is literal error text
+                # (e.g. "OpenAI request failed: Connection timeout") — without
+                # this check it gets silently persisted and synthesized as if
+                # it were real brand-positioning content. Same shared-contract
+                # pattern as the #80 regression, unpatched here until now.
+                if response.is_error:
+                    error_count += 1
+                    continue
                 text = response.executive_summary or ""
                 collected[analyst.name].append((prompt, text))
                 self.repository.save_result(
@@ -289,6 +298,7 @@ class IntelligenceService:
             "executive_briefing": briefing,
             "source": "live",
             "responses_used": n_responses,
+            "error_count": error_count,
         }
 
     # ── DB-backed synthesis ───────────────────────────────────────────────────
@@ -492,6 +502,11 @@ class IntelligenceService:
             # receive this string as portfolio_block and simply proceed without
             # portfolio grounding rather than crashing the whole run.
             return f"[Unavailable — {provider.provider_name} request failed: {exc}]"
+        if result.is_error:
+            # A provider can fail without raising (returns is_error=True with
+            # the failure message as executive_summary) — same fallback as the
+            # except branch above, just via the non-raising failure path.
+            return f"[Unavailable — {provider.provider_name} request failed: {result.executive_summary}]"
         return result.executive_summary or "Could not infer portfolio from available data."
 
     def _run_opportunity_pass(self, provider, collected: dict, portfolio_block: str) -> str:
@@ -508,18 +523,24 @@ class IntelligenceService:
             n_prompts=len(all_pairs),
             findings=findings,
         )
-        try:
-            result = provider.ask(prompt)
-        except Exception as exc:
+        def _failure_card(detail) -> str:
             # Pre-formatted to match _parse_opportunities()'s expected pattern so
             # the failure surfaces as one real, visible opportunity card instead
             # of silently producing zero opportunities with no explanation.
             return (
                 "OPPORTUNITY [1]: Opportunity generation failed\n"
-                f"EVIDENCE: {provider.provider_name} request failed: {exc}\n"
+                f"EVIDENCE: {provider.provider_name} request failed: {detail}\n"
                 "ACTION: Run Intelligence Analysis again\n"
                 "TACTICS: If this persists, check the API key and provider status in Settings"
             )
+        try:
+            result = provider.ask(prompt)
+        except Exception as exc:
+            return _failure_card(exc)
+        if result.is_error:
+            # A provider can fail without raising — same fallback card via the
+            # non-raising failure path.
+            return _failure_card(result.executive_summary)
         return result.executive_summary or ""
 
     def _run_briefing_pass(self, provider, collected: dict, brand_stats: dict,
@@ -582,14 +603,20 @@ class IntelligenceService:
             journey_block=block("Buying Journey"),
             web_block=self._build_web_block(),
         )
+        def _failure_briefing(detail) -> str:
+            return (
+                f"⚠ Executive briefing generation failed — {provider.provider_name} "
+                f"request failed: {detail}\n\nRun Intelligence Analysis again. If this "
+                "persists, check the API key and provider status in Settings."
+            )
         try:
             result = provider.ask(prompt)
         except Exception as exc:
-            return (
-                f"⚠ Executive briefing generation failed — {provider.provider_name} "
-                f"request failed: {exc}\n\nRun Intelligence Analysis again. If this "
-                "persists, check the API key and provider status in Settings."
-            )
+            return _failure_briefing(exc)
+        if result.is_error:
+            # A provider can fail without raising — same fallback text via the
+            # non-raising failure path.
+            return _failure_briefing(result.executive_summary)
         return result.executive_summary or ""
 
     def _extract_brand_quotes(self, collected: dict, target: str,

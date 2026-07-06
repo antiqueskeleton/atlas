@@ -313,7 +313,10 @@ class IntelligenceDocxReport:
             if evidence:
                 rows.append(("Evidence", evidence))
             if description:
-                rows.append(("Description", description))
+                # "Action" — matches the on-screen label (intelligence_page.py's
+                # opportunity cards) for this same field; previously said
+                # "Description" here, which didn't match the screen.
+                rows.append(("Action", description))
 
             if rows:
                 tbl = doc.add_table(rows=len(rows), cols=2)

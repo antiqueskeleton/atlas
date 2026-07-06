@@ -6,7 +6,7 @@ import sqlite3
 from backend.services.paths import get_db_path
 
 
-class CompShoppingRepository:
+class PriceComparisonRepository:
 
     def connect(self):
         conn = sqlite3.connect(get_db_path())

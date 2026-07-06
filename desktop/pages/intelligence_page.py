@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (
 )
 
 from backend.intelligence.intelligence_service import IntelligenceService
-from desktop.widgets.info_icon import info_icon
+from desktop.widgets.stat_card import StatCard
 
 
 class _RunWorker(QThread):
@@ -55,39 +55,6 @@ def _section_card(title: str):
     layout.addWidget(body)
     frame.setLayout(layout)
     return frame, body
-
-
-def _kpi(title, value="—", sub="", info=""):
-    frame = QFrame()
-    frame.setObjectName("StatCard")
-    frame.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-
-    layout = QVBoxLayout()
-    layout.setSpacing(2)
-
-    title_row = QHBoxLayout()
-    title_row.setContentsMargins(0, 0, 0, 0)
-    title_row.setSpacing(4)
-    title_row.addWidget(_lbl(title, "CardTitle"))
-    if info:
-        title_row.addWidget(info_icon(info))
-    title_row.addStretch()
-
-    layout.addLayout(title_row)
-    val_lbl = _lbl(value, "CardValue")
-    layout.addWidget(val_lbl)
-    if sub:
-        layout.addWidget(_lbl(sub, "CardSubtitle"))
-
-    frame.setLayout(layout)
-    return frame, val_lbl
-
-
-def _lbl(text, obj=""):
-    l = QLabel(text)
-    if obj:
-        l.setObjectName(obj)
-    return l
 
 
 class IntelligencePage(QWidget):
@@ -191,7 +158,7 @@ class IntelligencePage(QWidget):
         kpi_row.setContentsMargins(0, 0, 0, 0)
 
         brand = self.app.get_target_brand() or "Target Brand"
-        self._kpi_brand_card, self._kpi_brand_val = _kpi(
+        self._kpi_brand_card = StatCard(
             f"{brand} Mention Rate", "—%", "in latest intelligence analysis",
             info=(
                 f"% of responses in your MOST RECENT Intelligence Analysis run — the "
@@ -200,15 +167,19 @@ class IntelligencePage(QWidget):
                 f"from Visibility Score on the Visibility page, which uses your entire "
                 f"collection history."
             ),
+            expanding=True, spacing=2, always_show_subtitle=False,
         )
-        self._kpi_top_card, self._kpi_top_val = _kpi(
+        self._kpi_brand_val = self._kpi_brand_card.value
+        self._kpi_top_card = StatCard(
             "Intelligence Mention Rank", "—", "in latest intelligence analysis",
             info=(
                 f"{brand}'s rank among all tracked brands by mention count, computed from "
                 f"the same latest-run sample as Mention Rate above — not the full database."
             ),
+            expanding=True, spacing=2, always_show_subtitle=False,
         )
-        self._kpi_prompts_card, self._kpi_prompts_val = _kpi(
+        self._kpi_top_val = self._kpi_top_card.value
+        self._kpi_prompts_card = StatCard(
             "Responses Analyzed", "—", "total stored in database",
             info=(
                 "Total responses in your FULL Visibility database — this is NOT the number "
@@ -216,7 +187,9 @@ class IntelligencePage(QWidget):
                 "capped, classified sample — see Mention Rate). This tile just shows how "
                 "large your overall data reservoir is."
             ),
+            expanding=True, spacing=2, always_show_subtitle=False,
         )
+        self._kpi_prompts_val = self._kpi_prompts_card.value
 
         kpi_row.addWidget(self._kpi_brand_card)
         kpi_row.addWidget(self._kpi_top_card)
@@ -317,8 +290,10 @@ class IntelligencePage(QWidget):
         source = result.get("source", "live")
         used = result.get("responses_used", 0)
         mode_str = f"DB ({used} responses)" if source == "db" else f"Live ({used} prompts)"
+        errors = result.get("error_count", 0)
+        error_str = f" · {errors} prompt(s) failed and were excluded" if errors else ""
         self.status_lbl.setText(
-            f"Complete — {result['provider']} · {dur:.0f}s · {mode_str} + 3 synthesis passes"
+            f"Complete — {result['provider']} · {dur:.0f}s · {mode_str} + 3 synthesis passes{error_str}"
         )
         self._update_mode_label()
         self._load_latest()

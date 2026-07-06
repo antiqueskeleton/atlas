@@ -13,14 +13,14 @@ Data hierarchy per brand:
 """
 from __future__ import annotations
 
-from backend.comp_shopping.comp_shopping_repository import CompShoppingRepository
-from backend.comp_shopping import google_shopping_scraper as scraper
+from backend.price_comparison.price_comparison_repository import PriceComparisonRepository
+from backend.price_comparison import google_shopping_scraper as scraper
 
 
-class CompShoppingService:
+class PriceComparisonService:
 
     def __init__(self):
-        self.repo = CompShoppingRepository()
+        self.repo = PriceComparisonRepository()
         self.repo.initialize()
 
     # ── Public ─────────────────────────────────────────────────────────────────

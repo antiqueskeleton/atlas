@@ -28,16 +28,22 @@ class _FakeProvider:
             return SimpleNamespace(executive_summary=(
                 "OPPORTUNITY [1]: Test opportunity from live path\n"
                 "EVIDENCE: 1 of 14 responses\nACTION: Test action\nTACTICS: Test tactic"
-            ))
+            ), is_error=False)
         if "VISIBILITY SNAPSHOT" in prompt and "Produce a structured" in prompt:
-            return SimpleNamespace(executive_summary="VISIBILITY SNAPSHOT\nTest briefing from live path.")
+            return SimpleNamespace(
+                executive_summary="VISIBILITY SNAPSHOT\nTest briefing from live path.",
+                is_error=False,
+            )
         if prompt.strip().startswith("You are analyzing AI-generated research responses"):
             return SimpleNamespace(executive_summary=(
                 "IN PORTFOLIO: Portable Generators\n"
                 "NOT IN PORTFOLIO: Home Standby\n"
                 "UNCERTAIN: none"
-            ))
-        return SimpleNamespace(executive_summary=f"Fake analyst answer #{n} mentioning Firman and Honda.")
+            ), is_error=False)
+        return SimpleNamespace(
+            executive_summary=f"Fake analyst answer #{n} mentioning Firman and Honda.",
+            is_error=False,
+        )
 
 
 class _FakePM:
@@ -84,6 +90,46 @@ def test_run_live_threads_portfolio_block_into_opportunity_and_briefing():
         c for c in provider.calls if "VISIBILITY SNAPSHOT" in c and "Produce a structured" in c
     )
     assert "NOT IN PORTFOLIO" in brief_prompt
+
+
+def test_run_live_excludes_failed_analyst_prompts_from_collected_and_counts_them(tmp_path):
+    """
+    Regression test (#intelligence is_error bug): a failed analyst prompt's
+    executive_summary is literal error text ("OpenAI request failed: ...").
+    Before this fix it was silently appended to `collected` and persisted as
+    if it were real brand-positioning content, corrupting brand counts and
+    the executive briefing. It must instead be skipped and counted.
+    """
+    class _OneFailureProvider(_FakeProvider):
+        def ask(self, prompt):
+            # Fail exactly the first Product Intelligence analyst prompt;
+            # let synthesis-pass prompts and all others succeed normally.
+            if len(self.calls) == 0 and not any(
+                marker in prompt for marker in (
+                    "OPPORTUNITY [N]", "Identify the top 5",
+                    "VISIBILITY SNAPSHOT", "You are analyzing AI-generated",
+                )
+            ):
+                self.calls.append(prompt)
+                return SimpleNamespace(
+                    executive_summary="OpenAI request failed (gpt-4.1-mini): Connection timeout",
+                    is_error=True,
+                )
+            return super().ask(prompt)
+
+    provider = _OneFailureProvider()
+    svc = IntelligenceService(_FakePM(provider), target_brand="Firman")
+    svc.repository = IntelligenceRepository(db_path=str(tmp_path / "test_intelligence.db"))
+
+    result = svc._run_live(provider_name=None)
+
+    assert result["error_count"] == 1
+    assert result["responses_used"] == 13  # 14 analyst prompts minus the 1 failure
+    all_text = " ".join(
+        text for pairs in result["collected"].values() for _, text in pairs
+    )
+    assert "Connection timeout" not in all_text
+    assert "request failed" not in all_text
 
 
 def test_run_live_persists_parsed_opportunity_to_a_fresh_db(tmp_path):

@@ -36,16 +36,16 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from backend.comp_shopping.comp_shopping_service import CompShoppingService
+from backend.price_comparison.price_comparison_service import PriceComparisonService
 
 
 # ── Worker ────────────────────────────────────────────────────────────────────
 
-class _CompWorker(QThread):
+class _PriceComparisonWorker(QThread):
     progress = Signal(str, int, int)   # brand, done, total
     finished = Signal(dict)            # full results dict or {"error": ...}
 
-    def __init__(self, service: CompShoppingService,
+    def __init__(self, service: PriceComparisonService,
                  primary_brand: str, primary_model: str,
                  comp_brands: list[str], keywords: str,
                  retailer_urls: list[str] | None = None):
@@ -74,14 +74,14 @@ class _CompWorker(QThread):
 
 # ── Page ──────────────────────────────────────────────────────────────────────
 
-class CompShoppingPage(QWidget):
+class PriceComparisonPage(QWidget):
 
     _CELL_NA = "—"   # displayed for any unconfirmed / missing value
 
     def __init__(self, app):
         super().__init__()
         self.app     = app
-        self.service = CompShoppingService()
+        self.service = PriceComparisonService()
         self._worker = None
         self._results: dict = {}
         self._brand_checks: dict[str, QCheckBox] = {}
@@ -421,7 +421,7 @@ class CompShoppingPage(QWidget):
         self._progress_lbl.show()
         self._progress_lbl.setText("Starting…")
 
-        self._worker = _CompWorker(
+        self._worker = _PriceComparisonWorker(
             self.service, primary_brand, primary_model,
             comp_brands, keywords, retailer_urls=retailer_urls,
         )
@@ -644,7 +644,7 @@ class CompShoppingPage(QWidget):
         from PySide6.QtWidgets import QFileDialog
         default = os.path.join(
             os.path.expanduser("~"), "Downloads",
-            f"Atlas_CompShop_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
+            f"Atlas_PriceComparison_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
         )
         path, _ = QFileDialog.getSaveFileName(
             self, "Save Excel", default,

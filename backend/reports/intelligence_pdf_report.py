@@ -38,6 +38,18 @@ MARGIN    = 0.65 * inch
 CONTENT_W = PAGE_W - 2 * MARGIN
 
 
+def _pdf_safe(text: str) -> str:
+    """
+    reportlab's built-in Helvetica only supports WinAnsiEncoding (~cp1252) —
+    emoji and other characters outside it don't raise an error, they render
+    as a broken glyph box. AI response text routinely contains emoji, so
+    strip anything Helvetica can't represent before it reaches a Paragraph.
+    """
+    if not text:
+        return text
+    return text.encode("cp1252", errors="ignore").decode("cp1252")
+
+
 class IntelligencePDFReport:
     """
     Generate a professional PDF from an Intelligence Engine analysis run.
@@ -178,7 +190,7 @@ class IntelligencePDFReport:
             para = para.strip()
             if not para:
                 continue
-            story.append(Paragraph(para, s['Body']))
+            story.append(Paragraph(_pdf_safe(para), s['Body']))
             story.append(Spacer(1, 0.08 * inch))
 
         story.append(PageBreak())
@@ -216,9 +228,9 @@ class IntelligencePDFReport:
 
             for prompt, response in pairs:
                 block = [
-                    Paragraph(prompt, self._styles['QPrompt']),
+                    Paragraph(_pdf_safe(prompt), self._styles['QPrompt']),
                     Spacer(1, 0.04 * inch),
-                    Paragraph(response or "(no response)", self._styles['QResponse']),
+                    Paragraph(_pdf_safe(response) or "(no response)", self._styles['QResponse']),
                     Spacer(1, 0.18 * inch),
                 ]
                 story.append(KeepTogether(block[:2]))
@@ -262,7 +274,7 @@ class IntelligencePDFReport:
             status_label = (status or "new").replace("_", " ").title()
 
             header_data = [[
-                Paragraph(f"{idx}.  {title}", s['OppTitle']),
+                Paragraph(_pdf_safe(f"{idx}.  {title}"), s['OppTitle']),
                 Paragraph(status_label, s['OppStatus']),
             ]]
             header_tbl = Table(header_data,
@@ -279,9 +291,14 @@ class IntelligencePDFReport:
 
             body_rows = []
             if evidence:
-                body_rows.append(["Evidence:", evidence])
+                body_rows.append(["Evidence:", _pdf_safe(evidence)])
             if description:
-                body_rows.append(["Description:", description])
+                # "Action:" — matches the on-screen label (intelligence_page.py's
+                # opportunity cards) for this same field. It previously said
+                # "Description:" here, which didn't match the screen — the
+                # underlying text is the LLM's ACTION + TACTICS output, so
+                # "Action" is also the more accurate label of the two.
+                body_rows.append(["Action:", _pdf_safe(description)])
 
             if body_rows:
                 body_tbl = Table(body_rows,

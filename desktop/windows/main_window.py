@@ -30,7 +30,7 @@ from app.atlas_application import AtlasApplication
 from desktop.pages.home_page import HomePage
 from desktop.pages.investigation_page import InvestigationPage
 from desktop.pages.trends_page import TrendsPage
-from desktop.pages.comp_shopping_page import CompShoppingPage
+from desktop.pages.price_comparison_page import PriceComparisonPage
 from desktop.pages.knowledge_page import KnowledgePage
 from desktop.pages.intelligence_page import IntelligencePage
 from desktop.pages.settings_page import SettingsPage
@@ -292,8 +292,8 @@ class AtlasMainWindow(QMainWindow):
         self.pages.addTab(self.visibility_page,     "Visibility")
         self.pages.addTab(self.intelligence_page,   "Intelligence")
         self.pages.addTab(TrendsPage(self.app),     "Trends")
-        self.comp_shopping_page = CompShoppingPage(self.app)
-        self.pages.addTab(self.comp_shopping_page,  "Price Comparison")
+        self.price_comparison_page = PriceComparisonPage(self.app)
+        self.pages.addTab(self.price_comparison_page,  "Price Comparison")
         self.pages.addTab(KnowledgePage(self.app),  "Knowledge")
         self.pages.addTab(SettingsPage(self.app),   "Settings")
 
@@ -310,7 +310,7 @@ class AtlasMainWindow(QMainWindow):
         elif row == 2:   # Visibility
             self.visibility_page.refresh_provider_status()
         elif row == 5:   # Price Comparison
-            self.comp_shopping_page.refresh()
+            self.price_comparison_page.refresh()
 
     # ── Update checker ────────────────────────────────────────────────────────
 
