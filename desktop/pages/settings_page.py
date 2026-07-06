@@ -130,6 +130,7 @@ class SettingsPage(QWidget):
         self._volume_cred_inputs: dict[str, QLineEdit] = {}
         self._volume_site_inputs: dict[str, QLineEdit] = {}
         self._volume_test_workers: list = []
+        self._platform_cred_inputs: dict[tuple[str, str], QLineEdit] = {}
         self._build_ui()
 
     def _build_ui(self):
@@ -157,6 +158,7 @@ class SettingsPage(QWidget):
         root.addWidget(self._keys_card())
         root.addWidget(self._coming_soon_card())
         root.addWidget(self._volume_providers_card())
+        root.addWidget(self._platform_research_card())
         root.addWidget(self._health_card())
         root.addStretch()
 
@@ -456,6 +458,80 @@ class SettingsPage(QWidget):
         self.volume_status.setWordWrap(True)
         lay.addWidget(self.volume_status)
 
+        return card
+
+    # ── Platform research card (Targeted Review, #25) ─────────────────────────
+
+    # platform_key -> (display label, setup URL, note). Credential FIELDS come
+    # from each provider's own credential_fields, so a future platform with
+    # different fields renders correctly without touching this page.
+    _RESEARCH_PLATFORMS = {
+        "youtube": ("YouTube Data API",
+                    "console.cloud.google.com/apis/library/youtube.googleapis.com",
+                    "Free tier: 10,000 quota units/day (~50 brand collections)."),
+        "reddit":  ("Reddit API",
+                    "www.reddit.com/prefs/apps",
+                    "Create a 'script' type app — no Reddit account password "
+                    "is stored, only the app's ID and secret."),
+        "editorial": ("Google Custom Search",
+                      "programmablesearchengine.google.com/controlpanel/create",
+                      "Create an engine set to 'search the entire web'. The API "
+                      "key can be the SAME Google Cloud key as YouTube if the "
+                      "Custom Search API is enabled on that project. Free tier: "
+                      "100 queries/day (~2 collections at 6 brands)."),
+    }
+
+    def _platform_research_card(self) -> QFrame:
+        from backend.targeted_review.targeted_review_service import PLATFORMS
+
+        card, lay = self._card("Platform Research (Targeted Review)")
+        lay.addWidget(self._note(
+            "Credentials for the Targeted Review page's real platform data — "
+            "YouTube content volume, Reddit conversation share, and editorial-"
+            "site coverage per brand. Retail listings need no credential (they "
+            "work from product URLs saved on the Targeted Review page)."
+        ))
+        lay.addSpacing(10)
+
+        for key, (label, setup_url, note) in self._RESEARCH_PLATFORMS.items():
+            row = QHBoxLayout()
+            row.setSpacing(8)
+
+            name_col = QVBoxLayout()
+            name_col.setSpacing(2)
+            name_lbl = QLabel(label)
+            name_lbl.setStyleSheet("font-size: 13px; font-weight: bold; color: #111827;")
+            link_lbl = QLabel(
+                f'<a href="https://{setup_url}" style="color:#2563EB;'
+                f'text-decoration:none;font-size:11px;">Set up →</a>'
+            )
+            link_lbl.setOpenExternalLinks(True)
+            name_col.addWidget(name_lbl)
+            name_col.addWidget(link_lbl)
+            name_widget = QWidget()
+            name_widget.setFixedWidth(150)
+            name_widget.setLayout(name_col)
+            row.addWidget(name_widget)
+
+            for field_key, field_label in PLATFORMS[key].credential_fields.items():
+                inp = QLineEdit()
+                inp.setPlaceholderText(field_label)
+                inp.setEchoMode(QLineEdit.Password)
+                inp.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+                saved = self.app.config_service.get_platform_credential(key, field_key)
+                if saved:
+                    inp.setText(saved)
+                inp.setToolTip(f"{label} — {field_label}. {note}")
+                self._platform_cred_inputs[(key, field_key)] = inp
+                row.addWidget(inp)
+
+            lay.addLayout(row)
+            lay.addWidget(self._hsep())
+
+        lay.addSpacing(4)
+        lay.addWidget(self._note(
+            "Saved with the Save All button below, alongside AI provider keys."
+        ))
         return card
 
     # ── Health card ───────────────────────────────────────────────────────────
@@ -768,6 +844,10 @@ class SettingsPage(QWidget):
 
             self.app.volume_provider_manager.set_provider_site_url(key, site_url)
             self.app.config_service.set_volume_site_url(key, site_url)
+
+        for (platform, field), inp in self._platform_cred_inputs.items():
+            self.app.config_service.set_platform_credential(
+                platform, field, inp.text().strip())
 
         path = self.app.config_service.get_user_config_path()
         self.status.setText(f"Saved — {path}")

@@ -66,6 +66,18 @@ class ConfigService:
         self.settings["volume_site_urls"][provider_name] = site_url
         self._save()
 
+    def get_platform_credential(self, platform: str, field: str) -> str:
+        """Targeted Review platform credentials (#25) — two-level (platform →
+        field) because a platform can need multiple fields (Reddit: client
+        id + secret), unlike AI/volume providers' single api_key/credential."""
+        return (self.settings.get("platform_credentials", {})
+                .get(platform, {}).get(field, ""))
+
+    def set_platform_credential(self, platform: str, field: str, value: str):
+        creds = self.settings.setdefault("platform_credentials", {})
+        creds.setdefault(platform, {})[field] = value
+        self._save()
+
     def get_user_config_path(self) -> Path:
         return self._user_config_path
 
@@ -96,7 +108,8 @@ class ConfigService:
 
     def _save(self):
         # Only write user-owned keys to user config (never back to project config)
-        user_keys = {"target_brand", "api_keys", "models", "volume_credentials", "volume_site_urls"}
+        user_keys = {"target_brand", "api_keys", "models", "volume_credentials",
+                     "volume_site_urls", "platform_credentials"}
         user_data = {k: v for k, v in self.settings.items() if k in user_keys}
         with self._user_config_path.open("w", encoding="utf-8") as f:
             json.dump(user_data, f, indent=2)

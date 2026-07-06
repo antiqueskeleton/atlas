@@ -34,6 +34,7 @@ from desktop.pages.price_comparison_page import PriceComparisonPage
 from desktop.pages.knowledge_page import KnowledgePage
 from desktop.pages.intelligence_page import IntelligencePage
 from desktop.pages.settings_page import SettingsPage
+from desktop.pages.targeted_review_page import TargetedReviewPage
 from desktop.pages.visibility_page import VisibilityPage
 from desktop.theme.colors import NAVY, SLATE, STEEL, SILVER, LIGHT, PRIMARY, TEXT_MUTED
 from desktop.updater import UpdateChecker, APP_VERSION
@@ -45,6 +46,7 @@ _NAV_ITEMS = [
     ("👁",  "Visibility",  "nav_visibility.png"),
     ("💡", "Intelligence", "nav_intelligence.png"),
     ("📈", "Trends",       "nav_trends.png"),
+    ("🎯", "Targeted Review", "nav_target.png"),
     ("🛒", "Price Comparison", "nav_comp.png"),
     ("🧠", "Knowledge",    "nav_knowledge.png"),
     ("⚙",  "Settings",    "nav_settings.png"),
@@ -81,10 +83,11 @@ class AtlasMainWindow(QMainWindow):
         import_action = tools_menu.addAction("Import Responses")
         import_action.triggered.connect(self._import_responses)
         knowledge_action = tools_menu.addAction("Manage Knowledge")
-        # BUG FIX: was setCurrentRow(5), which is Price Comparison — Knowledge is
-        # row 6 in _NAV_ITEMS. "Manage Knowledge" previously opened the
-        # wrong page. Confirmed 2026-07-02.
-        knowledge_action.triggered.connect(lambda: self.nav.setCurrentRow(6))
+        # Knowledge's row in _NAV_ITEMS — this hardcoded index has broken
+        # once before when the nav list changed (was 5/Price Comparison,
+        # fixed 2026-07-02; shifted again 2026-07-06 when Targeted Review
+        # was inserted at row 5). Keep in sync with _NAV_ITEMS.
+        knowledge_action.triggered.connect(lambda: self.nav.setCurrentRow(7))
         logs_action = tools_menu.addAction("Open Logs Folder")
         logs_action.setToolTip(
             "Diagnostic logs from Visibility Collection runs (#75) — useful if a run "
@@ -292,6 +295,7 @@ class AtlasMainWindow(QMainWindow):
         self.pages.addTab(self.visibility_page,     "Visibility")
         self.pages.addTab(self.intelligence_page,   "Intelligence")
         self.pages.addTab(TrendsPage(self.app),     "Trends")
+        self.pages.addTab(TargetedReviewPage(self.app), "Targeted Review")
         self.price_comparison_page = PriceComparisonPage(self.app)
         self.pages.addTab(self.price_comparison_page,  "Price Comparison")
         self.pages.addTab(KnowledgePage(self.app),  "Knowledge")
@@ -309,8 +313,8 @@ class AtlasMainWindow(QMainWindow):
             self.home_page.refresh()
         elif row == 2:   # Visibility
             self.visibility_page.refresh_provider_status()
-        elif row == 5:   # Price Comparison
-            self.price_comparison_page.refresh()
+        elif row == 6:   # Price Comparison (shifted from 5 when Targeted
+            self.price_comparison_page.refresh()  # Review was inserted at 5)
 
     # ── Update checker ────────────────────────────────────────────────────────
 
