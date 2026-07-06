@@ -41,6 +41,8 @@ _PROVIDER_COLORS = {
     "mistral":    "#FF7000",
     "DeepSeek":   "#4D6BFE",
     "deepseek":   "#4D6BFE",
+    "Cohere":     "#39594D",
+    "cohere":     "#39594D",
     "Mock":       "#6B7280",
     "mock":       "#6B7280",
 }

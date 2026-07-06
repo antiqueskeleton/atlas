@@ -9,6 +9,7 @@ import matplotlib
 matplotlib.use('Agg')  # non-interactive backend — safe alongside Qt
 import matplotlib.pyplot as plt
 
+from backend.visibility.brand_matcher import resolve_target_brand
 from reportlab.lib.pagesizes import LETTER
 from reportlab.lib.units import inch
 from reportlab.lib.colors import HexColor, white
@@ -48,7 +49,10 @@ class VisibilityPDFReport:
         self.analytics    = analytics
         self.runs         = runs
         self.stats        = stats
-        self.target_brand = target_brand or analytics.get("target_brand", "Target Brand")
+        self.target_brand = resolve_target_brand(
+            target_brand or analytics.get("target_brand", "Target Brand"),
+            analytics.get("brand_counts", {}),
+        )
         self.generated_at = datetime.now()
         self._styles      = self._build_styles()
 

@@ -7,6 +7,7 @@ from datetime import datetime
 
 from backend.intelligence.analysts import BuyingJourneyAnalyst, PersonaAnalyst, ProductAnalyst
 from backend.intelligence.intelligence_repository import IntelligenceRepository
+from backend.visibility.brand_matcher import resolve_target_brand
 from backend.visibility.negation import detect_negative_brands
 from backend.visibility.visibility_repository import VisibilityRepository
 
@@ -550,7 +551,7 @@ class IntelligenceService:
             # Include full responses but cap at 600 chars each to stay within token budget
             return "\n\n".join(f"Q: {p}\nA: {r[:600]}" for p, r in pairs) or "No data."
 
-        target = self.target_brand or "N/A"
+        target = resolve_target_brand(self.target_brand, brand_stats.get("known_brands", [])) or "N/A"
         counts = brand_stats.get("counts", {})
         negative_counts = brand_stats.get("negative_counts", {})
         total  = max(brand_stats.get("total_responses", 1), 1)
@@ -727,6 +728,7 @@ class IntelligenceService:
             "counts": dict(counts),
             "negative_counts": dict(negative_counts),
             "total_responses": total,
+            "known_brands": list(brand_terms.keys()),
         }
 
     def _load_brands(self) -> dict[str, list[str]]:

@@ -1,5 +1,6 @@
 from collections import defaultdict
 
+from backend.visibility.brand_matcher import resolve_target_brand
 from backend.visibility.visibility_analytics import VisibilityAnalytics
 from backend.visibility.visibility_repository import VisibilityRepository
 
@@ -26,6 +27,18 @@ class TrendsService:
         # this, since page construction order isn't guaranteed.
         self.repository.backfill_cue_zone_cache()
         self.analytics = VisibilityAnalytics(target_brand=target_brand)
+
+    def _resolved_target(self) -> str:
+        """
+        self.target_brand is whatever casing the user typed into Settings —
+        resolve it to the canonical casing used as dict/list keys throughout
+        this file (self.analytics.brands), same fix as VisibilityAnalytics.
+        summarize_responses(). Without this, "FIRMAN" or "firman" wouldn't
+        match the "Firman" entries already in `selected`/`ranked` below, so
+        the "always include target brand" logic would append a second,
+        all-zero, wrong-cased ghost entry instead of finding the real one.
+        """
+        return resolve_target_brand(self.target_brand, self.analytics.brands)
 
     # ── Public API ─────────────────────────────────────────────────────────────
 
@@ -99,8 +112,9 @@ class TrendsService:
 
         ranked = sorted(totals, key=lambda b: -totals[b])
         selected = ranked[:top_n]
-        if self.target_brand and self.target_brand not in selected:
-            selected.append(self.target_brand)
+        target = self._resolved_target()
+        if target and target not in selected:
+            selected.append(target)
 
         return {
             brand: [s["brand_rates"].get(brand, 0) for s in summaries]
@@ -157,8 +171,9 @@ class TrendsService:
                 counts[brand] += 1
         avgs = {b: round(totals[b] / counts[b], 1) for b in totals}
         ranked = sorted(avgs, key=lambda b: -avgs[b])[:top_n]
-        if self.target_brand and self.target_brand not in ranked:
-            ranked.append(self.target_brand)
+        target = self._resolved_target()
+        if target and target not in ranked:
+            ranked.append(target)
         return {b: avgs.get(b, 0.0) for b in ranked}
 
     def detect_visibility_drops(self, summaries: list[dict]) -> list[dict]:
@@ -206,8 +221,9 @@ class TrendsService:
                 totals[brand] += share
 
         ranked = sorted(totals, key=lambda b: -totals[b])[:top_n]
-        if self.target_brand and self.target_brand not in ranked:
-            ranked.append(self.target_brand)
+        target = self._resolved_target()
+        if target and target not in ranked:
+            ranked.append(target)
 
         return {
             brand: [s["first_mention_share"].get(brand, 0) for s in summaries]

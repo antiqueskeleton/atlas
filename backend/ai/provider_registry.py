@@ -6,6 +6,7 @@ from backend.ai.perplexity_provider import PerplexityProvider
 from backend.ai.grok_provider import GrokProvider
 from backend.ai.mistral_provider import MistralProvider
 from backend.ai.deepseek_provider import DeepSeekProvider
+from backend.ai.cohere_provider import CohereProvider
 
 
 class ProviderRegistry:
@@ -19,6 +20,7 @@ class ProviderRegistry:
             "grok": GrokProvider,
             "mistral": MistralProvider,
             "deepseek": DeepSeekProvider,
+            "cohere": CohereProvider,
         }
 
     def create_provider(self, provider_key):

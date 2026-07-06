@@ -5,6 +5,7 @@ from PySide6.QtWidgets import QHBoxLayout, QLabel, QSizePolicy, QVBoxLayout, QWi
 
 from backend.intelligence.intelligence_service import IntelligenceService
 from backend.knowledge.knowledge_repository import KnowledgeRepository
+from backend.visibility.brand_matcher import resolve_target_brand
 from backend.visibility.visibility_repository import VisibilityRepository
 from desktop.widgets.activity_feed import ActivityFeed
 from desktop.widgets.stat_card import StatCard
@@ -166,7 +167,8 @@ class HomePage(QWidget):
                 for b, terms in brand_terms.items():
                     if any(t in lower for t in terms):
                         counts[b] += 1
-            rate = round(counts.get(target, 0) / max(total, 1) * 100)
+            resolved_target = resolve_target_brand(target, brand_terms.keys())
+            rate = round(counts.get(resolved_target, 0) / max(total, 1) * 100)
             self._mention_card.set_value(f"{rate}%")
             self._mention_card.set_subtitle(f"intelligence analysis · {total} responses")
         else:

@@ -31,6 +31,7 @@ _PROVIDERS = {
     "grok":       ("Grok (xAI)",    "xai-...",    "grok-3",               "grok-3 / grok-3-mini",                        "console.x.ai"),
     "mistral":    ("Mistral",       "...",        "mistral-large-latest", "mistral-large-latest / mistral-small-latest", "console.mistral.ai"),
     "deepseek":   ("DeepSeek",      "sk-...",     "deepseek-chat",        "deepseek-chat / deepseek-reasoner",           "platform.deepseek.com"),
+    "cohere":     ("Cohere",        "...",        "command-r-plus",       "command-r-plus / command-r / command-a-03-2025", "dashboard.cohere.com/api-keys"),
 }
 
 # Providers Atlas intends to add, but deliberately does NOT support yet (#62,

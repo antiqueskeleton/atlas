@@ -19,6 +19,26 @@ database before this replaced it.
 import ahocorasick
 
 
+def resolve_target_brand(target_brand: str, known_brands) -> str:
+    """
+    Case-insensitively resolve a free-typed target-brand string (Settings'
+    target-brand field is a plain QLineEdit with no validation against the
+    Knowledge brand list) to whatever casing that brand actually has in
+    known_brands. Every KPI/analytics lookup keys a dict by the brand's
+    canonical casing (e.g. "Firman") and does an exact-match `.get(target,
+    0)` against it — so typing "FIRMAN" or "firman" in Settings previously
+    made every one of those lookups silently miss and report 0, even though
+    brand-mention detection in response text is itself case-insensitive.
+    """
+    if not target_brand:
+        return target_brand
+    lowered = target_brand.lower()
+    for brand in known_brands:
+        if brand.lower() == lowered:
+            return brand
+    return target_brand
+
+
 class BrandTermMatcher:
     def __init__(self, flat_brand_terms: list[tuple[str, str]]):
         self.flat_brand_terms = flat_brand_terms

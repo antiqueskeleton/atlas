@@ -6,3 +6,4 @@ from backend.ai.ai_service import AIService
 from backend.ai.provider_registry import ProviderRegistry
 from backend.ai.ai_reasoning_parser import AIReasoningParser
 from backend.ai.deepseek_provider import DeepSeekProvider
+from backend.ai.cohere_provider import CohereProvider

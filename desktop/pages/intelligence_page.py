@@ -1,4 +1,5 @@
 from PySide6.QtCore import Qt, QThread, Signal
+from PySide6.QtGui import QTextCursor, QTextFormat
 from PySide6.QtWidgets import (
     QFileDialog,
     QFrame,
@@ -18,6 +19,7 @@ from PySide6.QtWidgets import (
 from backend.intelligence.intelligence_service import IntelligenceService
 from backend.intelligence.opportunity_ranking import rank_opportunities
 from backend.reports.briefing_sections import split_briefing_sections
+from backend.visibility.brand_matcher import resolve_target_brand
 from desktop.widgets.stat_card import StatCard
 
 
@@ -51,12 +53,48 @@ def _section_card(title: str):
 
     body = QTextEdit()
     body.setReadOnly(True)
+    body.setFrameShape(QFrame.NoFrame)
+    body.document().setDocumentMargin(10)
     body.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
     layout.addWidget(lbl)
     layout.addWidget(body)
     frame.setLayout(layout)
     return frame, body
+
+
+def _boost_markdown_spacing(text_edit: QTextEdit):
+    """
+    Qt's Markdown-to-richtext conversion (QTextEdit.setMarkdown()) gives
+    every heading and thematic-break ("---") block 0pt top/bottom margin —
+    so a heading sits flush against the paragraph right before it and the
+    whole document reads as one dense, run-together block, no matter how
+    much whitespace is in the source markdown. Call this right after
+    setMarkdown() to widen those margins so headings, dividers, and list
+    items all get visible breathing room.
+    """
+    doc = text_edit.document()
+    block = doc.begin()
+    while block.isValid():
+        bf = block.blockFormat()
+        level = bf.headingLevel()
+        is_rule = bf.hasProperty(QTextFormat.BlockTrailingHorizontalRulerWidth)
+        changed = False
+        if level > 0:
+            bf.setTopMargin(22 if level == 1 else 16 if level <= 3 else 12)
+            bf.setBottomMargin(8)
+            changed = True
+        elif is_rule:
+            bf.setTopMargin(14)
+            bf.setBottomMargin(14)
+            changed = True
+        elif bf.bottomMargin():
+            # Regular paragraph / list item — widen Qt's default 6pt margin.
+            bf.setBottomMargin(10)
+            changed = True
+        if changed:
+            QTextCursor(block).setBlockFormat(bf)
+        block = block.next()
 
 
 class IntelligencePage(QWidget):
@@ -608,15 +646,19 @@ class IntelligencePage(QWidget):
         self._product_body.setMarkdown(
             render(by_analyst.get("Product Intelligence", []))
         )
+        _boost_markdown_spacing(self._product_body)
         self._persona_body.setMarkdown(
             render(by_analyst.get("Consumer Personas", []))
         )
+        _boost_markdown_spacing(self._persona_body)
         self._journey_body.setMarkdown(
             render(by_analyst.get("Buying Journey", []))
         )
+        _boost_markdown_spacing(self._journey_body)
 
         briefing_text = (briefing[4] if briefing else "") or "No executive briefing available."
         self._brief_body.setMarkdown(self._format_briefing(briefing_text))
+        _boost_markdown_spacing(self._brief_body)
 
         opp_rows = self.service.repository.get_all_opportunities()
         self._render_opportunities(opp_rows)
@@ -625,7 +667,9 @@ class IntelligencePage(QWidget):
         brand_stats = self._compute_brand_stats(results)
         counts = brand_stats.get("counts", {})
         total = brand_stats.get("total", 1)
-        target = self.app.get_target_brand()
+        target = resolve_target_brand(
+            self.app.get_target_brand(), brand_stats.get("known_brands", [])
+        )
 
         target_count = counts.get(target, 0) if target else 0
         target_rate = round(target_count / total * 100) if total and target else 0
@@ -653,12 +697,15 @@ class IntelligencePage(QWidget):
         Reuses the same setMarkdown() rendering already proven for the
         Product/Personas/Journey tabs: turn each detected header into a
         real markdown heading so it renders bigger/bolder, purely for
-        on-screen display — the underlying data/text is unchanged.
+        on-screen display — the underlying data/text is unchanged. A "---"
+        between sections (same divider the Q&A panels use between pairs)
+        gives each section a visible break instead of running straight into
+        the next header.
         """
         sections = split_briefing_sections(text)
         if not sections:
             return text
-        return "\n\n".join(
+        return "\n\n---\n\n".join(
             f"#### {header}\n\n{body}" if header else body
             for header, body in sections
         )
@@ -773,4 +820,5 @@ class IntelligencePage(QWidget):
             # #48: total TRACKED brands, not just ones with ≥1 mention — same
             # fix as visibility_page.py's Mention Rank denominator.
             "total_tracked_brands": len(brand_terms),
+            "known_brands": list(brand_terms.keys()),
         }

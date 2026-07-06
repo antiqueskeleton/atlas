@@ -18,6 +18,7 @@ _PROVIDER_INFO = {
     "grok":       ("Grok (xAI)",    "grok-3"),
     "mistral":    ("Mistral",       "mistral-large-latest"),
     "deepseek":   ("DeepSeek",      "deepseek-chat"),
+    "cohere":     ("Cohere",        "command-r-plus"),
 }
 
 _BRAND_FIELDS = [

@@ -56,6 +56,25 @@ def test_visibility_score_is_percentage_of_responses_mentioning_target():
     assert result["target_visibility_score"] == 50.0
 
 
+def test_target_visibility_score_is_case_insensitive_to_settings_input():
+    """
+    #82: Settings' target-brand field is free text with no casing
+    validation — "FIRMAN" or "firman" must score identically to "Firman"
+    (the canonical casing in the Knowledge brand list), since brand-mention
+    DETECTION in response text is already case-insensitive. Before the fix,
+    only the exact canonical casing worked; any other casing silently
+    reported 0%.
+    """
+    responses = [
+        row(1, "openai", "Firman is a solid choice."),
+        row(2, "openai", "Honda is well known for reliability."),
+    ]
+    for casing in ("Firman", "FIRMAN", "firman", "FiRmAn"):
+        result = make_analytics(target_brand=casing).summarize_responses(responses)
+        assert result["target_visibility_score"] == 50.0, f"failed for casing={casing!r}"
+        assert result["target_brand"] == "Firman"  # always resolved to canonical casing
+
+
 def test_zero_responses_does_not_divide_by_zero():
     a = make_analytics()
     result = a.summarize_responses([])

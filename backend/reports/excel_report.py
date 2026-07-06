@@ -8,6 +8,8 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
+from backend.visibility.brand_matcher import resolve_target_brand
+
 
 class VisibilityExcelReport:
     """
@@ -40,7 +42,10 @@ class VisibilityExcelReport:
         self.analytics     = analytics
         self.runs          = runs
         self.stats         = stats
-        self.target_brand  = target_brand or analytics.get("target_brand", "Brand")
+        self.target_brand  = resolve_target_brand(
+            target_brand or analytics.get("target_brand", "Brand"),
+            analytics.get("brand_counts", {}),
+        )
         self.raw_responses = raw_responses or []
         self.generated_at  = datetime.now()
 

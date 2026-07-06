@@ -3,7 +3,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 from backend.services.paths import get_data_dir
-from backend.visibility.brand_matcher import BrandTermMatcher
+from backend.visibility.brand_matcher import BrandTermMatcher, resolve_target_brand
 from backend.visibility.negation import detect_negative_brands
 from backend.visibility.recommendation import detect_recommended_brands
 
@@ -225,7 +225,7 @@ class VisibilityAnalytics:
                         channel_brand_counts[ch_name][brand] += 1
 
         total_responses = len(responses)
-        target = self.target_brand
+        target = resolve_target_brand(self.target_brand, self.brands)
         target_mentions = brand_counts.get(target, 0) if target else 0
 
         target_visibility_score = (

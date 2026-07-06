@@ -384,20 +384,22 @@ class VisibilityPage(QWidget):
         row1.addWidget(ps_center_w, 1)
         row1.addLayout(ps_ctrl)
 
-        # ── Row 2: Provider checkboxes ────────────────────────────────────────
-        row2 = QHBoxLayout()
-        row2.setSpacing(6)
-        lbl_prov = QLabel("Providers:")
-        lbl_prov.setFixedWidth(88)
-        row2.addWidget(lbl_prov)
-
+        # ── Row 2: Provider checkboxes (collapsible, mirrors Prompt Sets panel
+        # below — wraps into a grid instead of one ever-widening horizontal
+        # row, so adding more providers doesn't run out of screen width) ──────
         self._provider_checks: dict[str, QCheckBox] = {}
         self._provider_dots: dict[str, QLabel] = {}
         provider_keys = [k for k in self.app.provider_manager.list_providers() if k != "mock"]
-        for key in provider_keys:
+
+        PROV_COLS = 4
+        prov_grid = QGridLayout()
+        prov_grid.setSpacing(4)
+        prov_grid.setContentsMargins(8, 6, 8, 6)
+        for i, key in enumerate(provider_keys):
             has_key = bool(self.app.provider_manager.get_provider_api_key(key))
             cb = QCheckBox()
             cb.setChecked(has_key)
+            cb.stateChanged.connect(self._on_providers_changed)
             self._provider_checks[key] = cb
             dot_tip = (
                 "API key configured — ready to collect"
@@ -416,11 +418,56 @@ class VisibilityPage(QWidget):
             name_lbl.setStyleSheet("font-size: 12px;")
             name_lbl.setCursor(Qt.PointingHandCursor)
             name_lbl.mousePressEvent = lambda _e, c=cb: c.setChecked(not c.isChecked())
-            row2.addWidget(cb)
-            row2.addWidget(dot)
-            row2.addWidget(name_lbl)
-            row2.addSpacing(10)
-        row2.addStretch()
+
+            item_row = QHBoxLayout()
+            item_row.setSpacing(4)
+            item_row.setContentsMargins(0, 0, 0, 0)
+            item_row.addWidget(cb)
+            item_row.addWidget(dot)
+            item_row.addWidget(name_lbl)
+            item_row.addStretch()
+            item_w = QWidget()
+            item_w.setLayout(item_row)
+            prov_grid.addWidget(item_w, i // PROV_COLS, i % PROV_COLS)
+
+        prov_inner = QWidget()
+        prov_inner.setLayout(prov_grid)
+        prov_inner.setStyleSheet("background: white;")
+
+        prov_frame = QFrame()
+        prov_frame_lay = QVBoxLayout()
+        prov_frame_lay.setContentsMargins(0, 0, 0, 0)
+        prov_frame_lay.addWidget(prov_inner)
+        prov_frame.setLayout(prov_frame_lay)
+        prov_frame.setStyleSheet(
+            "QFrame { border: 1px solid #D1D5DB; border-radius: 4px; background: white; }"
+        )
+
+        btn_prov_all = QPushButton("All")
+        btn_prov_none = QPushButton("None")
+        btn_prov_configured = QPushButton("Configured")
+        for b in (btn_prov_all, btn_prov_none, btn_prov_configured):
+            b.setFixedWidth(78)
+            b.setStyleSheet("font-size: 11px; padding: 3px 4px;")
+        btn_prov_all.clicked.connect(self._select_all_providers)
+        btn_prov_none.clicked.connect(self._clear_providers)
+        btn_prov_configured.clicked.connect(self._select_configured_providers)
+        btn_prov_all.setToolTip("Select every provider")
+        btn_prov_none.setToolTip("Clear all provider selections")
+        btn_prov_configured.setToolTip("Select only providers with an API key configured")
+
+        prov_ctrl = QVBoxLayout()
+        prov_ctrl.setSpacing(4)
+        prov_ctrl.setAlignment(Qt.AlignTop)
+        prov_ctrl.addWidget(btn_prov_all)
+        prov_ctrl.addWidget(btn_prov_none)
+        prov_ctrl.addWidget(btn_prov_configured)
+        prov_ctrl.addStretch()
+
+        row2 = QHBoxLayout()
+        row2.setSpacing(6)
+        row2.addWidget(prov_frame, 1)
+        row2.addLayout(prov_ctrl)
 
         # ── Run / Pause / Stop / progress — live in the toolbar row up top,
         # next to the Export buttons, so they stay visible even when the
@@ -466,12 +513,18 @@ class VisibilityPage(QWidget):
         self._count_lbl = QLabel("0 sets · 0 prompts")
         self._count_lbl.setStyleSheet("color: #6B7280; font-size: 11px;")
 
-        # Prompt Sets is the only collapsible piece now — Providers (row2)
-        # always stays visible underneath the toolbar.
+        self._prov_count_lbl = QLabel("")
+        self._prov_count_lbl.setStyleSheet("color: #6B7280; font-size: 11px;")
+
+        # Providers and Prompt Sets are both independently collapsible panels
+        # (see toolbar_row for the two toggle buttons).
+        self._prov_panel = QWidget()
+        self._prov_panel.setLayout(row2)
+
         self._ps_panel = QWidget()
         self._ps_panel.setLayout(row1)
 
-        ctrl_lay.addLayout(row2)
+        ctrl_lay.addWidget(self._prov_panel)
         ctrl_lay.addWidget(self._ps_panel)
         ctrl_frame.setLayout(ctrl_lay)
 
@@ -671,17 +724,16 @@ class VisibilityPage(QWidget):
         ov_lay.setContentsMargins(0, 0, 0, 0)
         ov_lay.addWidget(ov_split)
 
-        # Tab 2 — Brands: position + provider tables on top, sentiment below
+        # Tab 2 — Brands: position, provider, and sentiment tables all in one row
         brands_tab = QWidget()
         br_split = QSplitter(Qt.Horizontal)
         br_split.addWidget(self._pos_frame)
         br_split.addWidget(self._brand_frame)
-        br_split.setSizes([500, 500])
+        br_split.addWidget(self._sentiment_frame)
+        br_split.setSizes([360, 360, 480])
         br_lay = QVBoxLayout(brands_tab)
         br_lay.setContentsMargins(0, 0, 0, 0)
-        br_lay.setSpacing(8)
-        br_lay.addWidget(br_split, 2)
-        br_lay.addWidget(self._sentiment_frame, 1)
+        br_lay.addWidget(br_split)
 
         # Tab 3 — Features: totals + by-brand side by side
         features_tab = QWidget()
@@ -779,10 +831,13 @@ class VisibilityPage(QWidget):
         self._raw_detail_frame, self._raw_detail_body = _section("Full Response")
         self._raw_detail_body.setReadOnly(True)
 
-        raw_split = QSplitter(Qt.Vertical)
+        # Side by side (not stacked) — each pane keeps its own scroll bar, and
+        # Full Response gets the tab's full height instead of a squeezed strip
+        # underneath the table, which made longer responses hard to read.
+        raw_split = QSplitter(Qt.Horizontal)
         raw_split.addWidget(self._raw_frame)
         raw_split.addWidget(self._raw_detail_frame)
-        raw_split.setSizes([420, 200])
+        raw_split.setSizes([650, 450])
 
         # Review action bar — acts on the currently selected row above.
         review_bar = QHBoxLayout()
@@ -836,6 +891,19 @@ class VisibilityPage(QWidget):
         self._collapse_btn.clicked.connect(self._toggle_ctrl_panel)
         self._collapse_btn.setToolTip("Show or hide the prompt family/scenario selection list")
 
+        self._prov_collapse_btn = QPushButton("▲  Hide Providers")
+        self._prov_collapse_btn.setCursor(Qt.PointingHandCursor)
+        self._prov_collapse_btn.setFixedHeight(28)
+        self._prov_collapse_btn.setStyleSheet(
+            "QPushButton { text-align: left; font-size: 12px; font-weight: 600; "
+            "color: #374151; background: #F3F4F6; border: 1px solid #D1D5DB; "
+            "border-radius: 5px; padding: 4px 12px; }"
+            "QPushButton:hover { background: #E5E7EB; color: #0B84FF; border-color: #0B84FF; }"
+            "QPushButton:pressed { background: #D1D5DB; }"
+        )
+        self._prov_collapse_btn.clicked.connect(self._toggle_provider_panel)
+        self._prov_collapse_btn.setToolTip("Show or hide the provider selection list")
+
         self._export_pdf_btn = QPushButton("Export PDF Report")
         self._export_pdf_btn.setFixedHeight(28)
         self._export_pdf_btn.setCursor(Qt.PointingHandCursor)
@@ -865,6 +933,7 @@ class VisibilityPage(QWidget):
         toolbar_row = QHBoxLayout()
         toolbar_row.setContentsMargins(0, 0, 0, 0)
         toolbar_row.setSpacing(8)
+        toolbar_row.addWidget(self._prov_collapse_btn)
         toolbar_row.addWidget(self._collapse_btn)
         toolbar_row.addSpacing(4)
         toolbar_row.addWidget(self._run_btn)
@@ -872,6 +941,7 @@ class VisibilityPage(QWidget):
         toolbar_row.addWidget(self._stop_btn)
         toolbar_row.addWidget(self._progress)
         toolbar_row.addWidget(self._status_lbl)
+        toolbar_row.addWidget(self._prov_count_lbl)
         toolbar_row.addWidget(self._count_lbl)
         toolbar_row.addStretch()
         toolbar_row.addWidget(self._export_excel_btn)
@@ -890,7 +960,32 @@ class VisibilityPage(QWidget):
 
         self._rebuild_check_grid("")
         self._on_sets_changed()
+        self._on_providers_changed()
         self.refresh()
+
+    # ── Provider helpers ─────────────────────────────────────────────────────
+
+    def _on_providers_changed(self):
+        n = sum(1 for cb in self._provider_checks.values() if cb.isChecked())
+        total = len(self._provider_checks)
+        self._prov_count_lbl.setText(f"{n}/{total} providers")
+
+    def _select_all_providers(self):
+        for cb in self._provider_checks.values():
+            cb.setChecked(True)
+
+    def _clear_providers(self):
+        for cb in self._provider_checks.values():
+            cb.setChecked(False)
+
+    def _select_configured_providers(self):
+        for key, cb in self._provider_checks.items():
+            cb.setChecked(bool(self.app.provider_manager.get_provider_api_key(key)))
+
+    def _toggle_provider_panel(self):
+        visible = not self._prov_panel.isVisible()
+        self._prov_panel.setVisible(visible)
+        self._prov_collapse_btn.setText("▲  Hide Providers" if visible else "▼  Show Providers")
 
     # ── Prompt set helpers ────────────────────────────────────────────────────
 

@@ -8,7 +8,7 @@ word boundaries, case handled by the caller lowercasing text first (matching
 existing convention throughout backend/visibility/) — deliberately not
 "smarter" than the code it replaces, just faster.
 """
-from backend.visibility.brand_matcher import BrandTermMatcher
+from backend.visibility.brand_matcher import BrandTermMatcher, resolve_target_brand
 
 _FLAT_TERMS = [
     ("firman", "Firman"),
@@ -111,3 +111,27 @@ def test_preserves_no_word_boundary_behavior_of_the_prior_substring_loop():
     matcher = BrandTermMatcher(_FLAT_TERMS)
     text = "browse by category"
     assert matcher.find_brand_positions(text)["CAT"] == text.index("cat")
+
+
+# ── resolve_target_brand (#82 case-sensitivity fix) ─────────────────────────
+
+def test_resolve_target_brand_matches_regardless_of_input_casing():
+    known = ["Firman", "Honda", "Generac"]
+    assert resolve_target_brand("FIRMAN", known) == "Firman"
+    assert resolve_target_brand("firman", known) == "Firman"
+    assert resolve_target_brand("FiRmAn", known) == "Firman"
+
+
+def test_resolve_target_brand_returns_input_unchanged_when_already_correct_case():
+    assert resolve_target_brand("Firman", ["Firman", "Honda"]) == "Firman"
+
+
+def test_resolve_target_brand_falls_back_to_input_when_no_match_found():
+    """A brand not in the known list (e.g. a typo) is passed through as-is
+    rather than silently discarded — callers still get an in-band value to
+    show/compare against, just with no canonical match to resolve to."""
+    assert resolve_target_brand("NotTracked", ["Firman", "Honda"]) == "NotTracked"
+
+
+def test_resolve_target_brand_passes_through_empty_string():
+    assert resolve_target_brand("", ["Firman"]) == ""
