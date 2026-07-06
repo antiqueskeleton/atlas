@@ -20,6 +20,7 @@ from backend.intelligence.intelligence_service import IntelligenceService
 from backend.intelligence.opportunity_ranking import rank_opportunities
 from backend.reports.briefing_sections import split_briefing_sections
 from backend.visibility.brand_matcher import resolve_target_brand
+from desktop.widgets.info_icon import info_icon
 from desktop.widgets.stat_card import StatCard
 
 
@@ -145,12 +146,37 @@ class IntelligencePage(QWidget):
             "buying-journey insights, and strategic opportunities"
         )
 
+        # Single status line — shows run history normally, and temporarily
+        # switches to a running/error message during and right after a run
+        # (previously a separate self.status_lbl row duplicated this same
+        # provider/duration info a second time right under it — #84).
         self.last_run_lbl = QLabel("No runs yet.")
         self.last_run_lbl.setStyleSheet("color:#6B7280; font-size:12px;")
 
         self._mode_lbl = QLabel()
         self._mode_lbl.setStyleSheet("font-size:12px;")
         self._mode_lbl.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+
+        mode_row = QHBoxLayout()
+        mode_row.setSpacing(4)
+        mode_row.setContentsMargins(0, 0, 0, 0)
+        mode_row.addWidget(self._mode_lbl)
+        mode_row.addWidget(info_icon(
+            "Atlas runs the Intelligence Engine two ways:\n\n"
+            "DB Mode (green) — reuses responses you've already collected via Visibility "
+            "Collection. Only 3 AI calls are made, to synthesize a portfolio inference, "
+            "opportunities, and the executive briefing from that real stored data — fast "
+            "and cheap.\n\n"
+            "Live Mode (amber) — there isn't enough stored data yet for one or more topic "
+            "buckets (Product/Personas/Journey each need at least 3 responses), so Atlas "
+            "sends 14 fresh prompts directly to the AI provider first, then runs the same "
+            "3 synthesis passes on top of that. Slower and costs more API calls.\n\n"
+            "Run more Visibility Collections to build up stored data and switch into DB Mode."
+        ))
+        mode_widget = QWidget()
+        mode_widget.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        mode_widget.setLayout(mode_row)
+
         self._update_mode_label()
 
         _export_btn_style = (
@@ -188,7 +214,7 @@ class IntelligencePage(QWidget):
         ctrl.addWidget(self.run_btn)
         ctrl.addWidget(self.last_run_lbl)
         ctrl.addStretch()
-        ctrl.addWidget(self._mode_lbl)
+        ctrl.addWidget(mode_widget)
         ctrl.addSpacing(8)
         ctrl.addWidget(self._export_tab_btn)
         ctrl.addWidget(self._export_docx_btn)
@@ -197,12 +223,6 @@ class IntelligencePage(QWidget):
         ctrl_widget = QWidget()
         ctrl_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         ctrl_widget.setLayout(ctrl)
-
-        # Status label — single compact line below controls
-        self.status_lbl = QLabel("")
-        self.status_lbl.setStyleSheet("color:#6B7280; font-size:12px;")
-        self.status_lbl.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.status_lbl.setFixedHeight(18)
 
         # ── KPI row ───────────────────────────────────────────────────────────
         kpi_row = QHBoxLayout()
@@ -293,7 +313,6 @@ class IntelligencePage(QWidget):
         root.addWidget(title)
         root.addWidget(subtitle)
         root.addWidget(ctrl_widget)
-        root.addWidget(self.status_lbl)
         root.addWidget(kpi_widget)
         root.addWidget(h_splitter, stretch=1)
 
@@ -303,7 +322,8 @@ class IntelligencePage(QWidget):
 
     def _start_run(self):
         self.run_btn.setEnabled(False)
-        self.status_lbl.setText(
+        self.last_run_lbl.setStyleSheet("color:#0B84FF; font-size:12px;")
+        self.last_run_lbl.setText(
             "Running analysis — classifying stored responses and generating briefing…"
         )
         # Clear panels so user sees fresh generation, not stale data
@@ -321,7 +341,7 @@ class IntelligencePage(QWidget):
         counts = self.service.db_response_counts()
         total = counts.get("total", 0)
         if total == 0:
-            self._mode_lbl.setText("Mode: Live  (no DB data yet)")
+            self._mode_lbl.setText("Live Mode  (no stored data yet)")
             self._mode_lbl.setStyleSheet("font-size:12px; color:#6B7280;")
         else:
             from backend.intelligence.intelligence_service import _MIN_PER_BUCKET
@@ -330,29 +350,33 @@ class IntelligencePage(QWidget):
                 for k in ("Product Intelligence", "Consumer Personas", "Buying Journey")
             )
             if buckets_ok:
-                self._mode_lbl.setText(f"Mode: DB  ({total} stored responses — 3 API calls)")
+                self._mode_lbl.setText(f"DB Mode  ({total} stored responses — 3 API calls)")
                 self._mode_lbl.setStyleSheet("font-size:12px; color:#16A34A; font-weight:bold;")
             else:
-                self._mode_lbl.setText(f"Mode: Live  (DB has {total} responses but missing buckets)")
+                self._mode_lbl.setText(f"Live Mode  (DB has {total} responses but missing buckets)")
                 self._mode_lbl.setStyleSheet("font-size:12px; color:#F59E0B;")
 
     def _on_run_finished(self, result: dict):
         self.run_btn.setEnabled(True)
-        dur = result.get("duration_seconds", 0)
-        source = result.get("source", "live")
-        used = result.get("responses_used", 0)
-        mode_str = f"DB ({used} responses)" if source == "db" else f"Live ({used} prompts)"
-        errors = result.get("error_count", 0)
-        error_str = f" · {errors} prompt(s) failed and were excluded" if errors else ""
-        self.status_lbl.setText(
-            f"Complete — {result['provider']} · {dur:.0f}s · {mode_str} + 3 synthesis passes{error_str}"
-        )
         self._update_mode_label()
         self._load_latest()
 
+        # _load_latest() just rebuilt last_run_lbl with the persistent
+        # "Runs completed / Last run / provider / duration" summary — append
+        # anything transient that's only known right after THIS run and never
+        # persisted to the DB (a failed-prompt count), rather than repeating
+        # provider/duration a second time in a separate line (#84).
+        errors = result.get("error_count", 0)
+        if errors:
+            self.last_run_lbl.setText(
+                self.last_run_lbl.text()
+                + f"  ·  {errors} prompt(s) failed and were excluded this run"
+            )
+
     def _on_run_error(self, message: str):
         self.run_btn.setEnabled(True)
-        self.status_lbl.setText(f"Error: {message}")
+        self.last_run_lbl.setStyleSheet("color:#DC2626; font-size:12px;")
+        self.last_run_lbl.setText(f"Error: {message}")
 
     # ── Export ───────────────────────────────────────────────────────────────
 
@@ -619,11 +643,14 @@ class IntelligencePage(QWidget):
         briefing = latest["briefing"]
         results = latest["results"]
 
-        # Last run label — also shows runs completed count
+        # Last run label — also shows runs completed count. Reset the style in
+        # case a prior run left it blue (running) or red (error) — see
+        # _start_run()/_on_run_error().
         provider = run[1]
         started = run[4][:19].replace("T", " ")
         dur = f"{run[7]:.0f}s" if run[7] else ""
         n_runs = len(runs)
+        self.last_run_lbl.setStyleSheet("color:#6B7280; font-size:12px;")
         self.last_run_lbl.setText(
             f"Runs Completed: {n_runs}  ·  Last run: {started} · {provider} {dur}"
         )
