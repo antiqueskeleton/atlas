@@ -106,17 +106,93 @@ def test_count_stats_includes_flagged_count(tmp_path):
     assert stats["flagged"] == 1
 
 
+# ── Cue-zone cache / backfill (#81) ───────────────────────────────────────────
+# _insert_response() above inserts via raw SQL (bypassing save_responses()),
+# so its rows have NULL cue caches by default — exactly simulating responses
+# collected before this cache existed, which is what backfill needs to handle.
+
+def test_new_row_inserted_via_raw_sql_has_null_cue_cache(tmp_path):
+    repo = _repo(tmp_path)
+    _insert_response(repo)
+    assert repo.count_uncached_cue_zones() == 1
+
+
+def test_save_responses_computes_cache_immediately_no_backfill_needed(tmp_path):
+    from datetime import datetime
+    from backend.models.visibility_response import VisibilityResponse
+
+    repo = _repo(tmp_path)
+    repo.save_responses([
+        VisibilityResponse(
+            run_id="run-1", provider="openai", model="gpt-4.1-mini",
+            prompt="best generator", response="Firman is not as reliable as Honda.",
+            collected_at=datetime(2026, 7, 5, 10, 0, 0), family_name="Best Generator",
+        )
+    ])
+    assert repo.count_uncached_cue_zones() == 0
+
+
+def test_backfill_computes_cache_for_existing_uncached_rows(tmp_path):
+    repo = _repo(tmp_path)
+    _insert_response(repo, response_text="Firman is not as reliable as Honda.")
+    assert repo.count_uncached_cue_zones() == 1
+
+    updated = repo.backfill_cue_zone_cache()
+
+    assert updated == 1
+    assert repo.count_uncached_cue_zones() == 0
+    row = repo.list_responses()[0]
+    assert row[10] is not None  # negative_cue_cache
+    assert row[11] is not None  # recommended_cue_cache
+
+
+def test_backfill_is_a_no_op_when_nothing_is_uncached(tmp_path):
+    repo = _repo(tmp_path)
+    _insert_response(repo)
+    repo.backfill_cue_zone_cache()
+
+    assert repo.backfill_cue_zone_cache() == 0  # nothing left to do
+
+
+def test_backfill_processes_more_rows_than_one_batch(tmp_path):
+    repo = _repo(tmp_path)
+    for i in range(7):
+        _insert_response(repo, response_text=f"Firman response number {i}.")
+
+    updated = repo.backfill_cue_zone_cache(batch_size=3)
+
+    assert updated == 7
+    assert repo.count_uncached_cue_zones() == 0
+
+
+def test_backfilled_cache_produces_identical_detection_as_fresh_computation(tmp_path):
+    """The whole point of the cache: reading it back must give the exact
+    same negative-brand result as computing fresh from the raw text."""
+    from backend.visibility.negation import detect_negative_brands
+
+    repo = _repo(tmp_path)
+    text = "Firman is not as reliable as Honda for daily use."
+    _insert_response(repo, response_text=text)
+    repo.backfill_cue_zone_cache()
+
+    row = repo.list_responses()[0]
+    flat_terms = [("firman", "Firman"), ("honda", "Honda")]
+    fresh = detect_negative_brands(text, flat_terms)
+    from_cache = detect_negative_brands(text, flat_terms, row[10])
+    assert fresh == from_cache == {"Firman"}
+
+
 def test_review_status_does_not_disturb_existing_column_order(tmp_path):
     """
-    review_status/review_note are appended at the END of list_responses()'s
-    SELECT so existing positional indexing elsewhere (excel_report.py,
-    intelligence_service.py) keeps working unchanged.
+    review_status/review_note/cue caches are appended at the END of
+    list_responses()'s SELECT so existing positional indexing elsewhere
+    (excel_report.py, intelligence_service.py) keeps working unchanged.
     """
     repo = _repo(tmp_path)
     _insert_response(repo, provider="anthropic", response_text="Test response body")
 
     row = repo.list_responses()[0]
-    assert len(row) == 10
+    assert len(row) == 12
     assert row[2] == "anthropic"            # provider (unchanged index)
     assert row[5] == "Test response body"   # response (unchanged index)
     assert row[7] == "Best Generator"       # family_display (unchanged index)

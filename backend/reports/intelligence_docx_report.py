@@ -19,6 +19,10 @@ from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
 from docx.shared import Inches, Pt, RGBColor
 
+from backend.intelligence.opportunity_ranking import rank_opportunities
+from backend.reports.briefing_sections import split_briefing_sections
+from backend.reports.markdown_docx_render import render_markdown_to_docx
+
 
 # ── Palette ────────────────────────────────────────────────────────────────────
 _NAVY  = RGBColor(0x1E, 0x3A, 0x5F)
@@ -51,11 +55,14 @@ class IntelligenceDocxReport:
     """
 
     def __init__(self, run, briefing, results, opportunities,
-                 target_brand: str = ""):
+                 target_brand: str = "", full_export: bool = False):
+        """full_export: see IntelligencePDFReport's docstring for this
+        parameter — same meaning here."""
         self.run           = run or ()
         self.briefing      = briefing or ()
         self.results       = results or []
         self.opportunities = opportunities or []
+        self.full_export   = full_export
         self.target_brand  = (
             target_brand
             or (run[3] if run and len(run) > 3 else "")
@@ -220,16 +227,28 @@ class IntelligenceDocxReport:
 
         doc.add_heading("Executive Briefing", level=1)
 
-        for para in txt.split("\n\n"):
-            para = para.strip()
-            if not para:
-                continue
-            p = doc.add_paragraph(para)
-            p.paragraph_format.space_after = Pt(8)
+        # The briefing prompt deliberately forbids markdown and instead uses
+        # plain "SECTION NAME\nBody text" sections (briefing_sections.py) —
+        # give each section's header real visual distinction instead of one
+        # dense, undifferentiated wall of paragraphs.
+        for header, body in split_briefing_sections(txt):
+            if header:
+                p = doc.add_paragraph()
+                p.paragraph_format.space_before = Pt(6)
+                p.paragraph_format.space_after = Pt(2)
+                run = p.add_run(header)
+                run.font.bold = True
+                run.font.size = Pt(10)
+                run.font.color.rgb = _NAVY
+            if body:
+                p = doc.add_paragraph(body)
+                p.paragraph_format.space_after = Pt(6)
 
         doc.add_page_break()
 
     # ── Analyst Q&A sections ───────────────────────────────────────────────────
+
+    _MAX_QA_PAIRS_SHOWN = 5
 
     def _write_analyst_sections(self, doc: Document):
         _SECTIONS = [
@@ -249,12 +268,25 @@ class IntelligenceDocxReport:
             by_analyst.setdefault(analyst_name, []).append((prompt, response))
 
         for section_name, intro in _SECTIONS:
-            pairs = by_analyst.get(section_name, [])
-            if not pairs:
+            all_pairs = by_analyst.get(section_name, [])
+            if not all_pairs:
                 continue
+            # Same "too much raw detail for a printed report" cap as the PDF
+            # export and Strategic Opportunities below — the Executive
+            # Briefing is the actual synthesis of this data; these are
+            # representative supporting examples, not primary reading.
+            qa_cap = len(all_pairs) if self.full_export else self._MAX_QA_PAIRS_SHOWN
+            pairs = all_pairs[:qa_cap]
 
             doc.add_heading(section_name, level=1)
-            p = doc.add_paragraph(intro)
+            intro_text = intro
+            if len(all_pairs) > qa_cap:
+                intro_text += (
+                    f" Showing {len(pairs)} of {len(all_pairs)} representative responses "
+                    "analyzed for this section; see the Product/Personas/Journey tabs in "
+                    "the app for the complete set."
+                )
+            p = doc.add_paragraph(intro_text)
             p.paragraph_format.space_after = Pt(10)
 
             for prompt, response in pairs:
@@ -267,21 +299,29 @@ class IntelligenceDocxReport:
                 run.font.size  = Pt(9)
                 run.font.color.rgb = _NAVY
 
-                # Response block
-                p = doc.add_paragraph(response or "(no response)")
-                p.paragraph_format.space_before = Pt(0)
-                p.paragraph_format.space_after  = Pt(10)
-                p.paragraph_format.left_indent  = Inches(0.2)
-                for run in p.runs:
-                    run.font.size = Pt(9)
-                    run.font.color.rgb = _DARK
+                # Response: real markdown (headers/bold/bullets/tables)
+                # rendered as actual formatting instead of one add_paragraph()
+                # call, which showed literal ##/**/| syntax AND collapsed the
+                # response's real structure (docx paragraphs don't turn
+                # embedded newlines into visual line breaks either).
+                if response:
+                    render_markdown_to_docx(doc, response, _DARK, _NAVY)
+                else:
+                    doc.add_paragraph("(no response)")
 
             doc.add_page_break()
 
     # ── Strategic Opportunities ────────────────────────────────────────────────
 
+    _MAX_OPPORTUNITIES_SHOWN = 10
+
     def _write_opportunities(self, doc: Document):
-        opps = self.opportunities
+        # Ranked (evidence-count-backed findings first), not just parse
+        # order -- see opportunity_ranking.py. Capped for the same reason
+        # as the PDF export.
+        all_opps = rank_opportunities(self.opportunities)
+        opp_cap = len(all_opps) if self.full_export else self._MAX_OPPORTUNITIES_SHOWN
+        opps = all_opps[:opp_cap]
         if not opps:
             return
 
@@ -290,8 +330,15 @@ class IntelligenceDocxReport:
             f"The following opportunities were identified through AI analysis of how "
             f"{self.target_brand} and competitors are described across consumer research "
             "scenarios. Each represents an area where improved content, positioning, or "
-            "product strategy could increase AI visibility."
+            "product strategy could increase AI visibility. Ranked by strength of evidence "
+            "— findings citing a specific count (e.g. \"0 of 84 responses\") are shown first."
         )
+        if len(all_opps) > opp_cap:
+            intro += (
+                f" Showing the top {opp_cap} of {len(all_opps)} "
+                "opportunities identified from this run; see the Opportunities tab in "
+                "the app for the complete list."
+            )
         p = doc.add_paragraph(intro)
         p.paragraph_format.space_after = Pt(12)
 

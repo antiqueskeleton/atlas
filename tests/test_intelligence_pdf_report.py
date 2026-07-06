@@ -99,3 +99,89 @@ def test_generate_strips_emoji_from_analyst_responses(tmp_path):
     text = _extract_text(out)
     assert "■" not in text  # the broken-glyph box character
     assert "Great for tailgating" in text
+
+
+# ── Caps + ranking (#81 continuation) ─────────────────────────────────────────
+
+def test_analyst_section_caps_qa_pairs_shown_with_a_note(tmp_path):
+    results = [
+        ("Product Intelligence", f"Question {i}?", f"Response body {i}.", "2026-07-01T10:00:00")
+        for i in range(8)
+    ]
+    out = tmp_path / "capped.pdf"
+    IntelligencePDFReport(_RUN, _BRIEFING, results, [], "Firman").generate(str(out))
+    text = _extract_text(out)
+
+    assert "Showing 5 of 8" in text
+    for i in range(5):
+        assert f"Question {i}?" in text
+    for i in range(5, 8):
+        assert f"Question {i}?" not in text
+
+
+def test_analyst_section_shows_no_cap_note_when_under_the_limit(tmp_path):
+    out = tmp_path / "uncapped.pdf"
+    IntelligencePDFReport(_RUN, _BRIEFING, _RESULTS, [], "Firman").generate(str(out))
+    text = _extract_text(out)
+    assert "Showing" not in text
+
+
+def test_full_export_disables_qa_pair_cap(tmp_path):
+    results = [
+        ("Product Intelligence", f"Question {i}?", f"Response body {i}.", "2026-07-01T10:00:00")
+        for i in range(8)
+    ]
+    out = tmp_path / "full.pdf"
+    IntelligencePDFReport(_RUN, _BRIEFING, results, [], "Firman", full_export=True).generate(str(out))
+    text = _extract_text(out)
+
+    assert "Showing" not in text
+    for i in range(8):
+        assert f"Question {i}?" in text
+
+
+def test_full_export_disables_opportunities_cap(tmp_path):
+    opps = [(i, f"Opp {i}", f"{i} of 20 responses", f"Action {i}", "new") for i in range(15)]
+    out = tmp_path / "full_opps.pdf"
+    IntelligencePDFReport(_RUN, _BRIEFING, [], opps, "Firman", full_export=True).generate(str(out))
+    text = _extract_text(out)
+
+    assert "Showing the top" not in text
+    for i in range(15):
+        assert f"Opp {i}" in text
+
+
+def test_executive_briefing_sections_get_distinct_header_styling(tmp_path):
+    briefing = (
+        "product summary", "persona summary", "journey summary", "opportunities text",
+        "VISIBILITY SNAPSHOT  \nFirman appeared in 12 of 84 responses.\n\n"
+        "SENTIMENT  \nOut of 12 mentions, 4 were negative.",
+        "2026-07-01T10:00:26",
+    )
+    out = tmp_path / "briefing_sections.pdf"
+    IntelligencePDFReport(_RUN, briefing, [], [], "Firman").generate(str(out))
+    text = _extract_text(out)
+
+    assert "VISIBILITY SNAPSHOT" in text
+    assert "Firman appeared in 12 of 84 responses." in text
+    assert "SENTIMENT" in text
+    assert "Out of 12 mentions, 4 were negative." in text
+
+
+def test_opportunities_section_is_ranked_and_capped(tmp_path):
+    opps = [
+        (1, "Qualitative gap", "Champion and Honda have thousands of reviews.", "Action A", "new"),
+        (2, "Complete absence", "Firman is not mentioned (0 of 84 responses).", "Action B", "new"),
+    ] + [
+        (i, f"Filler {i}", "No count here.", f"Action {i}", "new") for i in range(3, 13)
+    ]
+    out = tmp_path / "ranked_opps.pdf"
+    IntelligencePDFReport(_RUN, _BRIEFING, [], opps, "Firman").generate(str(out))
+    text = _extract_text(out)
+
+    assert "Showing the top 10 of 12" in text
+    assert "1." in text  # "Complete absence" should rank #1 (0/84 ratio)
+    assert "Complete absence" in text
+    idx_complete = text.index("Complete absence")
+    idx_qualitative = text.index("Qualitative gap")
+    assert idx_complete < idx_qualitative  # ranked above the qualitative one

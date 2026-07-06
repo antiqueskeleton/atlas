@@ -123,14 +123,18 @@ class VisibilityExcelReport:
         sorted_b   = sorted(brand_cnts.items(), key=lambda x: -x[1])
         rank       = next((i + 1 for i, (b, _) in enumerate(sorted_b)
                            if b == tb), None)
+        # total tracked brands, not just ones with >=1 mention in this dataset —
+        # same fix as #48 already applied to visibility_page.py; this report
+        # generator had its own separate copy of the old, wrong denominator.
+        total_tracked = a.get("total_tracked_brands", len(sorted_b))
 
         self._section_label(ws, 4, "KEY PERFORMANCE INDICATORS")
         self._write_header(ws, 5, ["Metric", "Value"])
         kpis = [
             ("Visibility Score",     f"{a.get('target_visibility_score', 0)}%"),
-            ("Mention Rank",         f"#{rank} of {len(sorted_b)}" if rank else "—"),
+            ("Mention Rank",         f"#{rank} of {total_tracked}" if rank else "—"),
             ("Total Responses",      f"{a.get('total_responses', 0):,}"),
-            ("Brands Tracked",       str(len(sorted_b))),
+            ("Brands Tracked",       str(total_tracked)),
             ("Collection Runs",      str(self.stats.get("runs", 0))),
             ("Providers",            str(self.stats.get("providers", 0))),
             ("Prompt Families",      str(self.stats.get("families", 0))),

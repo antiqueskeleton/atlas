@@ -160,14 +160,18 @@ class VisibilityPDFReport:
         rank       = next((i + 1 for i, (b, _) in enumerate(sorted_b)
                            if b == tb), None)
         total      = a.get('total_responses', 0)
+        # total tracked brands, not just ones with >=1 mention in this dataset —
+        # same fix as #48 already applied to visibility_page.py; this report
+        # generator had its own separate copy of the old, wrong denominator.
+        total_tracked = a.get('total_tracked_brands', len(sorted_b))
 
         kpi_data = [
             ["Visibility Score", "Mention Rank", "Responses Analyzed", "Brands Tracked"],
             [
                 f"{score}%",
-                f"#{rank} of {len(sorted_b)}" if rank else "—",
+                f"#{rank} of {total_tracked}" if rank else "—",
                 f"{total:,}",
-                str(len(sorted_b)),
+                str(total_tracked),
             ],
         ]
         kpi_tbl = Table(kpi_data, colWidths=[CONTENT_W / 4] * 4)

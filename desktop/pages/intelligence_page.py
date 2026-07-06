@@ -16,6 +16,8 @@ from PySide6.QtWidgets import (
 )
 
 from backend.intelligence.intelligence_service import IntelligenceService
+from backend.intelligence.opportunity_ranking import rank_opportunities
+from backend.reports.briefing_sections import split_briefing_sections
 from desktop.widgets.stat_card import StatCard
 
 
@@ -134,11 +136,23 @@ class IntelligencePage(QWidget):
         self._export_docx_btn.clicked.connect(self._export_docx)
         self._export_docx_btn.setToolTip("Export the latest briefing as an editable Word document")
 
+        self._export_tab_btn = QPushButton("Export Tab (Full)")
+        self._export_tab_btn.setFixedHeight(26)
+        self._export_tab_btn.setCursor(Qt.PointingHandCursor)
+        self._export_tab_btn.setStyleSheet(_export_btn_style)
+        self._export_tab_btn.clicked.connect(self._export_current_tab_full)
+        self._export_tab_btn.setToolTip(
+            "Export the currently selected tab's complete results, with no "
+            "10-item cap — unlike Export PDF/Word above, which condense to "
+            "keep the main report a manageable length"
+        )
+
         ctrl.addWidget(self.run_btn)
         ctrl.addWidget(self.last_run_lbl)
         ctrl.addStretch()
         ctrl.addWidget(self._mode_lbl)
         ctrl.addSpacing(8)
+        ctrl.addWidget(self._export_tab_btn)
         ctrl.addWidget(self._export_docx_btn)
         ctrl.addWidget(self._export_pdf_btn)
 
@@ -443,6 +457,112 @@ class IntelligencePage(QWidget):
         self._docx_worker.finished.connect(_done)
         self._docx_worker.start()
 
+    # Tab index -> (analyst section name, display name), matching the
+    # addTab() order above. Opportunities (index 3) is handled separately
+    # since it isn't an analyst section.
+    _TAB_SECTIONS = {
+        0: ("Product Intelligence", "Product"),
+        1: ("Consumer Personas", "Personas"),
+        2: ("Buying Journey", "Journey"),
+    }
+
+    def _export_current_tab_full(self):
+        """
+        Export just the currently selected tab's complete results, with no
+        top-N cap — unlike Export PDF/Word, which deliberately condense to
+        keep the main report readable (#81). Reuses IntelligencePDFReport/
+        IntelligenceDocxReport's full_export flag rather than a separate
+        rendering path: constructing them with only this one tab's data
+        (empty everything else) naturally produces a document containing
+        just that section, in full.
+        """
+        tab_idx = self.tabs.currentIndex()
+        latest = self.service.get_latest_briefing()
+        if not latest:
+            QMessageBox.information(
+                self, "No Data",
+                "Run Intelligence Analysis first to generate data for export."
+            )
+            return
+        run = latest["run"]
+        brand = self.app.get_target_brand() or "Report"
+
+        if tab_idx in self._TAB_SECTIONS:
+            section_name, display_name = self._TAB_SECTIONS[tab_idx]
+            results = [r for r in latest["results"] if r[0] == section_name]
+            opps = []
+            if not results:
+                QMessageBox.information(
+                    self, "No Data", f"No {display_name} responses to export yet."
+                )
+                return
+        else:
+            display_name = "Opportunities"
+            results = []
+            opps = self.service.repository.get_all_opportunities()
+            if not opps:
+                QMessageBox.information(self, "No Data", "No opportunities to export yet.")
+                return
+
+        ts = __import__('datetime').datetime.now().strftime("%Y%m%d_%H%M")
+        default = f"Atlas_Intelligence_{display_name}_Full_{brand}_{ts}.pdf"
+        path, chosen_filter = QFileDialog.getSaveFileName(
+            self, f"Export {display_name} (Full)", default,
+            "PDF Files (*.pdf);;Word Documents (*.docx)"
+        )
+        if not path:
+            return
+
+        self._export_tab_btn.setEnabled(False)
+        self._export_tab_btn.setText("Generating…")
+        is_docx = path.lower().endswith(".docx")
+
+        def _generate():
+            try:
+                if is_docx:
+                    from backend.reports.intelligence_docx_report import IntelligenceDocxReport
+                    rpt = IntelligenceDocxReport(
+                        run=run, briefing=(), results=results, opportunities=opps,
+                        target_brand=brand, full_export=True,
+                    )
+                else:
+                    from backend.reports.intelligence_pdf_report import IntelligencePDFReport
+                    rpt = IntelligencePDFReport(
+                        run=run, briefing=(), results=results, opportunities=opps,
+                        target_brand=brand, full_export=True,
+                    )
+                rpt.generate(path)
+                return path, None
+            except Exception as exc:
+                return None, str(exc)
+
+        def _done(result):
+            out_path, err = result
+            self._export_tab_btn.setEnabled(True)
+            self._export_tab_btn.setText("Export Tab (Full)")
+            if err:
+                QMessageBox.critical(self, "Export Failed", f"Could not generate export:\n\n{err}")
+            else:
+                reply = QMessageBox.information(
+                    self, "Export Ready", f"Saved to:\n{out_path}",
+                    QMessageBox.Open | QMessageBox.Ok, QMessageBox.Ok,
+                )
+                if reply == QMessageBox.Open:
+                    import os
+                    if os.name == 'nt':
+                        os.startfile(out_path)
+
+        from PySide6.QtCore import QThread, Signal as _Signal
+
+        class _W(QThread):
+            finished = _Signal(tuple)
+            def run(self_):
+                self_.finished.emit(_generate())
+
+        self._tab_export_worker = _W()
+        self._tab_export_worker.finished.connect(_done)
+        self._tab_export_worker.start()
+
     # ── Load ─────────────────────────────────────────────────────────────────
 
     def _load_latest(self):
@@ -476,24 +596,27 @@ class IntelligencePage(QWidget):
             by_analyst.setdefault(analyst_name, []).append((prompt, response))
 
         def render(pairs):
-            return "\n\n".join(
-                f"Q: {p}\n\n{r}" for p, r in pairs
-            ) or "No data."
+            # AI responses are markdown (headers/bold/bullets/tables) — render
+            # it as such instead of dumping the raw ##/**/| syntax as plain
+            # text. "# Q: ..." uses the biggest heading level so each question
+            # stands out above the response's own internal ##/### structure;
+            # "---" between pairs gives a clear divider between Q&A blocks.
+            if not pairs:
+                return "No data."
+            return "\n\n---\n\n".join(f"# Q: {p}\n\n{r}" for p, r in pairs)
 
-        self._product_body.setPlainText(
+        self._product_body.setMarkdown(
             render(by_analyst.get("Product Intelligence", []))
         )
-        self._persona_body.setPlainText(
+        self._persona_body.setMarkdown(
             render(by_analyst.get("Consumer Personas", []))
         )
-        self._journey_body.setPlainText(
+        self._journey_body.setMarkdown(
             render(by_analyst.get("Buying Journey", []))
         )
 
-        if briefing:
-            self._brief_body.setPlainText(briefing[4] or "No executive briefing available.")
-        else:
-            self._brief_body.setPlainText("No executive briefing available.")
+        briefing_text = (briefing[4] if briefing else "") or "No executive briefing available."
+        self._brief_body.setMarkdown(self._format_briefing(briefing_text))
 
         opp_rows = self.service.repository.get_all_opportunities()
         self._render_opportunities(opp_rows)
@@ -520,6 +643,26 @@ class IntelligencePage(QWidget):
     _STATUS_LABELS = {"new": "New", "in_progress": "In Progress", "done": "Done"}
     _STATUS_COLORS = {"new": "#6B7280", "in_progress": "#F59E0B", "done": "#16A34A"}
 
+    @staticmethod
+    def _format_briefing(text: str) -> str:
+        """
+        The briefing prompt deliberately forbids markdown and instead uses
+        plain "SECTION NAME\\nBody text" sections (see briefing_sections.py)
+        — but with no visual distinction between a section's header and its
+        body, the whole briefing still read as one dense wall of text.
+        Reuses the same setMarkdown() rendering already proven for the
+        Product/Personas/Journey tabs: turn each detected header into a
+        real markdown heading so it renders bigger/bolder, purely for
+        on-screen display — the underlying data/text is unchanged.
+        """
+        sections = split_briefing_sections(text)
+        if not sections:
+            return text
+        return "\n\n".join(
+            f"#### {header}\n\n{body}" if header else body
+            for header, body in sections
+        )
+
     def _render_opportunities(self, opp_rows, placeholder=None):
         # Clear existing cards (all items except the trailing stretch)
         while self._opp_cards_layout.count() > 1:
@@ -534,6 +677,14 @@ class IntelligencePage(QWidget):
             lbl.setWordWrap(True)
             self._opp_cards_layout.insertWidget(0, lbl)
             return
+
+        # Priority order, not recency order — get_all_opportunities() sorts
+        # by created_date DESC (needed so a status change survives future
+        # runs, per #39), but that made the displayed "#N" look like a
+        # priority ranking when it never was one. Ranks opportunities citing
+        # a concrete "X of Y" evidence count (e.g. "0 of 84 responses") above
+        # purely qualitative ones — see opportunity_ranking.py.
+        opp_rows = rank_opportunities(opp_rows)
 
         for idx, (opp_id, title, evidence, description, status, *rest) in enumerate(opp_rows):
             status = status or "new"

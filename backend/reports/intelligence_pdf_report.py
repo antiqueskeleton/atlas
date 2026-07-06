@@ -20,6 +20,10 @@ from reportlab.platypus import (
     HRFlowable, PageBreak, KeepTogether,
 )
 
+from backend.intelligence.opportunity_ranking import rank_opportunities
+from backend.reports.briefing_sections import split_briefing_sections
+from backend.reports.markdown_pdf_render import build_markdown_styles, render_markdown_to_flowables
+
 # ── Palette (shared with visibility PDF) ──────────────────────────────────────
 C_BLUE    = HexColor('#0B84FF')
 C_NAVY    = HexColor('#1E3A5F')
@@ -73,11 +77,20 @@ class IntelligencePDFReport:
     """
 
     def __init__(self, run, briefing, results, opportunities,
-                 target_brand: str = ""):
+                 target_brand: str = "", full_export: bool = False):
+        """
+        full_export: when True, disables the top-N caps on analyst Q&A pairs
+        and opportunities (see _MAX_QA_PAIRS_SHOWN/_MAX_OPPORTUNITIES_SHOWN)
+        — used for a single-tab "export in full" request, where the caller
+        passes only that one tab's data (e.g. results=[just Product
+        Intelligence pairs], opportunities=[]) so the rest of the report is
+        naturally empty rather than needing a separate code path.
+        """
         self.run           = run or ()
         self.briefing      = briefing or ()
         self.results       = results or []
         self.opportunities = opportunities or []
+        self.full_export   = full_export
         self.target_brand  = (
             target_brand
             or (run[3] if run and len(run) > 3 else "")
@@ -85,6 +98,7 @@ class IntelligencePDFReport:
         )
         self.generated_at  = datetime.now()
         self._styles       = self._build_styles()
+        self._md_styles    = build_markdown_styles(base_color=C_DARK, heading_color=C_NAVY)
 
     # ── Public ─────────────────────────────────────────────────────────────────
 
@@ -186,17 +200,23 @@ class IntelligencePDFReport:
 
         story = [Paragraph("Executive Briefing", s['H1']), Spacer(1, 0.08 * inch)]
 
-        for para in txt.split("\n\n"):
-            para = para.strip()
-            if not para:
-                continue
-            story.append(Paragraph(_pdf_safe(para), s['Body']))
+        # The briefing prompt deliberately forbids markdown and instead uses
+        # plain "SECTION NAME\nBody text" sections (briefing_sections.py) —
+        # give each section's header real visual distinction instead of one
+        # dense, undifferentiated wall of paragraphs.
+        for header, body in split_briefing_sections(txt):
+            if header:
+                story.append(Paragraph(_pdf_safe(header), s['H2']))
+            if body:
+                story.append(Paragraph(_pdf_safe(body), s['Body']))
             story.append(Spacer(1, 0.08 * inch))
 
         story.append(PageBreak())
         return story
 
     # ── Analyst Q&A sections ───────────────────────────────────────────────────
+
+    _MAX_QA_PAIRS_SHOWN = 5
 
     def _analyst_sections(self) -> list:
         _SECTIONS = [
@@ -217,24 +237,50 @@ class IntelligencePDFReport:
 
         story = []
         for section_name, intro in _SECTIONS:
-            pairs = by_analyst.get(section_name, [])
-            if not pairs:
+            all_pairs = by_analyst.get(section_name, [])
+            if not all_pairs:
                 continue
+            # A printed report showing all 25 raw response transcripts per
+            # section (each several thousand characters of real markdown)
+            # doesn't stay readable just because the markdown itself now
+            # renders correctly -- same "too much raw detail for a printed
+            # report" problem already solved for Strategic Opportunities.
+            # The Executive Briefing is the actual synthesis of this data;
+            # these are representative supporting examples, not the primary
+            # reading material.
+            qa_cap = len(all_pairs) if self.full_export else self._MAX_QA_PAIRS_SHOWN
+            pairs = all_pairs[:qa_cap]
 
             story.append(Paragraph(section_name, self._styles['H1']))
             story.append(Spacer(1, 0.06 * inch))
-            story.append(Paragraph(intro, self._styles['Body']))
+            intro_text = intro
+            if len(all_pairs) > qa_cap:
+                intro_text += (
+                    f" Showing {len(pairs)} of {len(all_pairs)} representative responses "
+                    "analyzed for this section; see the Product/Personas/Journey tabs in "
+                    "the app for the complete set."
+                )
+            story.append(Paragraph(intro_text, self._styles['Body']))
             story.append(Spacer(1, 0.14 * inch))
 
             for prompt, response in pairs:
-                block = [
+                story.append(KeepTogether([
                     Paragraph(_pdf_safe(prompt), self._styles['QPrompt']),
                     Spacer(1, 0.04 * inch),
-                    Paragraph(_pdf_safe(response) or "(no response)", self._styles['QResponse']),
-                    Spacer(1, 0.18 * inch),
-                ]
-                story.append(KeepTogether(block[:2]))
-                story.extend(block[2:])
+                ]))
+                if response:
+                    # Real AI response markdown (headers/bold/bullets/tables)
+                    # rendered as actual formatting instead of a single
+                    # Paragraph dump — which both showed literal ##/**/|
+                    # syntax AND collapsed the response's real paragraph/
+                    # list/table structure (Paragraph treats embedded
+                    # newlines as insignificant whitespace, same as HTML).
+                    story.extend(render_markdown_to_flowables(
+                        response, self._md_styles, _pdf_safe, CONTENT_W - 12,
+                    ))
+                else:
+                    story.append(Paragraph("(no response)", self._styles['QResponse']))
+                story.append(Spacer(1, 0.18 * inch))
 
             story.append(PageBreak())
 
@@ -242,24 +288,42 @@ class IntelligencePDFReport:
 
     # ── Strategic Opportunities ────────────────────────────────────────────────
 
+    _MAX_OPPORTUNITIES_SHOWN = 10
+
     def _opportunities_section(self) -> list:
-        opps = self.opportunities
+        # Ranked (evidence-count-backed findings first), not just the order
+        # they were parsed in — see opportunity_ranking.py. Capped so a run
+        # that somehow produced far more than the usual ~5 doesn't turn this
+        # section into dozens of pages; the on-screen Opportunities tab
+        # already shows the complete, all-time list.
+        all_opps = rank_opportunities(self.opportunities)
+        opp_cap = len(all_opps) if self.full_export else self._MAX_OPPORTUNITIES_SHOWN
+        opps = all_opps[:opp_cap]
         if not opps:
             return []
 
         s = self._styles
         tb = self.target_brand
 
+        intro_text = (
+            f"The following opportunities were identified through AI analysis of how "
+            f"{tb} and competitors are described across consumer research scenarios. "
+            "Each represents an area where improved content, positioning, or product "
+            "strategy could meaningfully increase AI visibility. Ranked by strength of "
+            "evidence — findings citing a specific count (e.g. \"0 of 84 responses\") "
+            "are shown first."
+        )
+        if len(all_opps) > opp_cap:
+            intro_text += (
+                f" Showing the top {opp_cap} of {len(all_opps)} "
+                "opportunities identified from this run; see the Opportunities tab in "
+                "the app for the complete list."
+            )
+
         story = [
             Paragraph("Strategic Opportunities", s['H1']),
             Spacer(1, 0.06 * inch),
-            Paragraph(
-                f"The following opportunities were identified through AI analysis of how "
-                f"{tb} and competitors are described across consumer research scenarios. "
-                "Each represents an area where improved content, positioning, or product "
-                "strategy could meaningfully increase AI visibility.",
-                s['Body'],
-            ),
+            Paragraph(intro_text, s['Body']),
             Spacer(1, 0.14 * inch),
         ]
 

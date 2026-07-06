@@ -119,6 +119,29 @@ def test_summary_sheet_kpis_reflect_input_data(tmp_path):
     assert values["Collection Runs"] == "3"
 
 
+def test_mention_rank_and_brands_tracked_use_total_tracked_not_just_mentioned(tmp_path):
+    """
+    Regression test: brand_counts only contains brands that were mentioned
+    at least once, but Atlas tracks brands that got zero mentions too (e.g.
+    a real run: 90 tracked brands, only 70 ever mentioned). The report
+    previously computed both Mention Rank's denominator and Brands Tracked
+    from len(brand_counts) — silently different from the screen, which
+    correctly uses total_tracked_brands (see #48). Deliberately uses a
+    fixture where these two numbers differ, unlike _full_analytics()'s
+    fixture (used by test_summary_sheet_kpis_reflect_input_data above) where
+    they coincidentally match and hid this exact bug.
+    """
+    out = tmp_path / "tracked.xlsx"
+    analytics = _full_analytics()
+    analytics["total_tracked_brands"] = 90  # far more than the 2 in brand_counts
+    VisibilityExcelReport(analytics, [], _STATS, "Firman").generate(str(out))
+    ws = load_workbook(str(out))["Summary"]
+
+    values = {ws.cell(r, 1).value: ws.cell(r, 2).value for r in range(6, 13)}
+    assert values["Mention Rank"] == "#2 of 90"
+    assert values["Brands Tracked"] == "90"
+
+
 def test_target_brand_row_is_highlighted_in_brand_analytics(tmp_path):
     out = tmp_path / "highlight.xlsx"
     VisibilityExcelReport(_full_analytics(), [], _STATS, "Firman").generate(str(out))

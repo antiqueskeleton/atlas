@@ -14,6 +14,12 @@ class VisibilityService:
         self.runner = VisibilityRunner(provider_manager)
         self.analytics = VisibilityAnalytics(target_brand=target_brand)
         self.repository = VisibilityRepository()
+        # One-time backfill for responses collected before the cue-zone
+        # cache existed (#81) — idempotent and cheap (a single COUNT query)
+        # once nothing is left to backfill, so safe to call on every
+        # construction rather than needing a separate "have we done this
+        # already" flag.
+        self.repository.backfill_cue_zone_cache()
         self._analytics_cache: dict | None = None
         self._analytics_cache_count: int = -1
         self._analytics_cache_target_brand: str | None = None

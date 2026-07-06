@@ -82,6 +82,27 @@ def test_mention_rank_shows_dash_when_target_brand_never_mentioned(tmp_path):
     assert "—" in text or "-" in text  # rank renders as an em-dash placeholder
 
 
+def test_mention_rank_and_brands_tracked_use_total_tracked_not_just_mentioned(tmp_path):
+    """
+    Regression test: brand_counts only contains brands that were mentioned
+    at least once, but Atlas tracks brands that got zero mentions too (e.g.
+    a real run: 90 tracked brands, only 70 ever mentioned). The report
+    previously computed both Mention Rank's denominator and Brands Tracked
+    from len(brand_counts) — silently different from the screen, which
+    correctly uses total_tracked_brands (see #48). Deliberately uses a
+    fixture where these two numbers differ, unlike _full_analytics()'s
+    fixture where they coincidentally match and hid this exact bug.
+    """
+    out = tmp_path / "tracked.pdf"
+    analytics = _full_analytics()
+    analytics["total_tracked_brands"] = 90  # far more than the 2 in brand_counts
+    VisibilityPDFReport(analytics, [], _STATS, "Firman").generate(str(out))
+    text = _extract_text(out)
+
+    assert "of 90" in text
+    assert "of 2" not in text
+
+
 def test_generate_does_not_crash_with_minimal_analytics(tmp_path):
     """Brand-new installation, barely any data yet — most fields are
     optional (.get(..., {})) so this should degrade gracefully instead

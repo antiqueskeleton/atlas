@@ -2,6 +2,8 @@ import sqlite3
 from pathlib import Path
 
 from backend.services.paths import get_db_path
+from backend.visibility import negation, recommendation
+from backend.visibility.cue_zone_cache import compute_cue_zone_cache
 
 
 class VisibilityRepository:
@@ -42,6 +44,8 @@ class VisibilityRepository:
                     family_name TEXT DEFAULT '',
                     review_status TEXT DEFAULT '',
                     review_note TEXT DEFAULT '',
+                    negative_cue_cache TEXT,
+                    recommended_cue_cache TEXT,
                     FOREIGN KEY(run_id) REFERENCES visibility_runs(run_id)
                 )
             """)
@@ -52,6 +56,10 @@ class VisibilityRepository:
                 "ALTER TABLE visibility_responses ADD COLUMN family_name TEXT DEFAULT ''",
                 "ALTER TABLE visibility_responses ADD COLUMN review_status TEXT DEFAULT ''",
                 "ALTER TABLE visibility_responses ADD COLUMN review_note TEXT DEFAULT ''",
+                # NULL (not '') by default — distinguishes "not computed yet"
+                # from "computed, response has zero cue zones" ('{}').
+                "ALTER TABLE visibility_responses ADD COLUMN negative_cue_cache TEXT",
+                "ALTER TABLE visibility_responses ADD COLUMN recommended_cue_cache TEXT",
             ):
                 try:
                     conn.execute(ddl)
@@ -87,12 +95,19 @@ class VisibilityRepository:
             ))
 
     def save_responses(self, responses):
+        # Cue-zone cache computed once here, at collection time — the
+        # response text is immutable from this point on, so this is the
+        # only time this ever needs computing (see cue_zone_cache.py).
+        # Cheap per-response (~0.5-1ms); doing it here means analytics never
+        # pays this cost again for these rows, instead of paying it fresh on
+        # every future summarize_responses() call.
         with self.connect() as conn:
             conn.executemany("""
                 INSERT INTO visibility_responses (
-                    run_id, provider, model, prompt, response, collected_at, family_name
+                    run_id, provider, model, prompt, response, collected_at, family_name,
+                    negative_cue_cache, recommended_cue_cache
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, [
                 (
                     r.run_id,
@@ -102,6 +117,8 @@ class VisibilityRepository:
                     r.response,
                     r.collected_at.isoformat(),
                     getattr(r, "family_name", ""),
+                    compute_cue_zone_cache(r.response, negation._cue_zones),
+                    compute_cue_zone_cache(r.response, recommendation._cue_zones),
                 )
                 for r in responses
             ])
@@ -153,9 +170,10 @@ class VisibilityRepository:
         Pass limit=0 (default) to fetch all rows — used by analytics.
         Pass limit>0 for the Raw Data tab display.
         review_status: "" (no filter), "unreviewed", "flagged", or "reviewed".
-        review_status/review_note are appended at the END of the SELECT
-        (not inserted earlier) so existing positional indexing elsewhere
-        (excel_report.py, intelligence_service.py) keeps working unchanged.
+        review_status/review_note/cue caches are appended at the END of the
+        SELECT (not inserted earlier) so existing positional indexing
+        elsewhere (excel_report.py, intelligence_service.py) keeps working
+        unchanged.
         """
         clauses, params = [], []
         if provider:
@@ -187,7 +205,9 @@ class VisibilityRepository:
                     vresp.collected_at,
                     COALESCE(NULLIF(vresp.family_name, ''), vrun.prompt_set) AS family_display,
                     COALESCE(vresp.review_status, '') AS review_status,
-                    COALESCE(vresp.review_note, '') AS review_note
+                    COALESCE(vresp.review_note, '') AS review_note,
+                    vresp.negative_cue_cache,
+                    vresp.recommended_cue_cache
                 FROM visibility_responses vresp
                 LEFT JOIN visibility_runs vrun ON vresp.run_id = vrun.run_id
                 {where}
@@ -251,6 +271,57 @@ class VisibilityRepository:
         with self.connect() as conn:
             cursor = conn.execute("SELECT COUNT(*) FROM visibility_responses")
             return cursor.fetchone()[0]
+
+    def count_uncached_cue_zones(self) -> int:
+        """Responses collected before the cue-zone cache existed (#81) —
+        NULL, not '{}' (a response with genuinely zero zones is still
+        cached, just as an empty object; see cue_zone_cache.py)."""
+        with self.connect() as conn:
+            cursor = conn.execute(
+                "SELECT COUNT(*) FROM visibility_responses "
+                "WHERE negative_cue_cache IS NULL OR recommended_cue_cache IS NULL"
+            )
+            return cursor.fetchone()[0]
+
+    def backfill_cue_zone_cache(self, batch_size: int = 500) -> int:
+        """
+        One-time backfill for responses collected before the cue-zone cache
+        existed. Safe to call repeatedly/on every startup — only touches
+        rows that are actually still uncached, and does nothing (zero
+        query cost beyond the initial SELECT) once none remain. Processes
+        in batches so a very large backfill (100k+ rows) doesn't hold one
+        giant transaction or load the whole table into memory at once.
+
+        Returns the number of rows updated (0 once fully backfilled).
+        """
+        updated = 0
+        while True:
+            with self.connect() as conn:
+                rows = conn.execute(
+                    "SELECT id, response FROM visibility_responses "
+                    "WHERE negative_cue_cache IS NULL OR recommended_cue_cache IS NULL "
+                    "LIMIT ?",
+                    (batch_size,),
+                ).fetchall()
+                if not rows:
+                    break
+                conn.executemany(
+                    "UPDATE visibility_responses "
+                    "SET negative_cue_cache = ?, recommended_cue_cache = ? "
+                    "WHERE id = ?",
+                    [
+                        (
+                            compute_cue_zone_cache(text, negation._cue_zones),
+                            compute_cue_zone_cache(text, recommendation._cue_zones),
+                            row_id,
+                        )
+                        for row_id, text in rows
+                    ],
+                )
+            updated += len(rows)
+            if len(rows) < batch_size:
+                break
+        return updated
 
     def count_stats(self) -> dict:
         """Pure counts for the Raw Data tab KPI row — no derived metrics."""

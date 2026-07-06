@@ -3,6 +3,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 from backend.services.paths import get_data_dir
+from backend.visibility.brand_matcher import BrandTermMatcher
 from backend.visibility.negation import detect_negative_brands
 from backend.visibility.recommendation import detect_recommended_brands
 
@@ -95,6 +96,12 @@ class VisibilityAnalytics:
                     self._flat_brand_terms.append((term, brand))
                     seen.add(term)
 
+        # Single-pass multi-brand matcher (Aho-Corasick) — rebuilt only when
+        # terms actually change, same lifecycle as _flat_brand_terms above.
+        # Replaces the old "for term, brand in flat_terms: text.find(term)"
+        # loop, which scales with brands x text instead of just text length.
+        self._brand_matcher = BrandTermMatcher(self._flat_brand_terms)
+
         self._feature_set = [(f, f.lower()) for f in self.features]
 
         return (
@@ -115,7 +122,7 @@ class VisibilityAnalytics:
         counts across many responses.
         """
         lower = text.lower()
-        return sorted({brand for term, brand in self._flat_brand_terms if term in lower})
+        return sorted(self._brand_matcher.find_brand_positions(lower))
 
     def summarize_responses(self, responses):
         brand_counts = Counter()
@@ -142,12 +149,9 @@ class VisibilityAnalytics:
             provider_response_counts[provider] += 1
             prompt_set_response_counts[prompt_set] += 1
 
-            # Single pass: find earliest position for each brand across all its terms
-            brand_first_pos: dict[str, int] = {}
-            for term, brand in self._flat_brand_terms:
-                pos = text.find(term)
-                if pos >= 0 and (brand not in brand_first_pos or pos < brand_first_pos[brand]):
-                    brand_first_pos[brand] = pos
+            # Single pass over the whole response text for every brand at
+            # once (Aho-Corasick), instead of one text.find() per term.
+            brand_first_pos: dict[str, int] = self._brand_matcher.find_brand_positions(text)
 
             mentioned_brands = []
             for brand, match_pos in brand_first_pos.items():
@@ -165,10 +169,18 @@ class VisibilityAnalytics:
 
             brand_names_in_response = [b for _, b in mentioned_brands]
 
+            # Cached at collection time (see visibility_repository.py's
+            # save_responses()/backfill_cue_zone_cache()) — None only for a
+            # row shape that predates these columns (e.g. a test fixture),
+            # in which case detect_negative_brands/detect_recommended_brands
+            # fall back to computing fresh, exactly as before caching existed.
+            neg_cache = response[10] if len(response) > 10 else None
+            rec_cache = response[11] if len(response) > 11 else None
+
             # Negative-context detection: which mentioned brands were cast
             # unfavorably somewhere in this response ("unlike Firman, ...",
             # "Firman lacks...", etc). See backend/visibility/negation.py.
-            negative_brands = detect_negative_brands(response[5], self._flat_brand_terms)
+            negative_brands = detect_negative_brands(response[5], self._brand_matcher, neg_cache)
             for brand in negative_brands:
                 if brand in brand_first_pos:  # only count tracked, matched mentions
                     negative_brand_counts[brand] += 1
@@ -185,7 +197,7 @@ class VisibilityAnalytics:
             # Firman" contains the literal cue phrase "recommend" — so exclude
             # anything also flagged negative in this response, same pattern as
             # assoc_brand_names above.
-            recommended_raw = detect_recommended_brands(response[5], self._flat_brand_terms)
+            recommended_raw = detect_recommended_brands(response[5], self._brand_matcher, rec_cache)
             genuinely_recommended = recommended_raw - negative_brands
             for brand in genuinely_recommended:
                 if brand in brand_first_pos:  # only count tracked, matched mentions

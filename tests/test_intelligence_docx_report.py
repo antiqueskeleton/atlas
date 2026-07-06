@@ -95,6 +95,83 @@ def test_opportunity_status_labels_render_correctly(tmp_path):
     assert "Fix spec accuracy" in text
 
 
+def test_full_export_disables_qa_pair_cap(tmp_path):
+    results = [
+        ("Product Intelligence", f"Question {i}?", f"Response body {i}.", "2026-07-01T10:00:00")
+        for i in range(8)
+    ]
+    out = tmp_path / "full.docx"
+    IntelligenceDocxReport(_RUN, _BRIEFING, results, [], "Firman", full_export=True).generate(str(out))
+    text = _all_paragraph_text(Document(str(out)))
+
+    assert "Showing" not in text
+    for i in range(8):
+        assert f"Question {i}?" in text
+
+
+def test_full_export_disables_opportunities_cap(tmp_path):
+    opps = [(i, f"Opp {i}", f"{i} of 20 responses", f"Action {i}", "new") for i in range(15)]
+    out = tmp_path / "full_opps.docx"
+    IntelligenceDocxReport(_RUN, _BRIEFING, [], opps, "Firman", full_export=True).generate(str(out))
+    text = _all_paragraph_text(Document(str(out)))
+
+    assert "Showing the top" not in text
+    for i in range(15):
+        assert f"Opp {i}" in text
+
+
+def test_executive_briefing_sections_get_distinct_header_styling(tmp_path):
+    briefing = (
+        "product summary", "persona summary", "journey summary", "opportunities text",
+        "VISIBILITY SNAPSHOT  \nFirman appeared in 12 of 84 responses.\n\n"
+        "SENTIMENT  \nOut of 12 mentions, 4 were negative.",
+        "2026-07-01T10:00:26",
+    )
+    out = tmp_path / "briefing_sections.docx"
+    IntelligenceDocxReport(_RUN, briefing, [], [], "Firman").generate(str(out))
+    doc = Document(str(out))
+    paras = [p for p in doc.paragraphs if p.text.strip()]
+
+    header_para = next(p for p in paras if p.text == "VISIBILITY SNAPSHOT")
+    assert header_para.runs[0].font.bold is True
+    body_para = next(p for p in paras if "Firman appeared in 12 of 84 responses." in p.text)
+    assert body_para.text == "Firman appeared in 12 of 84 responses."
+
+
+def test_analyst_section_caps_qa_pairs_shown_with_a_note(tmp_path):
+    results = [
+        ("Product Intelligence", f"Question {i}?", f"Response body {i}.", "2026-07-01T10:00:00")
+        for i in range(8)
+    ]
+    out = tmp_path / "capped.docx"
+    IntelligenceDocxReport(_RUN, _BRIEFING, results, [], "Firman").generate(str(out))
+    text = _all_paragraph_text(Document(str(out)))
+
+    assert "Showing 5 of 8" in text
+    for i in range(5):
+        assert f"Question {i}?" in text
+    for i in range(5, 8):
+        assert f"Question {i}?" not in text
+
+
+def test_opportunities_section_is_ranked_and_capped(tmp_path):
+    opps = [
+        (1, "Qualitative gap", "Champion and Honda have thousands of reviews.", "Action A", "new"),
+        (2, "Complete absence", "Firman is not mentioned (0 of 84 responses).", "Action B", "new"),
+    ] + [
+        (i, f"Filler {i}", "No count here.", f"Action {i}", "new") for i in range(3, 13)
+    ]
+    out = tmp_path / "ranked_opps.docx"
+    IntelligenceDocxReport(_RUN, _BRIEFING, [], opps, "Firman").generate(str(out))
+    doc = Document(str(out))
+    text = _all_paragraph_text(doc)
+    headings = _heading_texts(doc)
+
+    assert "Showing the top 10 of 12" in text
+    heading_order = [h for h in headings if "Complete absence" in h or "Qualitative gap" in h]
+    assert "Complete absence" in heading_order[0]  # ranked first (0/84 ratio)
+
+
 def test_opportunity_section_labels_field_action_not_description(tmp_path):
     """Regression: this field was labeled "Description" here but "Action" on
     the Intelligence page's opportunity cards — same underlying data, two

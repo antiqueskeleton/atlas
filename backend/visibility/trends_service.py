@@ -20,6 +20,11 @@ class TrendsService:
     def __init__(self, target_brand=""):
         self.target_brand = target_brand
         self.repository = VisibilityRepository()
+        # One-time backfill for responses collected before the cue-zone
+        # cache existed (#81) — idempotent/cheap once nothing is left to
+        # backfill; not relying on VisibilityService having already run
+        # this, since page construction order isn't guaranteed.
+        self.repository.backfill_cue_zone_cache()
         self.analytics = VisibilityAnalytics(target_brand=target_brand)
 
     # ── Public API ─────────────────────────────────────────────────────────────

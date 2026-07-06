@@ -26,7 +26,9 @@ common, high-value, high-precision cases, not every case.
 """
 import re
 
+from backend.visibility.brand_matcher import BrandTermMatcher
 from backend.visibility.clause_boundaries import SENTENCE_SPLIT, clamp_backward, clamp_forward
+from backend.visibility.cue_zone_cache import parse_cue_zone_cache, zones_for_sentence
 
 # Endorsement-style phrases a model uses when actively recommending a
 # specific option, as opposed to merely listing it alongside others.
@@ -73,33 +75,52 @@ def _cue_zones(sent_lower: str) -> list[tuple[int, int]]:
 
 
 def detect_recommended_brands(response_text: str,
-                              flat_brand_terms: list[tuple[str, str]]) -> set[str]:
+                              flat_brand_terms,
+                              cached_zones_json: str | None = None) -> set[str]:
     """
-    Return the set of brands (from flat_brand_terms) that appear in an
-    endorsement/recommendation context somewhere in response_text.
+    Return the set of brands that appear in an endorsement/recommendation
+    context somewhere in response_text.
 
-    flat_brand_terms is a list of (search_term_lowercase, brand_display_name)
-    pairs, matching VisibilityAnalytics._flat_brand_terms — same signature
-    as negation.detect_negative_brands for a consistent call pattern.
+    flat_brand_terms may be either a list of (search_term_lowercase,
+    brand_display_name) pairs (matching VisibilityAnalytics._flat_brand_terms
+    — wrapped in a BrandTermMatcher internally, cheap for occasional/test
+    callers) or an already-built BrandTermMatcher (for a hot-path caller like
+    VisibilityAnalytics.summarize_responses(), which builds one once per
+    reload_terms() and reuses it across every response instead of rebuilding
+    it per call) — same signature convention as negation.detect_negative_brands.
+
+    cached_zones_json: optional pre-computed cue-zone cache from
+    cue_zone_cache.compute_cue_zone_cache() (persisted per response, since
+    it's brand-independent and response text never changes). When given,
+    _cue_zones() — the expensive part — is never called; when None, it's
+    computed fresh, exactly as before caching existed.
     """
     if not response_text:
         return set()
 
+    matcher = (
+        flat_brand_terms if isinstance(flat_brand_terms, BrandTermMatcher)
+        else BrandTermMatcher(flat_brand_terms)
+    )
+
+    # Parsed ONCE per response, not once per sentence — see negation.py's
+    # identical comment for why this matters.
+    parsed_cache = parse_cue_zone_cache(cached_zones_json) if cached_zones_json is not None else None
+
     recommended: set[str] = set()
-    for sentence in SENTENCE_SPLIT.split(response_text):
+    for i, sentence in enumerate(SENTENCE_SPLIT.split(response_text)):
         sent_lower = sentence.lower()
-        zones = _cue_zones(sent_lower)
+        zones = (
+            zones_for_sentence(parsed_cache, i) if parsed_cache is not None
+            else _cue_zones(sent_lower)
+        )
         if not zones:
             continue
 
-        for term, brand in flat_brand_terms:
+        for start, end, brand in matcher.find_first_term_occurrences(sent_lower):
             if brand in recommended:
                 continue  # already flagged from an earlier sentence
-            idx = sent_lower.find(term)
-            if idx < 0:
-                continue
-            term_end = idx + len(term)
-            if any(idx < z_end and term_end > z_start for z_start, z_end in zones):
+            if any(start < z_end and end > z_start for z_start, z_end in zones):
                 recommended.add(brand)
 
     return recommended

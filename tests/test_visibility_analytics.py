@@ -12,6 +12,7 @@ Response row shape mirrors visibility_repository rows:
 """
 import pytest
 
+from backend.visibility.brand_matcher import BrandTermMatcher
 from backend.visibility.visibility_analytics import VisibilityAnalytics
 
 
@@ -23,6 +24,7 @@ def make_analytics(target_brand="Firman"):
     a.features = ["Dual Fuel", "Electric Start"]
     a.channels = [("Amazon", ["amazon"], "retail"), ("YouTube", ["youtube"], "content")]
     a._flat_brand_terms = [("firman", "Firman"), ("honda", "Honda"), ("generac", "Generac")]
+    a._brand_matcher = BrandTermMatcher(a._flat_brand_terms)
     a._feature_set = [(f, f.lower()) for f in a.features]
     return a
 
