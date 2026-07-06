@@ -30,7 +30,10 @@ class StrategicOpportunitiesAgent(BaseAgent):
                 confidence=reasoning.confidence,
                 provider=reasoning.provider,
                 raw_response=reasoning.raw_response,
-                is_error=reasoning.is_error,
+                # #80: is_error here means "not trustworthy for synthesis" —
+                # either a real request failure OR a response that didn't
+                # come back as the structured JSON this agent asked for.
+                is_error=reasoning.is_error or reasoning.parse_failed,
             )
 
         summary = analysis["summary"]

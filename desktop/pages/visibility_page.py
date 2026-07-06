@@ -1295,6 +1295,18 @@ class VisibilityPage(QWidget):
                 cb.setToolTip(dot_tip)
 
     def refresh(self):
+        # #80: re-sync target_brand on every refresh, same as Trends already
+        # does — without this, a target-brand change made after this page
+        # was constructed (pages are all built once at app startup) never
+        # takes effect for the rest of the running session: the Visibility
+        # Score tile keeps computing against whatever brand was set at
+        # launch, while Mention Rank (which just enumerates brand_counts,
+        # not gated on an exact target_brand string match) still shows the
+        # real data — the mismatch between those two tiles is what exposed
+        # this bug.
+        self.service.target_brand = self.app.get_target_brand()
+        self.service.analytics.target_brand = self.app.get_target_brand()
+
         summary = self.service.analytics_summary()
         runs = self.service.list_runs() or []
 

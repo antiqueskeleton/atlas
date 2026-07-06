@@ -16,6 +16,7 @@ class VisibilityService:
         self.repository = VisibilityRepository()
         self._analytics_cache: dict | None = None
         self._analytics_cache_count: int = -1
+        self._analytics_cache_target_brand: str | None = None
 
     def run(
         self,
@@ -58,6 +59,13 @@ class VisibilityService:
         # recompute whenever reload_terms() reports a real change.
         if self.analytics.reload_terms():
             self._analytics_cache = None
+        # #80: also invalidate on a target_brand change alone (same response
+        # count, same term set) — without this, re-syncing target_brand in
+        # refresh() has no visible effect until the response count next
+        # changes, since target_visibility_score is keyed off target_brand
+        # but the cache wasn't tracking it.
+        if self.analytics.target_brand != self._analytics_cache_target_brand:
+            self._analytics_cache = None
         count = self.repository.count_responses()
         if self._analytics_cache is not None and count == self._analytics_cache_count:
             return self._analytics_cache
@@ -65,6 +73,7 @@ class VisibilityService:
         result = self.analytics.summarize_responses(responses)
         self._analytics_cache = result
         self._analytics_cache_count = count
+        self._analytics_cache_target_brand = self.analytics.target_brand
         return result
 
     def get_responses_for_run(self, run_id):

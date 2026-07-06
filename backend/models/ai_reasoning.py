@@ -12,3 +12,10 @@ class AIReasoning:
     provider: str = ""
     raw_response: str = ""
     is_error: bool = False
+    # parse_failed: the response wasn't valid JSON. Deliberately separate from
+    # is_error — a caller that never asked for JSON (Visibility Collection
+    # sends plain conversational prompts) gets a perfectly valid plain-text
+    # answer here, which must NOT be treated as an error. Only callers that
+    # explicitly requested structured JSON (the Investigation page's agents,
+    # via RESPONSE_SCHEMA) should treat parse_failed as a real problem.
+    parse_failed: bool = False

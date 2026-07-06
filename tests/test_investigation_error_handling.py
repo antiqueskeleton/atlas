@@ -40,12 +40,34 @@ def test_parser_sets_is_error_false_on_valid_json():
     assert reasoning.is_error is False
 
 
-def test_parser_sets_is_error_true_on_invalid_json():
+def test_parser_sets_parse_failed_but_not_is_error_on_invalid_json():
+    """
+    #80 REGRESSION TEST: is_error must stay False here. AIReasoningParser is
+    shared by every provider's ask(), used both by Visibility Collection
+    (plain conversational prompts, NEVER asking for JSON — a normal
+    plain-text answer legitimately fails json.loads() every time, and that
+    is completely expected) and the Investigation page's agents (which DO
+    request JSON). An earlier version of this fix set is_error=True
+    unconditionally here, which silently broke Visibility Collection for
+    every provider — every normal response got marked an error and never
+    saved (confirmed against a real production database: every run after
+    that change saved exactly 0 responses). parse_failed is the correct
+    signal for callers that specifically expect JSON to check instead.
+    """
     parser = AIReasoningParser()
     reasoning = parser.parse("This is plain English, not JSON at all.", provider="OpenAI")
-    assert reasoning.is_error is True
+    assert reasoning.is_error is False
+    assert reasoning.parse_failed is True
     assert reasoning.confidence == "Low"
     assert reasoning.raw_response == "This is plain English, not JSON at all."
+
+
+def test_parser_leaves_parse_failed_false_on_valid_json():
+    parser = AIReasoningParser()
+    reasoning = parser.parse(
+        '{"executive_summary": "Test", "confidence": "High"}', provider="OpenAI",
+    )
+    assert reasoning.parse_failed is False
 
 
 # ── RESPONSE_SCHEMA grounding rules ──────────────────────────────────────────
@@ -122,6 +144,24 @@ def test_strategic_opportunities_agent_propagates_is_error():
     agent = StrategicOpportunitiesAgent()
     with patch("backend.agents.agent_ai_service.AgentAIService.ask",
                return_value=_agent_reasoning(is_error=True)):
+        result = agent.run(analysis={"summary": object()}, request=object(), provider_manager=_FakePM())
+    assert result.is_error is True
+
+
+def test_agent_flags_task_result_as_error_when_only_parse_failed():
+    """
+    The realistic scenario: a genuine parser fallback has is_error=False,
+    parse_failed=True (per #80's fix). TaskResult.is_error must still end up
+    True — the 4 agents explicitly OR the two signals together, since for
+    THEIR use case (structured JSON expected), a parse failure is just as
+    disqualifying as a real request error.
+    """
+    agent = CompetitivePositionAgent()
+    reasoning = AIReasoning(
+        executive_summary="some raw text", confidence="Low",
+        provider="OpenAI", is_error=False, parse_failed=True,
+    )
+    with patch("backend.agents.agent_ai_service.AgentAIService.ask", return_value=reasoning):
         result = agent.run(analysis={"summary": object()}, request=object(), provider_manager=_FakePM())
     assert result.is_error is True
 
@@ -234,3 +274,47 @@ def test_all_results_erroring_produces_no_completed_findings_message():
     task_results = [_task_result("Competitive Positioning", "Low", is_error=True)]
     consensus = ExecutiveConsensusEngine().generate(task_results, provider_manager=None)
     assert consensus.overall_read == "No completed agent findings are available for consensus."
+
+
+# ── #80 end-to-end regression: Visibility Collection must save plain-text ──
+# responses as successes, not errors. This is the exact real-world scenario
+# that broke in v0.9.4: every provider's ask() routes through the SAME
+# AIReasoningParser used by the Investigation page, but Visibility
+# Collection sends plain conversational prompts that never produce JSON —
+# a real, genuine, useful answer is expected to fail json.loads() every
+# time. If is_error were ever set on that fallback again, this test fails.
+
+def test_visibility_runner_saves_plain_text_response_as_success_not_error():
+    from backend.visibility.visibility_runner import VisibilityRunner
+    from backend.ai.base_provider import AIProvider
+    from backend.ai.ai_reasoning_parser import AIReasoningParser
+
+    class _RealisticProvider(AIProvider):
+        """Mirrors a real provider: routes ask() through the real, shared
+        AIReasoningParser, exactly like OpenAIProvider/MistralProvider/
+        DeepSeekProvider all do."""
+        provider_name = "OpenAI"
+        model = "gpt-4.1-mini"
+
+        def __init__(self):
+            self.parser = AIReasoningParser()
+
+        def ask(self, prompt, context=None):
+            # A real, normal, conversational answer — plain prose, exactly
+            # what every provider actually returns for a Visibility prompt.
+            plain_text_answer = (
+                "Honda and Generac are the most commonly recommended "
+                "portable generator brands for home backup power."
+            )
+            return self.parser.parse(text=plain_text_answer, provider=self.provider_name)
+
+    runner = VisibilityRunner.__new__(VisibilityRunner)
+    result = runner.run_prompt_set(
+        prompts=["What is the best portable generator brand?"],
+        provider=_RealisticProvider(),
+    )
+
+    assert result["run"].response_count == 1
+    assert result["run"].error_count == 0
+    assert len(result["responses"]) == 1
+    assert "Honda and Generac" in result["responses"][0].response

@@ -1,5 +1,5 @@
 {
-  "version": "0.9.4",
-  "download_url": "https://github.com/antiqueskeleton/atlas/releases/download/v0.9.4/AtlasAI-v0.9.4-Setup.exe",
-  "release_notes": "v0.9.4 — Fixed a real factual-accuracy bug on the Investigation page where AI reasoning could state things not supported by the evidence provided, and where a failed AI response could render as if it were a genuine, high-confidence finding; both are now caught and clearly flagged instead. Visibility Collection runs now write a diagnostic log to disk so a stalled or crashed run can be reviewed afterward, and Atlas now warns before starting a likely-redundant rerun of the same prompt set. Added DeepSeek as a supported AI provider. Knowledge now includes an own-site audit (flags if your site blocks AI crawlers like GPTBot), a Search Volume tab that checks the prompt library against real Google Search Console query data, and Web Intelligence now checks robots.txt for AI-crawler blocking. Trends now flags a real visibility drop for a provider. Raw Data responses can now be flagged for review with an audit trail. Renamed \"Comp Shop\" to \"Price Comparison\" for clarity."
+  "version": "0.9.5",
+  "download_url": "https://github.com/antiqueskeleton/atlas/releases/download/v0.9.5/AtlasAI-v0.9.5-Setup.exe",
+  "release_notes": "v0.9.5 — CRITICAL FIX: v0.9.4 broke Visibility Collection for every AI provider (no responses were being saved). This is fixed. Also fixed the Visibility page's target-brand score tile going stale after changing the Target Brand in Settings. If you installed v0.9.4, please update immediately."
 }

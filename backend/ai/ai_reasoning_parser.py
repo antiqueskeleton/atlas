@@ -20,11 +20,20 @@ class AIReasoningParser:
             )
 
         except Exception:
-            # is_error=True is the critical part here — without it, this parse
-            # failure is indistinguishable from a real, successful response to
-            # any caller that only looks at executive_summary/risks/opportunities
-            # (which is exactly what let a broken response render as a fake
-            # high-confidence "executive consensus" — see #77).
+            # IMPORTANT: this is NOT necessarily an error. This same parser is
+            # shared by every provider's ask(), used both by Visibility
+            # Collection (plain conversational prompts, NEVER asking for
+            # JSON — a normal plain-text answer legitimately fails
+            # json.loads() every time, and that is completely expected) and
+            # the Investigation page's agents (which DO explicitly request
+            # JSON via RESPONSE_SCHEMA, where a parse failure is a real
+            # problem). is_error must stay False here — a prior version of
+            # this code set is_error=True unconditionally, which silently
+            # broke Visibility Collection for every provider (every normal
+            # plain-text response got marked an error and never saved) — see
+            # #80. parse_failed is the signal callers that DO expect JSON
+            # (executive_consensus_engine.py, the 4 live-AI agents) should
+            # check instead.
             return AIReasoning(
                 executive_summary=text,
                 confidence="Low",
@@ -40,5 +49,5 @@ class AIReasoningParser:
                     "Should Atlas retry with stricter JSON instructions?"
                 ],
                 provider=provider,
-                is_error=True,
+                parse_failed=True,
             )

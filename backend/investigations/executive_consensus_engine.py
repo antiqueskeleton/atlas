@@ -41,7 +41,12 @@ class ExecutiveConsensusEngine:
                 prompt = ExecutivePromptBuilder().build(completed)
                 provider = provider_manager.get_active_provider()
                 reasoning = provider.ask(prompt=prompt, context=None)
-                if reasoning.is_error:
+                # #80: this synthesis step explicitly requests structured JSON
+                # (via RESPONSE_SCHEMA in the prompt), so parse_failed is just
+                # as much a real failure here as is_error — unlike Visibility
+                # Collection, which never asks for JSON and must NOT treat a
+                # parse_failed plain-text answer as an error.
+                if reasoning.is_error or reasoning.parse_failed:
                     raise ValueError(f"Executive synthesis failed: {reasoning.executive_summary}")
                 return ExecutiveConsensus(
                     overall_read=reasoning.executive_summary or "",

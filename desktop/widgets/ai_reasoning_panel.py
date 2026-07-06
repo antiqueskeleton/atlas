@@ -27,7 +27,10 @@ class AIReasoningPanel(QFrame):
         # real, successful analysis — nothing here ever checked is_error, so
         # a technical failure was visually indistinguishable from genuine
         # findings. Style it as a clear warning instead.
-        if getattr(reasoning, "is_error", False):
+        # #80: this panel is only ever used in a context that explicitly
+        # requested structured JSON (the Investigation page's agents), so
+        # parse_failed is just as much a real problem here as is_error.
+        if getattr(reasoning, "is_error", False) or getattr(reasoning, "parse_failed", False):
             self.body.setStyleSheet(
                 "QTextEdit { background-color: #FEF2F2; border: 1px solid #FCA5A5; "
                 "color: #7F1D1D; }"
