@@ -145,7 +145,9 @@ class TrendsPage(QWidget):
         title_row_w.setLayout(title_row)
 
         subtitle = QLabel(
-            "How AI visibility changes over time — across providers, brands, features, and prompt sets."
+            "A view, not a collection — charts update automatically from your "
+            "Visibility runs. Nothing to run here; just Refresh after a new "
+            "collection finishes."
         )
         subtitle.setStyleSheet("font-size:15px;color:#6B7280;")
         subtitle.setWordWrap(True)

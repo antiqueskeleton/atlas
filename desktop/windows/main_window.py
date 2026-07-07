@@ -429,19 +429,20 @@ class AtlasMainWindow(QMainWindow):
 
         # Description
         desc = QLabel(
-            "Atlas tracks brand visibility, market perception, and competitive\n"
-            "positioning across AI providers — so you always know how your\n"
-            "brand appears in the answers people are reading."
+            "Atlas tracks brand visibility across AI providers, measures your\n"
+            "real footprint on YouTube, Reddit, editorial coverage, retail\n"
+            "listings, and Google AI Overviews, and synthesizes it all into a\n"
+            "strategic intelligence briefing — so you always know how your\n"
+            "brand appears, and why, everywhere AI is shaping buying decisions."
         )
         desc.setStyleSheet("font-size: 13px; color: #374151; line-height: 1.5;")
         desc.setAlignment(Qt.AlignCenter)
         desc.setWordWrap(True)
 
-        # Copyright with dweeb.co as link
-        copy_lbl = QLabel("© 2026 <a href='https://dweeb.co' style='color:#0B84FF;'>dweeb.co</a>")
+        # Plain-text copyright — no hyperlink styling/underline on dweeb.co.
+        copy_lbl = QLabel("© 2026 dweeb.co")
         copy_lbl.setStyleSheet("font-size: 12px; color: #9CA3AF;")
         copy_lbl.setAlignment(Qt.AlignCenter)
-        copy_lbl.setOpenExternalLinks(True)
 
         close_btn = QPushButton("Close")
         close_btn.setFixedWidth(110)

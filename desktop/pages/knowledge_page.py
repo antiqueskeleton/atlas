@@ -327,7 +327,10 @@ class KnowledgePage(QWidget):
 
         title = QLabel("Knowledge Library")
         title.setStyleSheet("font-size: 22px; font-weight: bold;")
-        subtitle = QLabel("Manage the brands, features, personas, and prompt sets Atlas tracks.")
+        subtitle = QLabel(
+            "Start here — define the brands, features, personas, and prompt "
+            "sets Atlas tracks before running a Visibility collection."
+        )
         subtitle.setStyleSheet("font-size: 13px; color: #6B7280;")
 
         self._tabs = QTabWidget()

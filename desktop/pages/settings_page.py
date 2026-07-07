@@ -148,7 +148,10 @@ class SettingsPage(QWidget):
         title = QLabel("Settings")
         title.setStyleSheet("font-size: 22px; font-weight: bold;")
 
-        subtitle = QLabel("Configure your target brand, active AI provider, and API keys.")
+        subtitle = QLabel(
+            "Start here — set your target brand and API keys before running "
+            "any collection or analysis."
+        )
         subtitle.setStyleSheet("font-size: 13px; color: #6B7280;")
 
         root.addWidget(title)

@@ -77,8 +77,9 @@ class InvestigationPage(QWidget):
         title.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         subtitle = QLabel(
-            "Ask Atlas a business question. Specialist AI agents analyze your "
-            "visibility data and return a strategic synthesis."
+            "Ask a one-off strategic question, any time — specialist AI agents "
+            "analyze whatever Visibility data is already stored. No separate "
+            "collection or report needs to run first."
         )
         subtitle.setStyleSheet("font-size:13px;color:#6B7280;")
         subtitle.setWordWrap(True)

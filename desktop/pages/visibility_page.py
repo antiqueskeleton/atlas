@@ -252,7 +252,9 @@ class VisibilityPage(QWidget):
         title = QLabel("Visibility Collection")
         title.setStyleSheet("font-size: 22px; font-weight: bold;")
         subtitle = QLabel(
-            "Send prompt sets to AI providers and measure how brands are mentioned."
+            "Step 1 of the workflow — send prompt sets to AI providers and log "
+            "how brands are mentioned. Run this first: Trends and Intelligence "
+            "both depend on the responses collected here."
         )
         subtitle.setStyleSheet("font-size: 13px; color: #6B7280;")
 

@@ -98,7 +98,8 @@ class PriceComparisonPage(QWidget):
         title = QLabel("Price Comparison")
         title.setStyleSheet("font-size: 28px; font-weight: 700; color: #111827;")
         subtitle = QLabel(
-            "Compare real-time pricing and confirmed product specs across tracked brands."
+            "Independent of the workflow above, run any time — compare "
+            "real-time pricing and confirmed product specs across tracked brands."
         )
         subtitle.setStyleSheet("font-size: 13px; color: #6B7280;")
         root.addWidget(title)

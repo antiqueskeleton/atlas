@@ -235,9 +235,10 @@ class TargetedReviewPage(QWidget):
         title.setStyleSheet("font-size:24px; font-weight:bold;")
 
         subtitle = QLabel(
-            "Real platform numbers — YouTube content volume, Reddit conversation "
-            "share, retailer review depth — that explain WHY AI models see some "
-            "brands more than others, and what would close each gap."
+            "Web Intelligence — optional but recommended, any time after "
+            "Knowledge. Real YouTube, Reddit, editorial, retail, and Google AI "
+            "Overview numbers that explain WHY AI models see some brands more "
+            "than others. Feeds directly into the Intelligence briefing."
         )
         subtitle.setStyleSheet("font-size:13px; color:#6B7280;")
         subtitle.setWordWrap(True)

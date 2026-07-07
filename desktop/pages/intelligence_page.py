@@ -124,7 +124,8 @@ class IntelligencePage(QWidget):
         title.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         subtitle = QLabel(
-            "Synthesizes stored AI responses into brand positioning, consumer insights, "
+            "Run this last — synthesizes your stored Visibility responses and "
+            "Targeted Review data into brand positioning, consumer insights, "
             "and strategic opportunities."
         )
         subtitle.setStyleSheet("font-size:13px; color:#6B7280;")
