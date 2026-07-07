@@ -132,6 +132,58 @@ def test_run_live_excludes_failed_analyst_prompts_from_collected_and_counts_them
     assert "request failed" not in all_text
 
 
+def test_run_live_threads_measured_platform_data_into_both_synthesis_prompts(tmp_path):
+    """
+    #25 phase 2: Targeted Review's measured platform numbers must reach the
+    opportunity AND briefing prompts as ground truth ('feeds into the
+    Intelligence Engine — not a separate silo'), including the deterministic
+    MEASURED GAP lines pre-computed by gap_analysis().
+    """
+    from backend.targeted_review.targeted_review_repository import TargetedReviewRepository
+
+    provider = _FakeProvider()
+    svc = IntelligenceService(_FakePM(provider), target_brand="Firman")
+    svc.repository = IntelligenceRepository(db_path=str(tmp_path / "test.db"))
+    svc.platform_repository = TargetedReviewRepository(db_path=tmp_path / "platform.db")
+    svc.platform_repository.save_findings("Editorial Coverage", [
+        {"brand": "Firman", "platform": "Editorial Coverage",
+         "sites_with_coverage": 2, "sites_checked": 6, "total_results": 40,
+         "strongest_site": "Bob Vila", "error": ""},
+        {"brand": "Honda", "platform": "Editorial Coverage",
+         "sites_with_coverage": 6, "sites_checked": 6, "total_results": 800,
+         "strongest_site": "CNET", "error": ""},
+    ])
+
+    svc._run_live(provider_name=None)
+
+    opp_prompt = next(c for c in provider.calls if "Identify the top 5" in c)
+    brief_prompt = next(
+        c for c in provider.calls if "VISIBILITY SNAPSHOT" in c and "Produce a structured" in c
+    )
+    for prompt in (opp_prompt, brief_prompt):
+        assert "MEASURED PLATFORM PRESENCE" in prompt
+        assert "covered by 2 of 6 tracked authority review sites" in prompt
+        assert "MEASURED GAP" in prompt
+
+
+def test_run_live_reports_explicit_no_platform_data_state(tmp_path):
+    """With no Targeted Review collections yet, the prompts must carry the
+    explicit 'do not invent' empty-state sentence, not a blank section."""
+    from backend.targeted_review.targeted_review_repository import TargetedReviewRepository
+
+    provider = _FakeProvider()
+    svc = IntelligenceService(_FakePM(provider), target_brand="Firman")
+    svc.repository = IntelligenceRepository(db_path=str(tmp_path / "test.db"))
+    svc.platform_repository = TargetedReviewRepository(db_path=tmp_path / "platform.db")
+
+    svc._run_live(provider_name=None)
+
+    brief_prompt = next(
+        c for c in provider.calls if "VISIBILITY SNAPSHOT" in c and "Produce a structured" in c
+    )
+    assert "No measured platform data collected yet" in brief_prompt
+
+
 def test_run_live_persists_parsed_opportunity_to_a_fresh_db(tmp_path):
     """
     Regression test: IntelligenceRepository previously only ALTERed the

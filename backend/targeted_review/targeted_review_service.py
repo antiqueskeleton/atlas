@@ -41,7 +41,11 @@ _RATING_FLOOR = 4.0
 
 
 class TargetedReviewService:
-    def __init__(self, config_service, target_brand: str = "", repository=None):
+    def __init__(self, config_service=None, target_brand: str = "", repository=None):
+        # config_service is only needed for COLLECTION (credential lookup in
+        # get_provider/platform_ready) — read-only consumers like
+        # build_presence_block() construct this with config_service=None to
+        # run gap_analysis() over already-stored snapshots.
         self.config_service = config_service
         self.target_brand = target_brand
         self.repository = repository or TargetedReviewRepository()
@@ -182,6 +186,79 @@ class TargetedReviewService:
                     "why": f"{target} leads every tracked competitor on this "
                            f"metric — keep feeding it.", "tactics": []}
         return None  # behind, but within noise — not worth an action card
+
+
+# ── Intelligence Engine integration ──────────────────────────────────────────
+
+def build_presence_block(repository, target_brand: str) -> str:
+    """
+    Plain-text summary of the latest measured platform presence, injected
+    into the Intelligence Engine's opportunity/briefing prompts (#25's
+    design intent: findings feed the Intelligence Engine as ground truth,
+    not a separate silo).
+
+    Includes the deterministic MEASURED GAP lines from gap_analysis() so the
+    LLM receives pre-validated comparisons rather than re-deriving (and
+    possibly mis-deriving) them from the raw numbers. Returns an explicit
+    "no data" sentence when nothing has been collected — the prompts tell
+    the model never to invent platform numbers, so the empty state must be
+    unambiguous, not just an absent section.
+    """
+    sections = []
+    for key, provider_cls in PLATFORMS.items():
+        latest = repository.latest_findings(provider_cls.platform_name)
+        usable = {b: m for b, m in latest.items() if not m.get("error")}
+        if not usable:
+            continue
+
+        newest = max(m.get("collected_at", "")[:10] for m in usable.values())
+        lines = [f"{provider_cls.platform_name} (collected {newest}):"]
+        for brand, metrics in usable.items():
+            lines.append(f"  {brand}: {_summarize_brand_metrics(key, metrics)}")
+
+        gap_service = TargetedReviewService(None, target_brand, repository=repository)
+        for g in gap_service.gap_analysis(key):
+            if g["type"] == "gap":
+                lines.append(
+                    f"  MEASURED GAP — {g['metric_label']}: "
+                    f"{g['target_brand']} {g['target_display']} vs "
+                    f"{g['leader_brand']} {g['leader_display']}"
+                )
+        sections.append("\n".join(lines))
+
+    if not sections:
+        return ("No measured platform data collected yet — the Targeted Review "
+                "page has not been run. Do not invent platform numbers.")
+    return "\n\n".join(sections)
+
+
+def _summarize_brand_metrics(platform_key: str, m: dict) -> str:
+    if platform_key == "youtube":
+        return (f"~{m.get('video_results') or 0:,} videos (est.), "
+                f"~{m.get('recent_videos_365d') or 0:,} new in last 12 months, "
+                f"{m.get('top_videos_total_views') or 0:,} views across top-10 videos")
+    if platform_key == "reddit":
+        capped = "+" if m.get("posts_capped") else ""
+        engagement = (m.get("total_score") or 0) + (m.get("total_comments") or 0)
+        subs = ", ".join(f"r/{s}" for s, _ in (m.get("top_subreddits") or [])[:3])
+        return (f"{m.get('posts_last_year') or 0}{capped} posts in last year, "
+                f"{engagement:,} combined upvotes+comments"
+                + (f", most active in {subs}" if subs else ""))
+    if platform_key == "editorial":
+        strongest = m.get("strongest_site")
+        return (f"covered by {m.get('sites_with_coverage') or 0} of "
+                f"{m.get('sites_checked') or 0} tracked authority review sites, "
+                f"~{m.get('total_results') or 0:,} articles"
+                + (f", strongest: {strongest}" if strongest else ""))
+    if platform_key == "retail":
+        reviews = m.get("total_reviews")
+        parts = [f"{reviews:,} retailer reviews" if reviews is not None
+                 else "review count unavailable"]
+        if m.get("avg_rating") is not None:
+            parts.append(f"{m['avg_rating']:.2f} avg stars")
+        parts.append(f"across {m.get('listings_ok') or 0} saved listings")
+        return ", ".join(parts)
+    return ""
 
 
 # ── Retail aggregation ────────────────────────────────────────────────────────

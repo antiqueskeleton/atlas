@@ -15,7 +15,9 @@ from backend.targeted_review.reddit_provider import (
 )
 from backend.targeted_review.retailer_provider import parse_listing_html
 from backend.targeted_review.targeted_review_repository import TargetedReviewRepository
-from backend.targeted_review.targeted_review_service import TargetedReviewService
+from backend.targeted_review.targeted_review_service import (
+    TargetedReviewService, build_presence_block,
+)
 from backend.targeted_review.youtube_provider import (
     YouTubePlatformProvider, parse_youtube_results,
 )
@@ -317,6 +319,48 @@ def test_gap_analysis_flags_rating_below_floor_even_when_leading(tmp_path):
     findings = service.gap_analysis("retail")
     rating = next(f for f in findings if "star rating" in f["metric_label"])
     assert rating["type"] == "gap"  # 3.8 < 4.0 floor, despite leading Honda
+
+
+# ── Intelligence Engine presence block ────────────────────────────────────────
+
+def test_build_presence_block_summarizes_platforms_with_measured_gaps(tmp_path):
+    repo = TargetedReviewRepository(db_path=tmp_path / "t.db")
+    _seed_youtube(repo, firman_videos=100, honda_videos=900)
+    repo.save_findings("Editorial Coverage", [
+        {"brand": "Firman", "platform": "Editorial Coverage",
+         "sites_with_coverage": 2, "sites_checked": 6, "total_results": 40,
+         "strongest_site": "Bob Vila", "error": ""},
+    ], collected_at="2026-07-06T12:00:00")
+
+    block = build_presence_block(repo, "Firman")
+
+    assert "YouTube (collected" in block
+    assert "Firman: ~100 videos (est.)" in block
+    assert "Honda: ~900 videos (est.)" in block
+    # Pre-validated deterministic comparison, so the LLM never re-derives it
+    assert "MEASURED GAP" in block
+    assert "Editorial Coverage (collected 2026-07-06)" in block
+    assert "covered by 2 of 6 tracked authority review sites" in block
+    assert "strongest: Bob Vila" in block
+
+
+def test_build_presence_block_reports_explicit_empty_state(tmp_path):
+    repo = TargetedReviewRepository(db_path=tmp_path / "t.db")
+    block = build_presence_block(repo, "Firman")
+    assert "No measured platform data collected yet" in block
+    assert "Do not invent platform numbers" in block
+
+
+def test_build_presence_block_skips_error_only_platforms(tmp_path):
+    """A platform where every brand failed (e.g. bad key) must not appear
+    as a section of zeros — absence, not fake measurements."""
+    repo = TargetedReviewRepository(db_path=tmp_path / "t.db")
+    repo.save_findings("Reddit", [
+        {"brand": "Firman", "platform": "Reddit", "error": "Reddit auth failed"},
+    ])
+    block = build_presence_block(repo, "Firman")
+    assert "Reddit" not in block
+    assert "No measured platform data collected yet" in block
 
 
 def test_platform_ready_reports_missing_credentials():

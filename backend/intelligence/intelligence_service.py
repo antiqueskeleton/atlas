@@ -7,6 +7,8 @@ from datetime import datetime
 
 from backend.intelligence.analysts import BuyingJourneyAnalyst, PersonaAnalyst, ProductAnalyst
 from backend.intelligence.intelligence_repository import IntelligenceRepository
+from backend.targeted_review.targeted_review_repository import TargetedReviewRepository
+from backend.targeted_review.targeted_review_service import build_presence_block
 from backend.visibility.brand_matcher import resolve_target_brand
 from backend.visibility.negation import detect_negative_brands
 from backend.visibility.visibility_repository import VisibilityRepository
@@ -43,12 +45,20 @@ data below — not in general industry knowledge.
 {target_brand}'S INFERRED PRODUCT PORTFOLIO (from prior analysis of this same data):
 {portfolio_block}
 
+MEASURED PLATFORM PRESENCE (real numbers pulled directly from platform APIs — \
+YouTube, Reddit, editorial-site search, retailer listings — NOT inferred from AI responses):
+{platform_block}
+
 RULES:
 - Respond in plain text only. Do not use markdown formatting — no **bold**, no ### headers, \
 no pipe-delimited tables, no bullet characters. Atlas displays this text as-is; markdown syntax \
 would show up as literal asterisks and symbols, not formatting.
 - EVIDENCE must cite a specific count ("X of Y responses...") or quote a sentence directly from \
-the data. Do not write generic observations.
+the data. Do not write generic observations. When the MEASURED PLATFORM PRESENCE data supports \
+an opportunity, cite its numbers alongside the response counts — measured numbers are stronger \
+evidence than AI-response patterns. Never cite platform numbers that are not present above.
+- When choosing TACTICS, prefer the platforms where the MEASURED PLATFORM PRESENCE data shows \
+{target_brand}'s largest deficit — a measured gap is a confirmed gap, not a hypothesis.
 - TACTICS must name specific platforms, programs, or content types — not vague instructions. \
 Examples of the required specificity: "Enroll in Amazon Vine and automate Seller Central \
 Request-a-Review"; "Publish a 300-word comparison page targeting '[feature] vs [feature]' \
@@ -109,6 +119,10 @@ BUYING JOURNEY — how AI models describe the path to purchase:
 WEB PRESENCE SIGNALS (scraped from brand homepages):
 {web_block}
 
+MEASURED PLATFORM PRESENCE (real numbers pulled directly from platform APIs — \
+YouTube, Reddit, editorial-site search, retailer listings — NOT inferred from AI responses):
+{platform_block}
+
 Produce a structured briefing with the sections below. Lead every section with a specific \
 data point before any analysis.
 
@@ -139,7 +153,10 @@ GAPS AND RISKS
 What is {target_brand} not mentioned for that competitors are? Name the competitor, the context, \
 and the count difference. Only include gaps visible in the data above. If a gap falls in a \
 category listed as NOT IN PORTFOLIO above, label it "Portfolio gap — {target_brand} does not \
-compete in this category" instead of describing it as a visibility problem.
+compete in this category" instead of describing it as a visibility problem. Where the MEASURED \
+PLATFORM PRESENCE data confirms or explains a gap, cite its numbers explicitly (e.g. "consistent \
+with the measured platform data: covered by 2 of 6 authority review sites vs 6 of 6 for the \
+leader"). Never invent platform numbers that are not present in that section.
 
 RECOMMENDED ACTIONS
 For each gap named above give one specific tactic. Match the tactic type to the gap:
@@ -187,6 +204,11 @@ class IntelligenceService:
         self.provider_manager = provider_manager
         self.target_brand = target_brand
         self.repository = IntelligenceRepository()
+        # Measured platform-presence data from Targeted Review (#25) —
+        # injected into the opportunity/briefing prompts as ground truth.
+        # An attribute (like self.repository) so tests swap in a tmp-path
+        # instance the same way they already do for the main repository.
+        self.platform_repository = TargetedReviewRepository()
         self._analysts = [ProductAnalyst(), PersonaAnalyst(), BuyingJourneyAnalyst()]
 
     # ── Public entry point ────────────────────────────────────────────────────
@@ -260,10 +282,14 @@ class IntelligenceService:
         # Portfolio inference must complete first — both other passes need its
         # output as grounding context, so it can't run inside the same pool.
         portfolio_block = self._run_portfolio_pass(provider, collected)
+        # Measured platform numbers from Targeted Review (#25) — computed once,
+        # fed to both passes as ground truth alongside the portfolio inference.
+        platform_block = build_presence_block(self.platform_repository, self.target_brand)
         with ThreadPoolExecutor(max_workers=2) as ex:
-            f_opp = ex.submit(self._run_opportunity_pass, provider, collected, portfolio_block)
+            f_opp = ex.submit(self._run_opportunity_pass, provider, collected,
+                              portfolio_block, platform_block)
             f_brief = ex.submit(self._run_briefing_pass, provider, collected, brand_stats,
-                                portfolio_block)
+                                portfolio_block, platform_block)
             opportunities = f_opp.result()
             briefing = f_brief.result()
         parsed_opps = self._parse_opportunities(opportunities)
@@ -341,10 +367,14 @@ class IntelligenceService:
         # Portfolio inference must complete first — both other passes need its
         # output as grounding context, so it can't run inside the same pool.
         portfolio_block = self._run_portfolio_pass(provider, collected)
+        # Measured platform numbers from Targeted Review (#25) — computed once,
+        # fed to both passes as ground truth alongside the portfolio inference.
+        platform_block = build_presence_block(self.platform_repository, self.target_brand)
         with ThreadPoolExecutor(max_workers=2) as ex:
-            f_opp = ex.submit(self._run_opportunity_pass, provider, collected, portfolio_block)
+            f_opp = ex.submit(self._run_opportunity_pass, provider, collected,
+                              portfolio_block, platform_block)
             f_brief = ex.submit(self._run_briefing_pass, provider, collected, brand_stats,
-                                portfolio_block)
+                                portfolio_block, platform_block)
             opportunities = f_opp.result()
             briefing = f_brief.result()
         parsed_opps = self._parse_opportunities(opportunities)
@@ -510,7 +540,8 @@ class IntelligenceService:
             return f"[Unavailable — {provider.provider_name} request failed: {result.executive_summary}]"
         return result.executive_summary or "Could not infer portfolio from available data."
 
-    def _run_opportunity_pass(self, provider, collected: dict, portfolio_block: str) -> str:
+    def _run_opportunity_pass(self, provider, collected: dict, portfolio_block: str,
+                              platform_block: str = "") -> str:
         all_pairs: list[tuple[str, str]] = []
         for responses in collected.values():
             all_pairs.extend(responses)
@@ -521,6 +552,7 @@ class IntelligenceService:
         prompt = _OPPORTUNITY_PROMPT_TEMPLATE.format(
             target_brand=self.target_brand or "the target brand",
             portfolio_block=portfolio_block,
+            platform_block=platform_block or "No measured platform data available.",
             n_prompts=len(all_pairs),
             findings=findings,
         )
@@ -545,7 +577,7 @@ class IntelligenceService:
         return result.executive_summary or ""
 
     def _run_briefing_pass(self, provider, collected: dict, brand_stats: dict,
-                           portfolio_block: str) -> str:
+                           portfolio_block: str, platform_block: str = "") -> str:
         def block(name):
             pairs = collected.get(name, [])
             # Include full responses but cap at 600 chars each to stay within token budget
@@ -597,6 +629,7 @@ class IntelligenceService:
         prompt = _BRIEFING_PROMPT_TEMPLATE.format(
             target_brand=target,
             portfolio_block=portfolio_block,
+            platform_block=platform_block or "No measured platform data available.",
             brand_block=brand_block,
             quotes_block=quotes_block,
             product_block=block("Product Intelligence"),
