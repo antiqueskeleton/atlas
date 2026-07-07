@@ -473,6 +473,13 @@ class SettingsPage(QWidget):
                     "www.reddit.com/prefs/apps",
                     "Create a 'script' type app — no Reddit account password "
                     "is stored, only the app's ID and secret."),
+        "aioverview": ("SerpApi (AI Overviews)",
+                       "serpapi.com/users/sign_up",
+                       "Free tier: 100 searches/month — each collection uses "
+                       "5, shared across all brands (= 20 collections/month)."),
+        "bestbuy": ("Best Buy API",
+                    "developer.bestbuy.com",
+                    "Free developer key — approval is usually same-day."),
         "editorial": ("Google Custom Search",
                       "programmablesearchengine.google.com/controlpanel/create",
                       "Create an engine set to 'search the entire web'. The API "

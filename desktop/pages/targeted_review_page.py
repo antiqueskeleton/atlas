@@ -93,6 +93,27 @@ _TABLE_COLUMNS = {
         ("Strongest Site", lambda m: m.get("strongest_site") or None,
          "The tracked editorial site with the most coverage of this brand."),
     ],
+    "aioverview": [
+        ("In Overviews", lambda m: (
+            f"{m['appearances']} of {m.get('queries_checked', 0)}"
+            if m.get("appearances") is not None else None),
+         "How many of the 5 canonical buying queries produced a Google AI "
+         "Overview that names this brand. 5 shared searches per collection "
+         "(SerpApi free tier: 100/month = 20 collections)."),
+        ("Overviews Shown", "overviews_present",
+         "How many of the 5 queries displayed an AI Overview at all — "
+         "Google doesn't show one for every query."),
+    ],
+    "bestbuy": [
+        ("Listings", "listings_found",
+         "Products on BestBuy.com whose name contains this brand "
+         "(word-boundary matched)."),
+        ("Reviews", "total_reviews",
+         "Combined customer review count across those listings."),
+        ("Avg Rating", lambda m: (f"{m['avg_rating']:.2f} ★"
+                                  if m.get("avg_rating") is not None else None),
+         "Review-weighted average customer rating."),
+    ],
     "retail": [
         ("Listings", lambda m: m.get("listings_ok"),
          "Saved product listings that could be read this collection."),
@@ -136,6 +157,17 @@ _DETAIL_SPECS = {
         ("Articles (est.)", lambda v: f"{v.get('results', 0):,}"),
         ("Top article", lambda v: v.get("top_title", "")),
         ("URL", lambda v: v.get("top_url", "")),
+    ])],
+    "aioverview": [("per_query", "Overview presence by query", [
+        ("Query", lambda v: v.get("query", "")),
+        ("Overview shown", lambda v: "yes" if v.get("overview_present") else "no"),
+        ("Brand named", lambda v: "YES" if v.get("mentioned") else "—"),
+    ])],
+    "bestbuy": [("top_products", "Best Buy listings (by review count)", [
+        ("Product", lambda v: v.get("name", "")),
+        ("Reviews", lambda v: f"{v.get('reviews', 0):,}"),
+        ("Rating", lambda v: "" if v.get("rating") is None else f"{v['rating']} ★"),
+        ("Price", lambda v: "" if v.get("price") is None else f"${v['price']:,.2f}"),
     ])],
     "retail": [("listings", "Saved listings", [
         ("Retailer", lambda v: v.get("retailer", "")),
@@ -224,6 +256,8 @@ class TargetedReviewPage(QWidget):
         self.tabs.addTab(self._build_platform_tab("youtube"), "YouTube")
         self.tabs.addTab(self._build_platform_tab("reddit"), "Reddit")
         self.tabs.addTab(self._build_platform_tab("editorial"), "Editorial")
+        self.tabs.addTab(self._build_platform_tab("aioverview"), "AI Overviews")
+        self.tabs.addTab(self._build_platform_tab("bestbuy"), "Best Buy")
         self.tabs.addTab(self._build_platform_tab("retail"), "Retail Listings")
         root.addWidget(self.tabs, 1)
 

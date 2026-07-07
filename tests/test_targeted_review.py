@@ -541,3 +541,75 @@ def test_top_video_comments_skips_disabled_and_caps(tmp_path):
     assert len(calls) == 3
     assert len(comments) == 30            # 15 + 0 (disabled skipped) + 15
     assert all(c["video"] in ("T1", "T3") for c in comments)
+
+
+# ── Best Buy provider (#98) ───────────────────────────────────────────────────
+
+def test_bestbuy_parse_filters_by_brand_and_aggregates():
+    from backend.targeted_review.bestbuy_provider import parse_bestbuy_products
+    products = [
+        {"name": "FIRMAN 4550W Generator", "customerReviewCount": 100,
+         "customerReviewAverage": "4.5", "salePrice": 499.0},
+        {"name": "FIRMAN Tri-Fuel 8000W", "customerReviewCount": 300,
+         "customerReviewAverage": "4.0", "salePrice": 999.0},
+        {"name": "Generator cover for Honda", "customerReviewCount": 999,
+         "customerReviewAverage": "5.0", "salePrice": 20.0},  # not a Firman name
+    ]
+    parsed = parse_bestbuy_products(products, "Firman")
+    assert parsed["listings_found"] == 2
+    assert parsed["total_reviews"] == 400
+    assert parsed["avg_rating"] == 4.12   # (4.5*100 + 4.0*300) / 400
+    assert parsed["top_products"][0]["reviews"] == 300
+
+
+def test_bestbuy_no_key_returns_in_band_error():
+    from backend.targeted_review.bestbuy_provider import BestBuyProvider
+    result = BestBuyProvider().fetch_brand_presence("Firman")
+    assert "No Best Buy API key" in result["error"]
+
+
+# ── AI Overviews provider (#97) ───────────────────────────────────────────────
+
+def test_ai_overview_text_extraction_flattens_nested_blocks():
+    from backend.targeted_review.ai_overview_provider import extract_overview_text
+    block = {"text_blocks": [
+        {"type": "paragraph", "snippet": "Top picks include Honda and Generac."},
+        {"type": "list", "list": [{"title": "Honda EU2200i", "snippet": "quiet"}]},
+    ]}
+    text = extract_overview_text(block)
+    assert "Honda and Generac" in text and "EU2200i" in text
+    assert extract_overview_text({}) == ""
+    assert extract_overview_text({"weird": [1, None]}) == ""
+
+
+def test_ai_overview_fetch_all_shares_queries_and_flags_brands():
+    from backend.targeted_review.ai_overview_provider import (
+        AIOverviewProvider, AI_OVERVIEW_QUERIES)
+    provider = AIOverviewProvider()
+    provider.set_credentials({"api_key": "k"})
+
+    calls = []
+    def fake_get(url, params=None, timeout=None):
+        calls.append(params["q"])
+        resp = MagicMock(status_code=200)
+        resp.json.return_value = {"ai_overview": {"text_blocks": [
+            {"snippet": "Experts recommend Honda generators for reliability."}]}}
+        return resp
+
+    with patch("backend.targeted_review.ai_overview_provider.requests.get",
+               side_effect=fake_get):
+        findings = provider.fetch_all(["Honda", "Firman"])
+
+    assert len(calls) == len(AI_OVERVIEW_QUERIES)   # shared, not per-brand
+    by_brand = {f["brand"]: f for f in findings}
+    assert by_brand["Honda"]["appearances"] == 5
+    assert by_brand["Firman"]["appearances"] == 0
+    assert by_brand["Firman"]["overviews_present"] == 5
+    assert by_brand["Firman"]["error"] == ""
+
+
+def test_ai_overview_no_key_fails_all_brands_in_band():
+    from backend.targeted_review.ai_overview_provider import AIOverviewProvider
+    findings = AIOverviewProvider().fetch_all(["Firman", "Honda"])
+    assert len(findings) == 2
+    assert all("No SerpApi key" in f["error"] for f in findings)

@@ -12,6 +12,8 @@ follows the platform-specific guidance already scoped in the project plan
 (Amazon Vine / Request-a-Review; YouTube creator seeding + comparison
 content; Reddit organic participation).
 """
+from backend.targeted_review.ai_overview_provider import AIOverviewProvider
+from backend.targeted_review.bestbuy_provider import BestBuyProvider
 from backend.targeted_review.editorial_search_provider import (
     EDITORIAL_SITES,
     EditorialSearchProvider,
@@ -26,6 +28,8 @@ PLATFORMS = {
     "youtube": YouTubePlatformProvider,
     "reddit": RedditPlatformProvider,
     "editorial": EditorialSearchProvider,
+    "aioverview": AIOverviewProvider,
+    "bestbuy": BestBuyProvider,
     "retail": RetailerListingProvider,
 }
 
@@ -93,6 +97,10 @@ class TargetedReviewService:
 
         if platform_key == "retail":
             findings = self._collect_retail(provider, brands, progress_cb)
+        elif platform_key == "aioverview":
+            # Collection-level platform: 5 shared Google searches serve
+            # every brand at once (#97) — never one sweep per brand.
+            findings = provider.fetch_all(brands, progress_cb=progress_cb)
         else:
             findings = []
             for i, brand in enumerate(brands):
@@ -270,6 +278,18 @@ def _summarize_brand_metrics(platform_key: str, m: dict) -> str:
                 f"{m.get('sites_checked') or 0} tracked authority review sites, "
                 f"~{m.get('total_results') or 0:,} articles"
                 + (f", strongest: {strongest}" if strongest else ""))
+    if platform_key == "aioverview":
+        return (f"named in {m.get('appearances') or 0} of "
+                f"{m.get('queries_checked') or 0} Google AI Overview buying "
+                f"queries ({m.get('overviews_present') or 0} queries showed an "
+                f"AI Overview)")
+    if platform_key == "bestbuy":
+        parts = [f"{m.get('listings_found') or 0} Best Buy listings"]
+        if m.get("total_reviews"):
+            parts.append(f"{m['total_reviews']:,} customer reviews")
+        if m.get("avg_rating") is not None:
+            parts.append(f"{m['avg_rating']:.2f} avg stars")
+        return ", ".join(parts)
     if platform_key == "retail":
         reviews = m.get("total_reviews")
         parts = [f"{reviews:,} retailer reviews" if reviews is not None
@@ -459,6 +479,63 @@ _PLATFORM_METRICS: dict[str, list[dict]] = {
                 "garden desks of major outlets",
                 "Publish original data (e.g. outage statistics, sizing surveys) "
                 "editorial sites will cite and link",
+            ],
+        },
+    ],
+    "aioverview": [
+        {
+            "label": "Appearances in Google AI Overviews (5 buying queries)",
+            "value": lambda m: m.get("appearances"),
+            "fmt": lambda v: f"{v} of 5 queries",
+            "why": lambda t, l: (
+                f"Google's AI Overview is the highest-reach AI answer surface "
+                f"there is — it sits above every organic result for the exact "
+                f"queries generator buyers ask. {l} being named in these "
+                f"overviews while {t} is absent means Google's AI is actively "
+                f"steering buyers elsewhere at the top of the funnel."
+            ),
+            "tactics": lambda t, l, u: [
+                "Win the sources the Overview cites: editorial roundups and "
+                "high-authority comparison pages (see Editorial tab gaps)",
+                "Publish structured, spec-rich comparison content targeting the "
+                "exact overview queries (best portable generator, quietest "
+                "inverter generator)",
+                "Build out product schema markup sitewide — Overviews lean on "
+                "structured data",
+            ],
+        },
+    ],
+    "bestbuy": [
+        {
+            "label": "Best Buy customer reviews",
+            "value": lambda m: m.get("total_reviews"),
+            "fmt": lambda v: f"{v:,} reviews",
+            "why": lambda t, l: (
+                f"Best Buy is a top-3 US electronics retailer and its review "
+                f"corpus feeds AI shopping answers. {l}'s deeper review base "
+                f"there reads as mainstream credibility that {t} lacks on the "
+                f"same shelf."
+            ),
+            "tactics": lambda t, l, u: [
+                "Get core SKUs stocked/listed on BestBuy.com (marketplace or "
+                "direct) — presence precedes reviews",
+                "Sync post-purchase review prompts for Best Buy orders",
+                "Match the listing depth (photos, specs, Q&A) of the category leader",
+            ],
+        },
+        {
+            "label": "Best Buy average rating (review-weighted)",
+            "value": lambda m: m.get("avg_rating"),
+            "fmt": lambda v: f"{v:.2f} stars",
+            "is_rating": True,
+            "why": lambda t, l: (
+                f"Ratings on a mainstream shelf like Best Buy get quoted in AI "
+                f"comparisons verbatim — under {_RATING_FLOOR:.1f} stars, or "
+                f"visibly behind {l}, becomes a repeated caution line."
+            ),
+            "tactics": lambda t, l, u: [
+                "Service-recover every sub-4-star Best Buy review thread",
+                "Audit lowest-rated SKUs for recurring defect themes",
             ],
         },
     ],
