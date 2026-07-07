@@ -53,13 +53,17 @@ _STRENGTH_BADGE = (
 # Table columns per platform: (header, metric key or callable, tooltip)
 _TABLE_COLUMNS = {
     "youtube": [
-        ("Videos (est.)", "video_results",
-         "YouTube's own ESTIMATE of matching videos for \"[brand] generator\" — "
-         "directionally reliable for brand-vs-brand comparison, not an exact count."),
-        ("New (12 mo)", "recent_videos_365d",
-         "Estimated videos published in the trailing year — content freshness."),
+        ("Relevant (top-100)", "relevant_results_top100",
+         "How many of the top-100 YouTube search results for \"[brand] portable "
+         "generator\" are actually about this brand's generators — each title "
+         "must mention the brand AND a generator-market term. Counted from real "
+         "results, never YouTube's inflated totals estimate."),
+        ("Fresh (12 mo)", "recent_relevant_365d",
+         "Relevant videos published in the trailing year, same top-100 counted "
+         "sample — content freshness."),
         ("Top-10 Views", "top_videos_total_views",
-         "Combined view count of the brand's top-10 search results."),
+         "Combined view count of the brand's top-10 RELEVANT videos (filtered, "
+         "so an ambiguous brand name's off-topic viral videos don't count)."),
     ],
     "reddit": [
         ("Posts (1 yr)", "posts_last_year",
@@ -240,7 +244,7 @@ class TargetedReviewPage(QWidget):
         hdr_row.addWidget(hdr)
         hdr_row.addWidget(info_icon(
             "Each checked brand costs one set of platform requests per "
-            "collection (YouTube: ~201 quota units of the 10,000/day free "
+            "collection (YouTube: ~401 quota units of the 10,000/day free "
             "tier; Reddit: one search; Editorial: 6 of Google Custom "
             "Search's 100 free queries/day). Target + top 5 competitors is "
             "the intended working set."
@@ -364,7 +368,8 @@ class TargetedReviewPage(QWidget):
                 self._url_brand_combo.addItem(row[1])
         self._url_input = QLineEdit()
         self._url_input.setPlaceholderText(
-            "Paste a product page URL (Amazon, Home Depot, Lowe's, Walmart…)"
+            "Paste a product page URL — Amazon, Home Depot, or Walmart "
+            "(Lowe's blocks automated access)"
         )
         add_btn = QPushButton("Add")
         add_btn.setFixedWidth(60)
@@ -378,14 +383,21 @@ class TargetedReviewPage(QWidget):
         add_row.addWidget(remove_btn)
         lay.addLayout(add_row)
 
-        self._url_table = QTableWidget(0, 3)
-        self._url_table.setHorizontalHeaderLabels(["Brand", "URL", "Added"])
+        self._url_table = QTableWidget(0, 4)
+        self._url_table.setHorizontalHeaderLabels(["Brand", "URL", "Added", "Last Fetch"])
         self._url_table.verticalHeader().setVisible(False)
         self._url_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self._url_table.setSelectionBehavior(QTableWidget.SelectRows)
-        self._url_table.setColumnWidth(0, 150)
+        self._url_table.setColumnWidth(0, 130)
         self._url_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
-        self._url_table.setColumnWidth(2, 100)
+        self._url_table.setColumnWidth(2, 90)
+        self._url_table.setColumnWidth(3, 260)
+        self._url_table.horizontalHeaderItem(3).setToolTip(
+            "Result of the most recent collection for this exact URL — hover a "
+            "failed row for the full error. Known limit: Lowe's hard-blocks "
+            "automated access (HTTP 403); Amazon, Home Depot, and Walmart "
+            "listings are the reliable sources."
+        )
         self._url_table.setFixedHeight(120)
         lay.addWidget(self._url_table)
 
@@ -429,6 +441,28 @@ class TargetedReviewPage(QWidget):
 
     def _reload_urls(self):
         rows = self.service.repository.list_product_urls()
+
+        # Per-URL result of the latest collection — the brand-level Status
+        # column alone couldn't tell the user WHICH listing failed or why.
+        last_fetch: dict[str, str] = {}
+        latest = self.service.repository.latest_findings(
+            PLATFORMS["retail"].platform_name)
+        for metrics in latest.values():
+            for listing in metrics.get("listings") or []:
+                error = listing.get("error", "")
+                if error:
+                    last_fetch[listing.get("url", "")] = error
+                else:
+                    reviews = listing.get("review_count")
+                    rating = listing.get("rating")
+                    parts = []
+                    if reviews is not None:
+                        parts.append(f"{reviews:,} reviews")
+                    if rating is not None:
+                        parts.append(f"{rating} ★")
+                    last_fetch[listing.get("url", "")] = \
+                        "OK · " + ", ".join(parts) if parts else "OK"
+
         self._url_table.setRowCount(len(rows))
         self._url_row_ids = []
         for r, (url_id, brand, url, added) in enumerate(rows):
@@ -436,6 +470,10 @@ class TargetedReviewPage(QWidget):
             self._url_table.setItem(r, 0, QTableWidgetItem(brand))
             self._url_table.setItem(r, 1, QTableWidgetItem(url))
             self._url_table.setItem(r, 2, QTableWidgetItem(added[:10]))
+            result = last_fetch.get(url, "—")
+            result_item = QTableWidgetItem(result)
+            result_item.setToolTip(result)
+            self._url_table.setItem(r, 3, result_item)
 
     def _add_url(self):
         url = self._url_input.text().strip()
@@ -496,12 +534,26 @@ class TargetedReviewPage(QWidget):
 
     def _on_collect_done(self, key: str, findings: list):
         self._collect_btns[key].setEnabled(True)
-        errors = sum(1 for f in findings if f.get("error"))
-        ok = len(findings) - errors
-        error_str = f" · {errors} failed" if errors else ""
-        self._status_lbls[key].setStyleSheet("color: #6B7280; font-size: 12px;")
-        self._status_lbls[key].setText(f"Done — {ok} brand(s) collected{error_str}")
+        failed = [f for f in findings if f.get("error")]
+        ok = len(findings) - len(failed)
         self._refresh_platform(key)
+        if key == "retail":
+            self._reload_urls()  # refresh the per-URL Last Fetch column
+
+        if failed:
+            # Show the first real error message in full — the table's Status
+            # column truncates, which made a simple "API not enabled" failure
+            # undiagnosable from the screen (found in real-credential testing).
+            first_error = failed[0].get("error", "")
+            self._status_lbls[key].setStyleSheet("color: #DC2626; font-size: 12px;")
+            self._status_lbls[key].setText(
+                f"Done — {ok} collected, {len(failed)} failed. First error: {first_error}"
+            )
+            self._status_lbls[key].setToolTip(first_error)
+        else:
+            self._status_lbls[key].setStyleSheet("color: #6B7280; font-size: 12px;")
+            self._status_lbls[key].setText(f"Done — {ok} brand(s) collected")
+            self._status_lbls[key].setToolTip("")
 
     def _on_collect_fail(self, key: str, message: str):
         self._collect_btns[key].setEnabled(True)

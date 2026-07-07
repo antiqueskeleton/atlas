@@ -19,7 +19,7 @@ from backend.targeted_review.targeted_review_service import (
     TargetedReviewService, build_presence_block,
 )
 from backend.targeted_review.youtube_provider import (
-    YouTubePlatformProvider, parse_youtube_results,
+    YouTubePlatformProvider, _filter_relevant,
 )
 
 
@@ -33,16 +33,9 @@ class FakeConfig:
 
 # ── YouTube provider ──────────────────────────────────────────────────────────
 
-_YT_SEARCH = {
-    "pageInfo": {"totalResults": 4321},
-    "items": [
-        {"id": {"videoId": "abc"}, "snippet": {"title": "Firman W03083 review",
-         "channelTitle": "Generatorist", "publishedAt": "2026-01-15T00:00:00Z"}},
-        {"id": {"videoId": "def"}, "snippet": {"title": "Firman vs Champion",
-         "channelTitle": "ToolGuy", "publishedAt": "2025-11-02T00:00:00Z"}},
-    ],
-}
-_YT_STATS = {"abc": {"viewCount": "150000"}, "def": {"viewCount": "980000"}}
+def _yt_item(video_id, title):
+    return {"video_id": video_id, "title": title, "channel": "c",
+            "published": "2026-01-15", "views": 0}
 
 
 def test_youtube_no_key_returns_in_band_error():
@@ -52,17 +45,59 @@ def test_youtube_no_key_returns_in_band_error():
     assert result["brand"] == "Firman"
 
 
-def test_youtube_parse_sorts_top_videos_by_views_and_totals():
-    parsed = parse_youtube_results(_YT_SEARCH, recent_total=87, stats_by_id=_YT_STATS)
-    assert parsed["video_results"] == 4321
-    assert parsed["recent_videos_365d"] == 87
-    assert parsed["top_videos"][0]["video_id"] == "def"  # 980k sorts above 150k
-    assert parsed["top_videos_total_views"] == 1_130_000
+def test_youtube_relevance_filter_drops_off_topic_and_off_brand_titles():
+    """
+    Pinned against REAL contamination observed with live credentials
+    (2026-07-06): searching '"CAT" generator' returned literal cat-the-
+    animal videos ("Flying Horse - Gatorrada (Cat-Toast)") with millions of
+    views. A title only counts when it mentions the brand (word-boundary,
+    so 'category' doesn't match 'CAT') AND a generator-market term.
+    """
+    items = [
+        _yt_item("a", "Cat RP12000E Generator Review | 12,000 Watt Portable"),
+        _yt_item("b", "Flying Horse - Gatorrada (Cat-Toast)"),      # no market term
+        _yt_item("c", "Best AI video generator tools 2026"),        # no brand word
+        _yt_item("d", "Shopping by category: generator deals"),     # 'category' != CAT
+        _yt_item("e", "TOP 5: Best Caterpillar Portable Generators"),  # no 'CAT' token
+    ]
+    kept = _filter_relevant(items, "CAT")
+    kept_ids = {v["video_id"] for v in kept}
+    assert "a" in kept_ids            # real Cat generator review survives
+    assert kept_ids == {"a"}          # every junk pattern above is dropped
 
 
-def test_youtube_api_error_reported_in_band():
+def test_youtube_relevance_filter_deduplicates_video_ids():
+    items = [_yt_item("a", "Firman W03083 generator review")] * 3
+    assert len(_filter_relevant(items, "Firman")) == 1
+
+
+def test_youtube_counted_metrics_and_error_path():
     provider = YouTubePlatformProvider()
     provider.set_credentials({"api_key": "k"})
+
+    search_page = {
+        "items": [
+            {"id": {"videoId": "abc"}, "snippet": {"title": "Firman W03083 generator review",
+             "channelTitle": "Generatorist", "publishedAt": "2026-01-15T00:00:00Z"}},
+            {"id": {"videoId": "junk"}, "snippet": {"title": "Firman family vlog",
+             "channelTitle": "Vlogs", "publishedAt": "2026-01-16T00:00:00Z"}},
+        ],
+    }
+    stats_page = {"items": [{"id": "abc", "statistics": {"viewCount": "150000"}}]}
+
+    def fake_get(url, params=None, timeout=None):
+        resp = MagicMock(status_code=200)
+        resp.json.return_value = stats_page if "videos" in url else search_page
+        return resp
+
+    with patch("backend.targeted_review.youtube_provider.requests.get", side_effect=fake_get):
+        result = provider.fetch_brand_presence("Firman")
+
+    assert result["error"] == ""
+    assert result["relevant_results_top100"] == 1   # vlog filtered out
+    assert result["top_videos"][0]["views"] == 150000
+    assert result["top_videos_total_views"] == 150000
+
     bad = MagicMock(status_code=403)
     bad.json.return_value = {"error": {"message": "quotaExceeded"}}
     with patch("backend.targeted_review.youtube_provider.requests.get", return_value=bad):
@@ -240,8 +275,8 @@ def test_repository_url_crud_and_duplicate_rejection(tmp_path):
 class _FakeYouTube(YouTubePlatformProvider):
     def fetch_brand_presence(self, brand):
         return {"brand": brand, "platform": "YouTube",
-                "video_results": {"Firman": 100, "Honda": 900}.get(brand, 0),
-                "recent_videos_365d": 5, "top_videos": [],
+                "relevant_results_top100": {"Firman": 10, "Honda": 90}.get(brand, 0),
+                "recent_relevant_365d": 5, "top_videos": [],
                 "top_videos_total_views": 0, "error": ""}
 
 
@@ -258,22 +293,24 @@ def test_collect_platform_persists_one_snapshot_per_brand(tmp_path):
 
 def _seed_youtube(repo, firman_videos, honda_videos):
     repo.save_findings("YouTube", [
-        {"brand": "Firman", "platform": "YouTube", "video_results": firman_videos,
-         "recent_videos_365d": 10, "top_videos_total_views": 1000, "error": ""},
-        {"brand": "Honda", "platform": "YouTube", "video_results": honda_videos,
-         "recent_videos_365d": 10, "top_videos_total_views": 1000, "error": ""},
+        {"brand": "Firman", "platform": "YouTube",
+         "relevant_results_top100": firman_videos,
+         "recent_relevant_365d": 10, "top_videos_total_views": 1000, "error": ""},
+        {"brand": "Honda", "platform": "YouTube",
+         "relevant_results_top100": honda_videos,
+         "recent_relevant_365d": 10, "top_videos_total_views": 1000, "error": ""},
     ])
 
 
 def test_gap_analysis_flags_meaningful_lead_with_why_and_tactics(tmp_path):
     repo = TargetedReviewRepository(db_path=tmp_path / "t.db")
-    _seed_youtube(repo, firman_videos=100, honda_videos=900)
+    _seed_youtube(repo, firman_videos=10, honda_videos=90)
     service = TargetedReviewService(FakeConfig(), "Firman", repository=repo)
     findings = service.gap_analysis("youtube")
 
     gaps = [f for f in findings if f["type"] == "gap"]
-    assert gaps, "9x video lead must produce a gap finding"
-    video_gap = next(f for f in gaps if "videos (estimated" in f["metric_label"])
+    assert gaps, "9x relevant-video lead must produce a gap finding"
+    video_gap = next(f for f in gaps if "top-100 search results" in f["metric_label"])
     assert video_gap["leader_brand"] == "Honda"
     assert video_gap["ratio"] == 9.0
     assert "AI" in video_gap["why"]
@@ -282,20 +319,20 @@ def test_gap_analysis_flags_meaningful_lead_with_why_and_tactics(tmp_path):
 
 def test_gap_analysis_reports_strength_when_target_leads(tmp_path):
     repo = TargetedReviewRepository(db_path=tmp_path / "t.db")
-    _seed_youtube(repo, firman_videos=900, honda_videos=100)
+    _seed_youtube(repo, firman_videos=90, honda_videos=10)
     service = TargetedReviewService(FakeConfig(), "Firman", repository=repo)
     findings = service.gap_analysis("youtube")
-    video = next(f for f in findings if "videos (estimated" in f["metric_label"])
+    video = next(f for f in findings if "top-100 search results" in f["metric_label"])
     assert video["type"] == "strength"
 
 
 def test_gap_analysis_ignores_lead_within_noise_threshold(tmp_path):
     repo = TargetedReviewRepository(db_path=tmp_path / "t.db")
-    _seed_youtube(repo, firman_videos=100, honda_videos=120)  # 1.2x < 1.5x bar
+    _seed_youtube(repo, firman_videos=50, honda_videos=60)  # 1.2x < 1.5x bar
     service = TargetedReviewService(FakeConfig(), "Firman", repository=repo)
     findings = service.gap_analysis("youtube")
     labels = [f["metric_label"] for f in findings if f["type"] == "gap"]
-    assert not any("videos (estimated" in l for l in labels)
+    assert not any("top-100 search results" in l for l in labels)
 
 
 def test_gap_analysis_resolves_target_brand_case_insensitively(tmp_path):
@@ -335,8 +372,8 @@ def test_build_presence_block_summarizes_platforms_with_measured_gaps(tmp_path):
     block = build_presence_block(repo, "Firman")
 
     assert "YouTube (collected" in block
-    assert "Firman: ~100 videos (est.)" in block
-    assert "Honda: ~900 videos (est.)" in block
+    assert "Firman: 100 relevant videos in the top-100 search results" in block
+    assert "Honda: 900 relevant videos in the top-100 search results" in block
     # Pre-validated deterministic comparison, so the LLM never re-derives it
     assert "MEASURED GAP" in block
     assert "Editorial Coverage (collected 2026-07-06)" in block

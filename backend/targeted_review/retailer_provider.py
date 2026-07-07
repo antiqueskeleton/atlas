@@ -50,45 +50,62 @@ class RetailerListingProvider(PlatformProvider):
 
     def fetch_listing(self, url: str) -> dict:
         """Fetch one product page and extract listing metrics."""
-        html = _fetch_html(url)
+        html, fetch_error = _fetch_html(url)
         if not html:
             return {"url": url, "retailer": _retailer_from_url(url),
-                    "error": "Page could not be fetched — the retailer may be "
-                             "blocking automated access."}
+                    "error": fetch_error}
         return parse_listing_html(html, url)
 
 
-def _fetch_html(url: str) -> str:
-    """requests first; cloudscraper fallback for Amazon's bot wall."""
+def _fetch_html(url: str) -> tuple[str, str]:
+    """
+    Returns (html, error) — error is an in-band, HTTP-status-specific
+    message when the page couldn't be read (a bare "could not be fetched"
+    proved undiagnosable in real testing).
+
+    requests first, then a cloudscraper retry for ANY retailer — every
+    major retailer runs some bot protection, not just Amazon. Known hard
+    limit, confirmed empirically 2026-07-06: Lowe's (Akamai) returns
+    HTTP 403 to BOTH paths — those listings cannot be read without a real
+    browser; the error message says so instead of pretending it's
+    transient.
+    """
     time.sleep(random.uniform(0.8, 1.8))  # polite pacing between listings
-    html = ""
+    retailer = _retailer_from_url(url)
+    html, status = "", None
     try:
         resp = requests.get(url, headers=_HEADERS, timeout=_TIMEOUT)
-        if resp.status_code == 200:
+        status = resp.status_code
+        if status == 200:
             html = resp.text
-    except requests.RequestException:
-        pass
+    except requests.RequestException as exc:
+        return "", f"{retailer} request failed: {exc}"
 
-    # Amazon serves CAPTCHA interstitials to plain requests — detectable by
-    # the absence of any product markers. Retry once through cloudscraper.
-    if "amazon." in url.lower():
-        if "captcha" in html.lower() or not _looks_like_product(html):
-            try:
-                import cloudscraper
-                scraper = cloudscraper.create_scraper()
-                resp = scraper.get(url, timeout=30)
-                if resp.status_code == 200 and _looks_like_product(resp.text):
-                    html = resp.text
-            except Exception:
-                pass
-        # Still an interstitial after the retry → report as blocked rather
-        # than letting the parser misread a CAPTCHA page as "no reviews".
-        return html if _looks_like_product(html) else ""
+    blocked = status != 200 or "captcha" in html.lower() or not _looks_like_product(html)
+    if blocked:
+        try:
+            import cloudscraper
+            scraper = cloudscraper.create_scraper()
+            resp = scraper.get(url, timeout=30)
+            status = resp.status_code
+            if status == 200 and _looks_like_product(resp.text):
+                return resp.text, ""
+        except Exception:
+            pass
+        if status != 200:
+            hint = (" — Lowe's is known to hard-block automated access; "
+                    "use Amazon, Home Depot, or Walmart listings instead"
+                    if "lowes.com" in url.lower() else " — likely bot protection")
+            return "", f"{retailer} returned HTTP {status}{hint}"
+        if "amazon." in url.lower():
+            # Still an interstitial after the retry → report as blocked
+            # rather than letting the parser misread a CAPTCHA page as
+            # "no reviews".
+            return "", f"{retailer} served a CAPTCHA page — try again later"
 
-    # Non-Amazon: return whatever came back — a page without structured-data
-    # markers should surface as "no rating data found" (a parsing outcome),
-    # not be silently misreported as a blocked fetch.
-    return html
+    # Page fetched — even without obvious product markers, let the parser
+    # report "no rating data found" (a parsing outcome, not a fetch failure).
+    return html, ""
 
 
 def _looks_like_product(html: str) -> bool:

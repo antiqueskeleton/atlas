@@ -234,9 +234,10 @@ def build_presence_block(repository, target_brand: str) -> str:
 
 def _summarize_brand_metrics(platform_key: str, m: dict) -> str:
     if platform_key == "youtube":
-        return (f"~{m.get('video_results') or 0:,} videos (est.), "
-                f"~{m.get('recent_videos_365d') or 0:,} new in last 12 months, "
-                f"{m.get('top_videos_total_views') or 0:,} views across top-10 videos")
+        return (f"{m.get('relevant_results_top100') or 0:,} relevant videos in the "
+                f"top-100 search results, {m.get('recent_relevant_365d') or 0:,} "
+                f"fresh in last 12 months, {m.get('top_videos_total_views') or 0:,} "
+                f"views across top-10 relevant videos")
     if platform_key == "reddit":
         capped = "+" if m.get("posts_capped") else ""
         engagement = (m.get("total_score") or 0) + (m.get("total_comments") or 0)
@@ -295,15 +296,15 @@ def _top_subreddits_of(usable: dict, brand: str) -> str:
 _PLATFORM_METRICS: dict[str, list[dict]] = {
     "youtube": [
         {
-            "label": "YouTube videos (estimated search results)",
-            "value": lambda m: m.get("video_results"),
-            "fmt": lambda v: f"~{v:,} videos",
+            "label": "Relevant videos in the top-100 search results",
+            "value": lambda m: m.get("relevant_results_top100"),
+            "fmt": lambda v: f"{v:,} of top-100",
             "why": lambda t, l: (
                 f"YouTube reviews are among the sources AI assistants cite most in "
-                f"generator recommendations, and the sheer volume of public video "
-                f"content shapes which brands AI models learn to treat as major. "
-                f"{l}'s larger video footprint means more review data, more "
-                f"comparisons, and more transcripts feeding AI training and search."
+                f"generator recommendations, and the share of search results a "
+                f"brand actually owns shapes which brands AI models learn to treat "
+                f"as major. {l} filling more of the results page means more review "
+                f"data, more comparisons, and more transcripts feeding AI answers."
             ),
             "tactics": lambda t, l, u: [
                 "Seed 2-3 YouTube reviewers in the 50K-500K subscriber range with review units",
@@ -313,9 +314,9 @@ _PLATFORM_METRICS: dict[str, list[dict]] = {
             ],
         },
         {
-            "label": "New videos in the last 12 months",
-            "value": lambda m: m.get("recent_videos_365d"),
-            "fmt": lambda v: f"~{v:,} videos",
+            "label": "Fresh videos in the last 12 months (top-100 sample)",
+            "value": lambda m: m.get("recent_relevant_365d"),
+            "fmt": lambda v: f"{v:,} of top-100",
             "why": lambda t, l: (
                 f"Fresh content matters separately from back-catalog volume: AI "
                 f"answers favor current-model information, and a year of {l} "
@@ -329,7 +330,7 @@ _PLATFORM_METRICS: dict[str, list[dict]] = {
             ],
         },
         {
-            "label": "Views across each brand's top-10 videos",
+            "label": "Views across each brand's top-10 relevant videos",
             "value": lambda m: m.get("top_videos_total_views"),
             "fmt": lambda v: f"{v:,} views",
             "why": lambda t, l: (
