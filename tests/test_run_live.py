@@ -12,6 +12,7 @@ from types import SimpleNamespace
 
 from backend.intelligence.intelligence_service import IntelligenceService
 from backend.intelligence.intelligence_repository import IntelligenceRepository
+from backend.visibility.visibility_repository import VisibilityRepository
 
 
 class _FakeProvider:
@@ -65,6 +66,7 @@ def test_run_live_completes_and_makes_exactly_17_calls(tmp_path):
     provider = _FakeProvider()
     svc = IntelligenceService(_FakePM(provider), target_brand="Firman")
     svc.repository = IntelligenceRepository(db_path=str(tmp_path / "test_intelligence.db"))
+    svc.visibility_repository = VisibilityRepository(db_path=tmp_path / "vis.db")
 
     result = svc._run_live(provider_name=None)
 
@@ -80,6 +82,8 @@ def test_run_live_threads_portfolio_block_into_opportunity_and_briefing():
     svc.repository = IntelligenceRepository(
         db_path=os.path.join(tempfile.mkdtemp(), "test.db")
     )
+    svc.visibility_repository = VisibilityRepository(
+        db_path=os.path.join(tempfile.mkdtemp(), "vis.db"))
 
     svc._run_live(provider_name=None)
 
@@ -120,6 +124,7 @@ def test_run_live_excludes_failed_analyst_prompts_from_collected_and_counts_them
     provider = _OneFailureProvider()
     svc = IntelligenceService(_FakePM(provider), target_brand="Firman")
     svc.repository = IntelligenceRepository(db_path=str(tmp_path / "test_intelligence.db"))
+    svc.visibility_repository = VisibilityRepository(db_path=tmp_path / "vis.db")
 
     result = svc._run_live(provider_name=None)
 
@@ -144,6 +149,7 @@ def test_run_live_threads_measured_platform_data_into_both_synthesis_prompts(tmp
     provider = _FakeProvider()
     svc = IntelligenceService(_FakePM(provider), target_brand="Firman")
     svc.repository = IntelligenceRepository(db_path=str(tmp_path / "test.db"))
+    svc.visibility_repository = VisibilityRepository(db_path=tmp_path / "vis.db")
     svc.platform_repository = TargetedReviewRepository(db_path=tmp_path / "platform.db")
     svc.platform_repository.save_findings("Editorial Coverage", [
         {"brand": "Firman", "platform": "Editorial Coverage",
@@ -174,6 +180,7 @@ def test_run_live_reports_explicit_no_platform_data_state(tmp_path):
     provider = _FakeProvider()
     svc = IntelligenceService(_FakePM(provider), target_brand="Firman")
     svc.repository = IntelligenceRepository(db_path=str(tmp_path / "test.db"))
+    svc.visibility_repository = VisibilityRepository(db_path=tmp_path / "vis.db")
     svc.platform_repository = TargetedReviewRepository(db_path=tmp_path / "platform.db")
 
     svc._run_live(provider_name=None)
@@ -196,9 +203,56 @@ def test_run_live_persists_parsed_opportunity_to_a_fresh_db(tmp_path):
     provider = _FakeProvider()
     svc = IntelligenceService(_FakePM(provider), target_brand="Firman")
     svc.repository = IntelligenceRepository(db_path=str(tmp_path / "fresh.db"))
+    svc.visibility_repository = VisibilityRepository(db_path=tmp_path / "vis.db")
 
     result = svc._run_live(provider_name=None)
 
     saved = svc.repository.get_opportunities_for_run(result["run_id"])
     assert len(saved) == 1
     assert "Test opportunity from live path" in saved[0][1]  # title column
+
+
+def test_briefing_quantitative_block_uses_full_history_when_it_exists(tmp_path):
+    """
+    #94: the briefing previously quoted numbers computed over the capped
+    ~25-per-bucket synthesis sample ("Firman: 10 of 71") while the database
+    held thousands of responses. The quantitative block must come from the
+    FULL stored history, with an explicit scope line, whenever any history
+    exists.
+    """
+    from datetime import datetime
+    from backend.models.visibility_response import VisibilityResponse
+
+    provider = _FakeProvider()
+    svc = IntelligenceService(_FakePM(provider), target_brand="Firman")
+    svc.repository = IntelligenceRepository(db_path=str(tmp_path / "test.db"))
+    svc.visibility_repository = VisibilityRepository(db_path=tmp_path / "vis.db")
+
+    now = datetime.now()
+    svc.visibility_repository.save_responses([
+        VisibilityResponse("r1", "mock", "m", f"q{i}",
+                           "Firman is solid. Honda is reliable.", now, "fam")
+        for i in range(30)
+    ])
+
+    svc._run_live(provider_name=None)
+
+    brief_prompt = next(
+        c for c in provider.calls if "VISIBILITY SNAPSHOT" in c and "Produce a structured" in c
+    )
+    assert "Scope: full collection history (30 stored responses)" in brief_prompt
+    assert "Firman: 30 of 30 responses (100%)" in brief_prompt
+
+
+def test_briefing_quantitative_block_falls_back_to_sample_scope_without_history(tmp_path):
+    provider = _FakeProvider()
+    svc = IntelligenceService(_FakePM(provider), target_brand="Firman")
+    svc.repository = IntelligenceRepository(db_path=str(tmp_path / "test.db"))
+    svc.visibility_repository = VisibilityRepository(db_path=tmp_path / "vis.db")
+
+    svc._run_live(provider_name=None)
+
+    brief_prompt = next(
+        c for c in provider.calls if "VISIBILITY SNAPSHOT" in c and "Produce a structured" in c
+    )
+    assert "Scope: this run's collected sample" in brief_prompt

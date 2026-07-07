@@ -209,6 +209,10 @@ class IntelligenceService:
         # An attribute (like self.repository) so tests swap in a tmp-path
         # instance the same way they already do for the main repository.
         self.platform_repository = TargetedReviewRepository()
+        # Injectable for the same reason (#94) — the briefing's quantitative
+        # numbers now come from the FULL stored response history, not just
+        # the capped synthesis sample.
+        self.visibility_repository = VisibilityRepository()
         self._analysts = [ProductAnalyst(), PersonaAnalyst(), BuyingJourneyAnalyst()]
 
     # ── Public entry point ────────────────────────────────────────────────────
@@ -220,8 +224,7 @@ class IntelligenceService:
         Prefers stored visibility responses (2 synthesis API calls only).
         Falls back to live 14-prompt collection when DB data is insufficient.
         """
-        vis_repo = VisibilityRepository()
-        raw = vis_repo.list_responses()
+        raw = self.visibility_repository.list_responses()
 
         if raw:
             collected = self._classify_visibility_responses(raw)
@@ -285,10 +288,14 @@ class IntelligenceService:
         # Measured platform numbers from Targeted Review (#25) — computed once,
         # fed to both passes as ground truth alongside the portfolio inference.
         platform_block = build_presence_block(self.platform_repository, self.target_brand)
+        # #94: the briefing's quantitative claims come from the FULL stored
+        # history when one exists — the capped sample stats are only the
+        # fallback for a brand-new install with no collections yet.
+        briefing_stats = self._full_history_brand_stats() or brand_stats
         with ThreadPoolExecutor(max_workers=2) as ex:
             f_opp = ex.submit(self._run_opportunity_pass, provider, collected,
                               portfolio_block, platform_block)
-            f_brief = ex.submit(self._run_briefing_pass, provider, collected, brand_stats,
+            f_brief = ex.submit(self._run_briefing_pass, provider, collected, briefing_stats,
                                 portfolio_block, platform_block)
             opportunities = f_opp.result()
             briefing = f_brief.result()
@@ -370,10 +377,14 @@ class IntelligenceService:
         # Measured platform numbers from Targeted Review (#25) — computed once,
         # fed to both passes as ground truth alongside the portfolio inference.
         platform_block = build_presence_block(self.platform_repository, self.target_brand)
+        # #94: the briefing's quantitative claims come from the FULL stored
+        # history when one exists — the capped sample stats are only the
+        # fallback for a brand-new install with no collections yet.
+        briefing_stats = self._full_history_brand_stats() or brand_stats
         with ThreadPoolExecutor(max_workers=2) as ex:
             f_opp = ex.submit(self._run_opportunity_pass, provider, collected,
                               portfolio_block, platform_block)
-            f_brief = ex.submit(self._run_briefing_pass, provider, collected, brand_stats,
+            f_brief = ex.submit(self._run_briefing_pass, provider, collected, briefing_stats,
                                 portfolio_block, platform_block)
             opportunities = f_opp.result()
             briefing = f_brief.result()
@@ -609,7 +620,9 @@ class IntelligenceService:
             ". No negative-context mentions detected for this brand."
         )
 
+        scope = brand_stats.get("scope", "this run's collected sample")
         brand_block = (
+            f"Scope: {scope}\n"
             f"{target}: {target_count} of {total} responses ({target_rate}%)"
             + (f", rank #{rank} of {len(sorted_brands)}" if rank else "")
             + sentiment_line
@@ -764,6 +777,37 @@ class IntelligenceService:
             "negative_counts": dict(negative_counts),
             "total_responses": total,
             "known_brands": list(brand_terms.keys()),
+            "scope": "this run's collected sample",
+        }
+
+    def _full_history_brand_stats(self) -> dict | None:
+        """
+        Brand stats over the ENTIRE stored response history (#94).
+
+        The briefing previously quoted numbers computed only over the capped
+        ~25-per-bucket synthesis sample — telling the AI "Firman: 10 of 71
+        responses" while the database held thousands. The synthesis TEXT still
+        comes from the capped sample (token budget), but the quantitative
+        claims the briefing is required to cite now come from everything
+        Atlas has ever collected — the same numbers the Visibility page
+        shows. Fast because summarize_responses() reads the persisted
+        cue-zone caches (list_responses returns them at the indexes it
+        expects). Returns None when no history exists (brand-new install,
+        live-only first run) so callers fall back to sample stats.
+        """
+        rows = self.visibility_repository.list_responses()
+        if not rows:
+            return None
+        from backend.visibility.visibility_analytics import VisibilityAnalytics
+        analytics = VisibilityAnalytics(target_brand=self.target_brand)
+        summary = analytics.summarize_responses(rows)
+        total = summary.get("total_responses", 0)
+        return {
+            "counts": summary.get("brand_counts", {}),
+            "negative_counts": summary.get("negative_brand_counts", {}),
+            "total_responses": total,
+            "known_brands": list(analytics.brands),
+            "scope": f"full collection history ({total:,} stored responses)",
         }
 
     def _load_brands(self) -> dict[str, list[str]]:
@@ -839,12 +883,11 @@ class IntelligenceService:
 
     def total_response_count(self) -> int:
         """Total rows in visibility_responses — the full data reservoir."""
-        return VisibilityRepository().count_responses()
+        return self.visibility_repository.count_responses()
 
     def db_response_counts(self) -> dict[str, int]:
         """Return per-bucket counts from the visibility DB (for UI display)."""
-        vis_repo = VisibilityRepository()
-        raw = vis_repo.list_responses()
+        raw = self.visibility_repository.list_responses()
         if not raw:
             return {"Product Intelligence": 0, "Consumer Personas": 0,
                     "Buying Journey": 0, "Brand Intelligence": 0, "total": 0}
