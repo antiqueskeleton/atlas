@@ -165,6 +165,20 @@ def test_full_export_disables_opportunities_cap(tmp_path):
         assert f"Opp {i}" in text
 
 
+def test_opportunities_with_trailing_created_date_column_dont_crash(tmp_path):
+    """Pinned to a real crash: get_all_opportunities() (used by the
+    Opportunities tab's "Export Tab (Full)" button) returns a 6th
+    created_date column that get_opportunities_for_run() doesn't have —
+    "too many values to unpack (expected 5, got 6)" on real export."""
+    opps = [(i, f"Opp {i}", f"{i} of 20 responses", f"Action {i}", "new",
+              "2026-07-01T10:00:00") for i in range(3)]
+    out = tmp_path / "full_opps_6col.pdf"
+    IntelligencePDFReport(_RUN, _BRIEFING, [], opps, "Firman", full_export=True).generate(str(out))
+    text = _extract_text(out)
+    for i in range(3):
+        assert f"Opp {i}" in text
+
+
 def test_executive_briefing_sections_get_distinct_header_styling(tmp_path):
     briefing = (
         "product summary", "persona summary", "journey summary", "opportunities text",

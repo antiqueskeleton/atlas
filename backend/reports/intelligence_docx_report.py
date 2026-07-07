@@ -348,7 +348,12 @@ class IntelligenceDocxReport:
             "done":        "Done",
         }
 
-        for idx, (opp_id, title, evidence, description, status) in enumerate(opps, 1):
+        for idx, row in enumerate(opps, 1):
+            # Sliced, not unpacked to a fixed arity — opps can come from either
+            # get_opportunities_for_run() (5 columns) or get_all_opportunities()
+            # (6, trailing created_date); see intelligence_pdf_report.py's
+            # matching fix for the real crash this caused on Full export.
+            opp_id, title, evidence, description, status = row[:5]
             # Opportunity number + title
             doc.add_heading(f"{idx}.  {title}", level=2)
 

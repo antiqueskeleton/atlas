@@ -335,6 +335,15 @@ class TargetedReviewPage(QWidget):
         ctrl.addWidget(btn_socials)
         ctrl.addStretch()
 
+        # Own status line, not one of the per-platform tab labels — Find
+        # Socials applies across every platform and must stay visible no
+        # matter which tab happens to be open (previously reused the
+        # YouTube tab's status label, so its "done" message was invisible
+        # whenever a different tab was selected — real user report 2026-07-07).
+        self._socials_status = QLabel("")
+        self._socials_status.setStyleSheet("color: #6B7280; font-size: 12px;")
+        self._socials_status.setWordWrap(True)
+
         hdr_row = QHBoxLayout()
         hdr_row.setSpacing(4)
         hdr = QLabel("Brands to research:")
@@ -358,6 +367,7 @@ class TargetedReviewPage(QWidget):
         body_row.addWidget(scroll, 1)
         body_row.addLayout(ctrl)
         panel_lay.addLayout(body_row)
+        panel_lay.addWidget(self._socials_status)
 
         panel = QWidget()
         panel.setLayout(panel_lay)
@@ -547,14 +557,14 @@ class TargetedReviewPage(QWidget):
         column and channel gap metric on the next YouTube collection."""
         brands = self._checked_brands()
         if not brands:
-            self._status_lbls["youtube"].setText("Check at least one brand first.")
+            self._socials_status.setText("Check at least one brand first.")
             return
         websites = {row[1]: (row[2] or "")
                     for row in KnowledgeRepository().list_brands()}
         targets = [(b, websites.get(b, "")) for b in brands]
 
         self._socials_btn.setEnabled(False)
-        status = self._status_lbls["youtube"]
+        status = self._socials_status
         status.setStyleSheet("color: #0B84FF; font-size: 12px;")
         status.setText("Finding social links…")
 
@@ -595,10 +605,10 @@ class TargetedReviewPage(QWidget):
                 saved += 1
                 if links.get("youtube"):
                     with_yt += 1
-        status = self._status_lbls["youtube"]
-        status.setStyleSheet("color: #6B7280; font-size: 12px;")
+        status = self._socials_status
+        status.setStyleSheet("color: #16A34A; font-size: 12px;")
         status.setText(
-            f"Social links saved for {saved} of {len(results)} brand(s) — "
+            f"Done — social links saved for {saved} of {len(results)} brand(s) — "
             f"{with_yt} with a YouTube channel. Channel metrics appear on the "
             f"next YouTube collection.")
 

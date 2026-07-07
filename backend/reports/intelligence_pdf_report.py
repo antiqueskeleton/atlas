@@ -333,7 +333,13 @@ class IntelligencePDFReport:
             "done":        C_GREEN,
         }
 
-        for idx, (opp_id, title, evidence, description, status) in enumerate(opps, 1):
+        for idx, row in enumerate(opps, 1):
+            # Sliced, not unpacked to a fixed arity — opps can come from either
+            # get_opportunities_for_run() (5 columns) or get_all_opportunities()
+            # (6, trailing created_date), and this section only ever needs the
+            # first 5 (real crash from the Full export path: "too many values
+            # to unpack (expected 5, got 6)").
+            opp_id, title, evidence, description, status = row[:5]
             status_color = _STATUS_COLORS.get(status or "new", C_GRAY)
             status_label = (status or "new").replace("_", " ").title()
 
