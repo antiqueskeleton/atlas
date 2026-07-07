@@ -338,7 +338,8 @@ class VisibilityRepository:
                     COUNT(DISTINCT vr.provider)                                       AS providers,
                     COUNT(DISTINCT vr.run_id)                                         AS runs,
                     COUNT(DISTINCT COALESCE(NULLIF(vr.family_name, ''), vs.prompt_set, '?')) AS families,
-                    COUNT(CASE WHEN vr.review_status = 'flagged' THEN 1 END)          AS flagged
+                    COUNT(CASE WHEN vr.review_status = 'flagged' THEN 1 END)          AS flagged,
+                    COUNT(CASE WHEN vr.review_status = 'reviewed' THEN 1 END)         AS reviewed
                 FROM visibility_responses vr
                 LEFT JOIN visibility_runs vs ON vr.run_id = vs.run_id
             """).fetchone()
@@ -348,6 +349,7 @@ class VisibilityRepository:
             "runs":      row[2] or 0,
             "families":  row[3] or 0,
             "flagged":   row[4] or 0,
+            "reviewed":  row[5] or 0,
         }
 
     def citation_domain_counts(self, limit: int = 25) -> dict:

@@ -798,8 +798,20 @@ class VisibilityPage(QWidget):
         self._raw_runs_card,  _, self._raw_runs_val  = _compact_card("Runs", "—")
         self._raw_fam_card,   _, self._raw_fam_val   = _compact_card("Prompt Families", "—")
         self._raw_flagged_card, _, self._raw_flagged_val = _compact_card("Flagged for Review", "—")
+        # #91: measured extraction accuracy from the human review workflow —
+        # of everything a person has checked, what share was confirmed
+        # correct. This is the difference between "trust the rules" and
+        # "verified against human judgment".
+        self._raw_acc_card, _, self._raw_acc_val = _compact_card("Spot-Check Accuracy", "—")
+        self._raw_acc_card.setToolTip(
+            "Confirmed-correct rate across every response a human has "
+            "reviewed: Reviewed ÷ (Reviewed + Flagged). Use the Audit Random "
+            "button below to build the sample — 30+ checks makes this a "
+            "credible measure of Atlas's automated extraction accuracy."
+        )
         for card in (self._raw_total_card, self._raw_prov_card,
-                     self._raw_runs_card, self._raw_fam_card, self._raw_flagged_card):
+                     self._raw_runs_card, self._raw_fam_card,
+                     self._raw_flagged_card, self._raw_acc_card):
             raw_kpi_row.addWidget(card)
         raw_kpi_widget = QWidget()
         raw_kpi_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -873,6 +885,14 @@ class VisibilityPage(QWidget):
         # Review action bar — acts on the currently selected row above.
         review_bar = QHBoxLayout()
         review_bar.setSpacing(8)
+        self._raw_audit_btn = QPushButton("🎲 Audit Random")
+        self._raw_audit_btn.clicked.connect(self._audit_random_unreviewed)
+        self._raw_audit_btn.setToolTip(
+            "Jump to a random unreviewed response (#91). Read it, then Mark "
+            "Reviewed if Atlas's brand/sentiment extraction looks right or "
+            "Flag it if wrong — each check feeds the Spot-Check Accuracy "
+            "tile above. Click again for the next one."
+        )
         self._raw_flag_btn = QPushButton("🚩 Flag for Review")
         self._raw_reviewed_btn = QPushButton("✓ Mark Reviewed")
         self._raw_clear_review_btn = QPushButton("↺ Clear Review Status")
@@ -886,6 +906,7 @@ class VisibilityPage(QWidget):
         )
         self._raw_reviewed_btn.setToolTip("Mark this response as manually reviewed and confirmed correct.")
         self._raw_clear_review_btn.setToolTip("Clear this response's review status back to unreviewed.")
+        review_bar.addWidget(self._raw_audit_btn)
         for btn in (self._raw_flag_btn, self._raw_reviewed_btn, self._raw_clear_review_btn):
             btn.setEnabled(False)
             review_bar.addWidget(btn)
@@ -1669,6 +1690,7 @@ class VisibilityPage(QWidget):
         self._raw_runs_val.setText(str(stats["runs"]))
         self._raw_fam_val.setText(str(stats["families"]))
         self._raw_flagged_val.setText(str(stats["flagged"]))
+        self._set_accuracy_kpi(stats)
 
         # Rebuild provider filter dropdown without triggering a re-query
         current_prov = self._raw_prov_filter.currentText()
@@ -1802,8 +1824,38 @@ class VisibilityPage(QWidget):
         self._refresh_raw_data_kpis_only()
 
     def _refresh_raw_data_kpis_only(self):
-        """Updates just the Flagged-for-Review KPI tile after a status change,
+        """Updates just the review-derived KPI tiles after a status change,
         without re-querying the provider-filter dropdown or resetting scroll
         position the way a full _refresh_raw_data() would."""
         stats = self.service.repository.count_stats()
         self._raw_flagged_val.setText(str(stats["flagged"]))
+        self._set_accuracy_kpi(stats)
+
+    def _set_accuracy_kpi(self, stats: dict):
+        """#91: Reviewed ÷ (Reviewed + Flagged), with the audited count so
+        a 100% from n=2 can't masquerade as a real measure."""
+        checked = (stats.get("reviewed", 0) or 0) + (stats.get("flagged", 0) or 0)
+        if not checked:
+            self._raw_acc_val.setText("—")
+            return
+        accuracy = round(stats.get("reviewed", 0) / checked * 100)
+        self._raw_acc_val.setText(f"{accuracy}%  (n={checked})")
+
+    def _audit_random_unreviewed(self):
+        """#91: one click per audit step — filter to unreviewed and land on
+        a random one, so the sample is unbiased instead of 'whatever was at
+        the top of the table'."""
+        import random
+        if self._raw_review_filter.currentText() != "Unreviewed":
+            self._raw_review_filter.setCurrentText("Unreviewed")  # triggers refilter
+        rows = self._raw_tbl.rowCount()
+        if rows == 0:
+            QMessageBox.information(
+                self, "Audit Complete",
+                "No unreviewed responses in the current view — every response "
+                "has been checked (or filters exclude the rest).")
+            return
+        row = random.randrange(rows)
+        self._raw_tbl.selectRow(row)
+        self._raw_tbl.scrollToItem(self._raw_tbl.item(row, 0))
+        self._on_raw_row_selected(row)
