@@ -9,7 +9,7 @@ from backend.intelligence.analysts import BuyingJourneyAnalyst, PersonaAnalyst, 
 from backend.intelligence.intelligence_repository import IntelligenceRepository
 from backend.targeted_review.targeted_review_repository import TargetedReviewRepository
 from backend.targeted_review.targeted_review_service import build_presence_block
-from backend.visibility.brand_matcher import resolve_target_brand
+from backend.visibility.brand_matcher import resolve_target_brand, text_contains_term
 from backend.visibility.negation import detect_negative_brands
 from backend.visibility.visibility_repository import VisibilityRepository
 
@@ -672,7 +672,7 @@ class IntelligenceService:
         for pairs in collected.values():
             for _, response in pairs:
                 for sentence in re.split(r'(?<=[.!?])\s+', response):
-                    if target_lower not in sentence.lower():
+                    if not text_contains_term(sentence.lower(), target_lower):
                         continue
                     s = sentence.strip()
                     if len(s) < 30 or len(s) > 400:
@@ -751,7 +751,9 @@ class IntelligenceService:
                 lower = text.lower()
                 mentioned: set[str] = set()
                 for brand, terms in brand_terms.items():
-                    if any(t in lower for t in terms):
+                    # Word-boundary check (#87) — plain `t in lower` credited
+                    # CAT for "category" and WEN for "went".
+                    if any(text_contains_term(lower, t) for t in terms):
                         counts[brand] += 1
                         mentioned.add(brand)
                 for brand in detect_negative_brands(text, flat_terms):

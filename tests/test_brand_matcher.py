@@ -102,15 +102,47 @@ def test_find_first_term_occurrences_still_finds_each_distinct_brand():
     assert {b for _, _, b in occurrences} == {"Firman", "Honda"}
 
 
-def test_preserves_no_word_boundary_behavior_of_the_prior_substring_loop():
-    """The code this replaces used plain text.find(term) with zero word-
-    boundary awareness (e.g. "cat" matches inside "category") — this is a
-    pre-existing property of the real brand term data, not something to fix
-    here; BrandTermMatcher must reproduce it exactly, not silently "improve"
-    matching and risk changing real brand counts."""
+def test_word_boundary_matching_rejects_substring_hits():
+    """
+    #87: the original implementation deliberately preserved the prior
+    plain-substring semantics ("cat" matched inside "category"), but real
+    data proved that a core factual defect — every count for a short-named
+    brand was inflated by substring hits ("category", "indicates", "went").
+    Boundary matching is now the required behavior.
+    """
     matcher = BrandTermMatcher(_FLAT_TERMS)
-    text = "browse by category"
-    assert matcher.find_brand_positions(text)["CAT"] == text.index("cat")
+    assert "CAT" not in matcher.find_brand_positions("browse by category")
+    assert "CAT" not in matcher.find_brand_positions("this indicates a problem")
+    assert "CAT" in matcher.find_brand_positions("the cat rp12000e is solid")
+
+
+def test_word_boundary_allows_plural_and_possessive():
+    matcher = BrandTermMatcher([("honda", "Honda")])
+    assert "Honda" in matcher.find_brand_positions("hondas are quiet")
+    assert "Honda" in matcher.find_brand_positions("honda's eu2200i is the pick")
+    assert "Honda" not in matcher.find_brand_positions("hondanet is a website")
+
+
+def test_word_boundary_applies_to_all_three_query_methods():
+    matcher = BrandTermMatcher(_FLAT_TERMS)
+    text = "category pages went live"  # substring hits for CAT only via 'category'
+    assert matcher.find_brand_positions(text) == {}
+    assert matcher.find_all_brand_occurrences(text) == []
+    assert matcher.find_first_term_occurrences(text) == []
+
+
+def test_text_contains_term_boundary_semantics():
+    """Shared helper for the ad-hoc single-term scans in intelligence/home
+    pages — must match BrandTermMatcher's boundary rules exactly."""
+    assert resolve_target_brand is not None  # module import sanity
+    from backend.visibility.brand_matcher import text_contains_term
+    assert text_contains_term("the cat rp12000e", "cat") is True
+    assert text_contains_term("browse by category", "cat") is False
+    assert text_contains_term("this indicates trouble", "cat") is False
+    assert text_contains_term("hondas are quiet", "honda") is True
+    assert text_contains_term("i went with generac", "wen") is False
+    # Second occurrence valid even when the first is embedded
+    assert text_contains_term("categories aside, the cat xq230 works", "cat") is True
 
 
 # ── resolve_target_brand (#82 case-sensitivity fix) ─────────────────────────

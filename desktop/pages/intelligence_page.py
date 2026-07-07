@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
 from backend.intelligence.intelligence_service import IntelligenceService
 from backend.intelligence.opportunity_ranking import rank_opportunities
 from backend.reports.briefing_sections import split_briefing_sections
-from backend.visibility.brand_matcher import resolve_target_brand
+from backend.visibility.brand_matcher import resolve_target_brand, text_contains_term
 from desktop.widgets.export_buttons import export_button
 from desktop.widgets.info_icon import info_icon
 from desktop.widgets.stat_card import StatCard
@@ -918,7 +918,9 @@ class IntelligencePage(QWidget):
             total += 1
             lower = response.lower()
             for brand, terms in brand_terms.items():
-                if any(t in lower for t in terms):
+                # Word-boundary check (#87) — plain substring credited
+                # CAT for "category" and WEN for "went".
+                if any(text_contains_term(lower, t) for t in terms):
                     counts[brand] += 1
         return {
             "counts": dict(counts),

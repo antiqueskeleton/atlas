@@ -5,7 +5,7 @@ from PySide6.QtWidgets import QHBoxLayout, QLabel, QSizePolicy, QVBoxLayout, QWi
 
 from backend.intelligence.intelligence_service import IntelligenceService
 from backend.knowledge.knowledge_repository import KnowledgeRepository
-from backend.visibility.brand_matcher import resolve_target_brand
+from backend.visibility.brand_matcher import resolve_target_brand, text_contains_term
 from backend.visibility.visibility_repository import VisibilityRepository
 from desktop.widgets.activity_feed import ActivityFeed
 from desktop.widgets.stat_card import StatCard
@@ -165,7 +165,9 @@ class HomePage(QWidget):
                 total += 1
                 lower = response.lower()
                 for b, terms in brand_terms.items():
-                    if any(t in lower for t in terms):
+                    # Word-boundary check (#87) — plain substring credited
+                    # CAT for "category" and WEN for "went".
+                    if any(text_contains_term(lower, t) for t in terms):
                         counts[b] += 1
             resolved_target = resolve_target_brand(target, brand_terms.keys())
             rate = round(counts.get(resolved_target, 0) / max(total, 1) * 100)

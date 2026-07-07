@@ -9,14 +9,48 @@ becomes the dominant cost of every analytics pass. An Aho-Corasick automaton
 finds every occurrence of every term in ONE pass over the text — O(text
 length), independent of how many brands are tracked.
 
-Preserves the exact matching semantics of the code it replaces: plain
-substring matching, no word boundaries, case handled by the caller
-lowercasing text before it's passed in (matching the existing convention
-throughout backend/visibility/). Verified byte-for-byte identical output
-against the prior per-term-loop implementation on the real production
-database before this replaced it.
+Matching semantics (#87): WORD-BOUNDARY matching, case handled by the
+caller lowercasing text before it's passed in. The first version
+deliberately preserved the prior plain-substring semantics, but real data
+proved that wrong at the core: 'cat' matched inside "category" and
+"indicates", 'wen' inside "went" — systematically inflating every count
+for short-named brands (CAT was showing as the #2 brand partly on
+substring hits). A hit now only counts when the characters on both sides
+of the match are non-alphanumeric, with a plural/possessive allowance
+(trailing "s" or "'s": "Hondas"/"Honda's" still count as Honda).
+Consequence, by design: brand counts DROP after this lands — that is a
+correction of previously-inflated numbers, not data loss.
 """
 import ahocorasick
+
+
+def _boundary_ok(text: str, start: int, end: int) -> bool:
+    """True when [start:end) sits on word boundaries in `text`.
+    Allows a trailing plural/possessive: "hondas" / "honda's" count."""
+    if start > 0 and text[start - 1].isalnum():
+        return False
+    n = len(text)
+    if end >= n or not text[end].isalnum():
+        return True
+    # Trailing "s" then a boundary → plural ("hondas")
+    if text[end] in "sS" and (end + 1 >= n or not text[end + 1].isalnum()):
+        return True
+    return False
+
+
+def text_contains_term(text_lower: str, term: str) -> bool:
+    """
+    Word-boundary containment check for ad-hoc single-term scans — the
+    shared replacement for the raw `term in text` substring tests that
+    previously lived in intelligence_service/home_page/intelligence_page
+    and carried the same #87 inflation bug as the matcher.
+    """
+    start = text_lower.find(term)
+    while start != -1:
+        if _boundary_ok(text_lower, start, start + len(term)):
+            return True
+        start = text_lower.find(term, start + 1)
+    return False
 
 
 def resolve_target_brand(target_brand: str, known_brands) -> str:
@@ -57,12 +91,13 @@ class BrandTermMatcher:
     def find_brand_positions(self, text: str) -> dict[str, int]:
         """
         Earliest character position of each brand's first-matching term in
-        `text`. Replaces the "for term, brand in flat_brand_terms: text.find
-        (term)" loop in VisibilityAnalytics.summarize_responses().
+        `text` (word-boundary matches only — see module docstring, #87).
         """
         brand_first_pos: dict[str, int] = {}
         for end_idx, term in self._automaton.iter(text):
             start_idx = end_idx - len(term) + 1
+            if not _boundary_ok(text, start_idx, end_idx + 1):
+                continue
             for brand in self._term_to_brands[term]:
                 if brand not in brand_first_pos or start_idx < brand_first_pos[brand]:
                     brand_first_pos[brand] = start_idx
@@ -70,12 +105,14 @@ class BrandTermMatcher:
 
     def find_all_brand_occurrences(self, text: str) -> list[tuple[int, int, str]]:
         """
-        Every (start, end, brand) occurrence in `text` — not just the
-        earliest per brand.
+        Every word-boundary (start, end, brand) occurrence in `text` — not
+        just the earliest per brand.
         """
         occurrences: list[tuple[int, int, str]] = []
         for end_idx, term in self._automaton.iter(text):
             start_idx = end_idx - len(term) + 1
+            if not _boundary_ok(text, start_idx, end_idx + 1):
+                continue
             for brand in self._term_to_brands[term]:
                 occurrences.append((start_idx, end_idx + 1, brand))
         return occurrences
@@ -100,8 +137,9 @@ class BrandTermMatcher:
         """
         first_by_term: dict[str, tuple[int, int]] = {}
         for end_idx, term in self._automaton.iter(text):
-            if term not in first_by_term:
-                first_by_term[term] = (end_idx - len(term) + 1, end_idx + 1)
+            start_idx = end_idx - len(term) + 1
+            if term not in first_by_term and _boundary_ok(text, start_idx, end_idx + 1):
+                first_by_term[term] = (start_idx, end_idx + 1)
 
         occurrences: list[tuple[int, int, str]] = []
         for term, (start, end) in first_by_term.items():
