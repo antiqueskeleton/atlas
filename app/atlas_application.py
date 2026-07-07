@@ -16,6 +16,12 @@ from backend.volume.volume_provider_manager import VolumeProviderManager
 
 class AtlasApplication:
     def __init__(self):
+        # #92: rotating database backup at every launch (skipped when a
+        # recent one exists). create_backup never raises — a backup problem
+        # must not block startup; the Health card reports backup status.
+        from backend.services.backup_service import create_backup
+        create_backup()
+
         self.config_service = ConfigService()
         self.dataset_manager = DatasetManager()
         self.provider_manager = ProviderManager()

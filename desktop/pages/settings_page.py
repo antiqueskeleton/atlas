@@ -702,6 +702,37 @@ class SettingsPage(QWidget):
         db_mb = os.path.getsize(db_path) / (1024 * 1024) if os.path.exists(db_path) else 0
         checks.append(("green", "Database", f"{db_mb:.1f} MB on disk.", None, None))
 
+        # 10 — Database integrity (#92): PRAGMA integrity_check — actual
+        # corruption detection, not just "the file exists".
+        from backend.services.backup_service import integrity_check, list_backups
+        ok, detail = integrity_check()
+        checks.append((
+            "green" if ok else "red",
+            "Database Integrity",
+            "PRAGMA integrity_check: ok." if ok
+            else f"INTEGRITY PROBLEM: {detail[:120]} — restore from a backup "
+                 f"in the backups folder next to the database.",
+            None, None,
+        ))
+
+        # 11 — Backups (#92): rotating copies made at app launch.
+        backups = list_backups()
+        if backups:
+            import datetime as _dt
+            newest_age_h = (_dt.datetime.now().timestamp()
+                            - backups[0].stat().st_mtime) / 3600
+            checks.append((
+                "green" if newest_age_h < 48 else "amber",
+                "Backups",
+                f"{len(backups)} backup(s); newest {newest_age_h:.0f}h old — "
+                f"{backups[0].name}.",
+                None, None,
+            ))
+        else:
+            checks.append(("amber", "Backups",
+                           "No backups yet — one is created automatically at "
+                           "each app launch.", None, None))
+
         self._health_check_data = {"stuck": stuck, "unparsed": unparsed}
         self._render_health_rows(checks)
 
