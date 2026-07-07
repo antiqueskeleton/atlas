@@ -64,6 +64,11 @@ _TABLE_COLUMNS = {
         ("Top-10 Views", "top_videos_total_views",
          "Combined view count of the brand's top-10 RELEVANT videos (filtered, "
          "so an ambiguous brand name's off-topic viral videos don't count)."),
+        ("Ch. Subs", lambda m: (f"{m['channel_subscribers']:,}"
+                                if m.get("channel_subscribers") is not None else None),
+         "Official channel subscribers — needs the brand's channel URL, "
+         "discovered via the Find Socials button (scrapes each brand's "
+         "website for its social links). Costs ~3 quota units per brand."),
     ],
     "reddit": [
         ("Posts (1 yr)", "posts_last_year",
@@ -109,6 +114,7 @@ _DETAIL_SPECS = {
         ("Title", lambda v: v.get("title", "")),
         ("Channel", lambda v: v.get("channel", "")),
         ("Views", lambda v: f"{v.get('views', 0):,}"),
+        ("Comments", lambda v: f"{v.get('comments', 0):,}"),
         ("Published", lambda v: v.get("published", "")),
     ]),
     "reddit": ("top_posts", "Top posts (last year)", [
@@ -264,11 +270,24 @@ class TargetedReviewPage(QWidget):
         btn_none.clicked.connect(self._clear_brands)
         btn_none.setToolTip("Uncheck every brand except the target brand")
 
+        btn_socials = QPushButton("Find Socials")
+        btn_socials.setFixedWidth(120)
+        btn_socials.setStyleSheet("font-size: 11px; padding: 3px 4px;")
+        btn_socials.clicked.connect(self._discover_socials)
+        btn_socials.setToolTip(
+            "Scrape each checked brand's manufacturer website (from Knowledge) "
+            "for its official social links — most importantly the YouTube "
+            "channel, which unlocks cheap channel metrics (subscribers, upload "
+            "cadence) on the next YouTube collection."
+        )
+        self._socials_btn = btn_socials
+
         ctrl = QVBoxLayout()
         ctrl.setSpacing(4)
         ctrl.setAlignment(Qt.AlignTop)
         ctrl.addWidget(btn_top)
         ctrl.addWidget(btn_none)
+        ctrl.addWidget(btn_socials)
         ctrl.addStretch()
 
         hdr_row = QHBoxLayout()
@@ -406,8 +425,8 @@ class TargetedReviewPage(QWidget):
                 self._url_brand_combo.addItem(row[1])
         self._url_input = QLineEdit()
         self._url_input.setPlaceholderText(
-            "Paste a product page URL — Amazon, Home Depot, or Walmart "
-            "(Lowe's blocks automated access)"
+            "Paste a product page URL — Amazon or Walmart "
+            "(Lowe's and Home Depot block automated access)"
         )
         add_btn = QPushButton("Add")
         add_btn.setFixedWidth(60)
@@ -432,9 +451,9 @@ class TargetedReviewPage(QWidget):
         self._url_table.setColumnWidth(3, 260)
         self._url_table.horizontalHeaderItem(3).setToolTip(
             "Result of the most recent collection for this exact URL — hover a "
-            "failed row for the full error. Known limit: Lowe's hard-blocks "
-            "automated access (HTTP 403); Amazon, Home Depot, and Walmart "
-            "listings are the reliable sources."
+            "failed row for the full error. Known limits (confirmed in real "
+            "testing): Lowe's AND Home Depot hard-block automated access "
+            "(HTTP 403). Amazon and Walmart listings are the remaining sources."
         )
         self._url_table.setFixedHeight(120)
         lay.addWidget(self._url_table)
@@ -474,6 +493,69 @@ class TargetedReviewPage(QWidget):
                if b != target][:5]
         for name, cb in self._brand_checks.items():
             cb.setChecked(name == target or name in top)
+
+    # ── Social link discovery ─────────────────────────────────────────────────
+
+    def _discover_socials(self):
+        """Scrape checked brands' websites for social profiles (user request
+        2026-07-06): the discovered YouTube channel powers the Ch. Subs
+        column and channel gap metric on the next YouTube collection."""
+        brands = self._checked_brands()
+        if not brands:
+            self._status_lbls["youtube"].setText("Check at least one brand first.")
+            return
+        websites = {row[1]: (row[2] or "")
+                    for row in KnowledgeRepository().list_brands()}
+        targets = [(b, websites.get(b, "")) for b in brands]
+
+        self._socials_btn.setEnabled(False)
+        status = self._status_lbls["youtube"]
+        status.setStyleSheet("color: #0B84FF; font-size: 12px;")
+        status.setText("Finding social links…")
+
+        class _SocialWorker(QThread):
+            progress = Signal(int, int, str)
+            done = Signal(dict)
+
+            def __init__(self, pairs):
+                super().__init__()
+                self._pairs = pairs
+
+            def run(self):
+                from backend.targeted_review.social_discovery import (
+                    discover_socials_for_website)
+                results = {}
+                for i, (brand, website) in enumerate(self._pairs):
+                    self.progress.emit(i, len(self._pairs), brand)
+                    results[brand] = discover_socials_for_website(website)
+                self.done.emit(results)
+
+        worker = _SocialWorker(targets)
+        worker.progress.connect(
+            lambda done, total, label: status.setText(
+                f"Finding social links {done + 1}/{total} — {label}"))
+        worker.done.connect(self._on_socials_done)
+        worker.finished.connect(
+            lambda w=worker: self._workers.remove(w) if w in self._workers else None)
+        self._workers.append(worker)
+        worker.start()
+
+    def _on_socials_done(self, results: dict):
+        self._socials_btn.setEnabled(True)
+        with_yt, saved = 0, 0
+        for brand, result in results.items():
+            links = result.get("links", {})
+            if links:
+                self.service.repository.save_social_links(brand, links)
+                saved += 1
+                if links.get("youtube"):
+                    with_yt += 1
+        status = self._status_lbls["youtube"]
+        status.setStyleSheet("color: #6B7280; font-size: 12px;")
+        status.setText(
+            f"Social links saved for {saved} of {len(results)} brand(s) — "
+            f"{with_yt} with a YouTube channel. Channel metrics appear on the "
+            f"next YouTube collection.")
 
     # ── Retail URL management ─────────────────────────────────────────────────
 

@@ -51,6 +51,13 @@ class TargetedReviewRepository:
                     added_at TEXT NOT NULL
                 )
             """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS brand_social_links (
+                    brand TEXT PRIMARY KEY,
+                    links_json TEXT NOT NULL,
+                    discovered_at TEXT NOT NULL
+                )
+            """)
 
     # ── Findings ──────────────────────────────────────────────────────────────
 
@@ -139,3 +146,41 @@ class TargetedReviewRepository:
     def delete_product_url(self, url_id: int):
         with self.connect() as conn:
             conn.execute("DELETE FROM targeted_review_urls WHERE id = ?", (url_id,))
+
+    # ── Brand social links ────────────────────────────────────────────────────
+
+    def save_social_links(self, brand: str, links: dict):
+        """Discovered social profiles per brand (youtube/facebook/… → URL).
+        Last discovery wins — sites change their footers."""
+        with self.connect() as conn:
+            conn.execute("""
+                INSERT INTO brand_social_links (brand, links_json, discovered_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(brand) DO UPDATE SET
+                    links_json = excluded.links_json,
+                    discovered_at = excluded.discovered_at
+            """, (brand, json.dumps(links), datetime.now().isoformat()))
+
+    def get_social_links(self, brand: str) -> dict:
+        with self.connect() as conn:
+            row = conn.execute(
+                "SELECT links_json FROM brand_social_links WHERE brand = ?",
+                (brand,)).fetchone()
+        if not row:
+            return {}
+        try:
+            return json.loads(row[0])
+        except (json.JSONDecodeError, TypeError):
+            return {}
+
+    def all_social_links(self) -> dict[str, dict]:
+        with self.connect() as conn:
+            rows = conn.execute(
+                "SELECT brand, links_json FROM brand_social_links").fetchall()
+        result = {}
+        for brand, links_json in rows:
+            try:
+                result[brand] = json.loads(links_json)
+            except (json.JSONDecodeError, TypeError):
+                continue
+        return result

@@ -83,6 +83,14 @@ class TargetedReviewService:
         """
         provider = self.get_provider(platform_key)
 
+        if platform_key == "youtube":
+            # Official channel URLs from the discovered social links — the
+            # cheap, rich half of the YouTube picture (~3 units per brand).
+            provider.channel_urls = {
+                b: (self.repository.get_social_links(b) or {}).get("youtube", "")
+                for b in brands
+            }
+
         if platform_key == "retail":
             findings = self._collect_retail(provider, brands, progress_cb)
         else:
@@ -234,10 +242,14 @@ def build_presence_block(repository, target_brand: str) -> str:
 
 def _summarize_brand_metrics(platform_key: str, m: dict) -> str:
     if platform_key == "youtube":
-        return (f"{m.get('relevant_results_top100') or 0:,} relevant videos in the "
+        text = (f"{m.get('relevant_results_top100') or 0:,} relevant videos in the "
                 f"top-100 search results, {m.get('recent_relevant_365d') or 0:,} "
                 f"fresh in last 12 months, {m.get('top_videos_total_views') or 0:,} "
                 f"views across top-10 relevant videos")
+        if m.get("channel_subscribers") is not None:
+            text += (f", official channel: {m['channel_subscribers']:,} subscribers, "
+                     f"{m.get('channel_uploads_365d') or 0} uploads in last year")
+        return text
     if platform_key == "reddit":
         capped = "+" if m.get("posts_capped") else ""
         engagement = (m.get("total_score") or 0) + (m.get("total_comments") or 0)
@@ -327,6 +339,24 @@ _PLATFORM_METRICS: dict[str, list[dict]] = {
                 "Ship review units for every new model launch, not just flagships",
                 "Refresh top-performing older videos with current-year updates via creators",
                 "Time creator content to storm-season demand spikes (June + December)",
+            ],
+        },
+        {
+            "label": "Official YouTube channel subscribers",
+            "value": lambda m: m.get("channel_subscribers"),
+            "fmt": lambda v: f"{v:,} subscribers",
+            "why": lambda t, l: (
+                f"An official channel is the one YouTube surface a brand fully "
+                f"controls. {l}'s larger subscriber base means every upload gets "
+                f"guaranteed reach, comments, and watch time — the engagement "
+                f"signals that push its content into search results and AI answers."
+            ),
+            "tactics": lambda t, l, u: [
+                "Publish setup/troubleshooting series — utility content earns "
+                "subscribers between purchases",
+                "Cross-promote the channel on packaging, manuals, and "
+                "post-purchase emails (QR code to a first-start walkthrough)",
+                f"Study {l}'s top-performing upload formats and counter-program",
             ],
         },
         {

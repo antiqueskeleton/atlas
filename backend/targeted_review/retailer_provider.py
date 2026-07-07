@@ -93,9 +93,11 @@ def _fetch_html(url: str) -> tuple[str, str]:
         except Exception:
             pass
         if status != 200:
-            hint = (" — Lowe's is known to hard-block automated access; "
-                    "use Amazon, Home Depot, or Walmart listings instead"
-                    if "lowes.com" in url.lower() else " — likely bot protection")
+            hard_blockers = ("lowes.com", "homedepot.com")  # confirmed 2026-07-06
+            hint = (f" — {retailer} is known to hard-block automated access; "
+                    "use Amazon or Walmart listings instead"
+                    if any(h in url.lower() for h in hard_blockers)
+                    else " — likely bot protection")
             return "", f"{retailer} returned HTTP {status}{hint}"
         if "amazon." in url.lower():
             # Still an interstitial after the retry → report as blocked

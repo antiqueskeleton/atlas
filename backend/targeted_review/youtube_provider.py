@@ -38,6 +38,8 @@ from backend.targeted_review.base_platform_provider import PlatformProvider
 
 _SEARCH_URL = "https://www.googleapis.com/youtube/v3/search"
 _VIDEOS_URL = "https://www.googleapis.com/youtube/v3/videos"
+_CHANNELS_URL = "https://www.googleapis.com/youtube/v3/channels"
+_PLAYLIST_URL = "https://www.googleapis.com/youtube/v3/playlistItems"
 _TIMEOUT = 20
 _PAGES = 2          # 2 pages × 50 = top-100 sample per query
 _PAGE_SIZE = 50
@@ -68,6 +70,14 @@ def _brand_pattern(brand: str) -> re.Pattern:
 class YouTubePlatformProvider(PlatformProvider):
     platform_name = "YouTube"
     credential_fields = {"api_key": "API Key"}
+
+    def __init__(self):
+        super().__init__()
+        # brand -> official channel URL, injected by the service from the
+        # discovered social links. Channel metrics cost ~3 quota units per
+        # brand (channels.list + playlistItems) versus ~400 for the search
+        # sampling — by far the cheapest signal this provider collects.
+        self.channel_urls: dict[str, str] = {}
 
     def fetch_brand_presence(self, brand: str) -> dict:
         base = {"brand": brand, "platform": self.platform_name}
@@ -104,12 +114,18 @@ class YouTubePlatformProvider(PlatformProvider):
             return {**base, "error": f"YouTube request failed: {exc}"}
 
         for video in relevant:
+            video_stats = stats_by_id.get(video["video_id"], {})
             try:
-                video["views"] = int(stats_by_id.get(video["video_id"], {})
-                                     .get("viewCount", 0))
+                video["views"] = int(video_stats.get("viewCount", 0))
             except (TypeError, ValueError):
                 video["views"] = 0
+            try:
+                video["comments"] = int(video_stats.get("commentCount", 0))
+            except (TypeError, ValueError):
+                video["comments"] = 0
         relevant.sort(key=lambda v: -v["views"])
+
+        channel = self._channel_metrics(api_key, self.channel_urls.get(brand, ""))
 
         return {
             **base,
@@ -118,8 +134,64 @@ class YouTubePlatformProvider(PlatformProvider):
             "recent_relevant_365d": len(recent_relevant),
             "top_videos": relevant[:10],
             "top_videos_total_views": sum(v["views"] for v in relevant[:10]),
+            **channel,
             "error": "",
         }
+
+    def _channel_metrics(self, api_key: str, channel_url: str) -> dict:
+        """Official-channel statistics for a brand with a discovered channel
+        URL. All failures degrade to empty fields — channel data is an
+        enrichment and must never fail a brand whose search sampling worked."""
+        empty = {"channel_url": channel_url or "", "channel_subscribers": None,
+                 "channel_total_views": None, "channel_video_count": None,
+                 "channel_uploads_365d": None, "channel_latest_upload": ""}
+        params = _channel_lookup_params(channel_url)
+        if not params:
+            return empty
+        try:
+            resp = requests.get(_CHANNELS_URL, params={
+                "part": "statistics,contentDetails", "key": api_key, **params,
+            }, timeout=_TIMEOUT)
+            items = resp.json().get("items", []) if resp.status_code == 200 else []
+            if not items:
+                return empty
+            stats = items[0].get("statistics", {})
+            uploads_id = (items[0].get("contentDetails", {})
+                          .get("relatedPlaylists", {}).get("uploads", ""))
+
+            uploads_365d, latest = None, ""
+            if uploads_id:
+                pl = requests.get(_PLAYLIST_URL, params={
+                    "part": "contentDetails", "playlistId": uploads_id,
+                    "maxResults": 50, "key": api_key,
+                }, timeout=_TIMEOUT)
+                if pl.status_code == 200:
+                    dates = sorted((item.get("contentDetails", {})
+                                    .get("videoPublishedAt", "") or "")[:10]
+                                   for item in pl.json().get("items", []))
+                    dates = [d for d in dates if d]
+                    if dates:
+                        latest = dates[-1]
+                        year_ago = (datetime.now(timezone.utc)
+                                    - timedelta(days=365)).strftime("%Y-%m-%d")
+                        uploads_365d = sum(1 for d in dates if d >= year_ago)
+
+            def _int(value):
+                try:
+                    return int(value)
+                except (TypeError, ValueError):
+                    return None
+
+            return {
+                "channel_url": channel_url,
+                "channel_subscribers": _int(stats.get("subscriberCount")),
+                "channel_total_views": _int(stats.get("viewCount")),
+                "channel_video_count": _int(stats.get("videoCount")),
+                "channel_uploads_365d": uploads_365d,
+                "channel_latest_upload": latest,
+            }
+        except requests.RequestException:
+            return empty
 
     def _paged_search(self, api_key: str, query: str,
                       published_after: str = "") -> tuple[list[dict], str]:
@@ -173,3 +245,20 @@ def _filter_relevant(items: list[dict], brand: str) -> list[dict]:
             seen.add(item["video_id"])
             relevant.append(dict(item))
     return relevant
+
+
+def _channel_lookup_params(channel_url: str) -> dict | None:
+    """Map a channel URL form to channels.list lookup params. /c/NAME custom
+    URLs have no direct API lookup and return None (skipped, not errored)."""
+    if not channel_url:
+        return None
+    match = re.search(r"youtube\.com/channel/(UC[\w-]+)", channel_url, re.IGNORECASE)
+    if match:
+        return {"id": match.group(1)}
+    match = re.search(r"youtube\.com/@([\w.\-]+)", channel_url, re.IGNORECASE)
+    if match:
+        return {"forHandle": match.group(1)}
+    match = re.search(r"youtube\.com/user/([\w.\-]+)", channel_url, re.IGNORECASE)
+    if match:
+        return {"forUsername": match.group(1)}
+    return None

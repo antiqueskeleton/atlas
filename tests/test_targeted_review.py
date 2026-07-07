@@ -411,3 +411,80 @@ def test_platform_ready_reports_missing_credentials():
         FakeConfig({("youtube", "api_key"): "k"}), "Firman", repository=MagicMock())
     ready, reason = ready_service.platform_ready("youtube")
     assert ready is True
+
+
+# ── Social discovery + channel metrics (user request 2026-07-06) ────────────
+
+_SITE_HTML = """
+<html><body><footer>
+<a href="https://www.youtube.com/@FirmanPowerEquipment">YouTube</a>
+<a href="https://www.facebook.com/FirmanPower">Facebook</a>
+<a href="https://www.instagram.com/firmanpower/">Instagram</a>
+<a href="https://www.facebook.com/sharer/sharer.php?u=x">Share</a>
+<a href="/products">Products</a>
+</footer></body></html>
+"""
+
+
+def test_extract_social_links_finds_profiles_and_skips_share_links():
+    from backend.targeted_review.social_discovery import extract_social_links
+    links = extract_social_links(_SITE_HTML)
+    assert links["youtube"] == "https://www.youtube.com/@FirmanPowerEquipment"
+    assert links["facebook"] == "https://www.facebook.com/FirmanPower"
+    assert "instagram" in links
+    assert "sharer" not in links.get("facebook", "")
+
+
+def test_social_links_repository_roundtrip(tmp_path):
+    repo = TargetedReviewRepository(db_path=tmp_path / "t.db")
+    repo.save_social_links("Firman", {"youtube": "https://youtube.com/@x"})
+    repo.save_social_links("Firman", {"youtube": "https://youtube.com/@y"})  # update wins
+    assert repo.get_social_links("Firman")["youtube"] == "https://youtube.com/@y"
+    assert repo.get_social_links("Unknown") == {}
+    assert "Firman" in repo.all_social_links()
+
+
+def test_channel_lookup_params_forms():
+    from backend.targeted_review.youtube_provider import _channel_lookup_params
+    assert _channel_lookup_params("https://www.youtube.com/channel/UCabc-1") == {"id": "UCabc-1"}
+    assert _channel_lookup_params("https://youtube.com/@Firman") == {"forHandle": "Firman"}
+    assert _channel_lookup_params("https://www.youtube.com/user/gen") == {"forUsername": "gen"}
+    assert _channel_lookup_params("https://www.youtube.com/c/Custom") is None
+    assert _channel_lookup_params("") is None
+
+
+def test_channel_metrics_parsed_from_api_payloads():
+    from backend.targeted_review.youtube_provider import YouTubePlatformProvider
+    provider = YouTubePlatformProvider()
+
+    channels_payload = {"items": [{
+        "statistics": {"subscriberCount": "15200", "viewCount": "9000000",
+                       "videoCount": "240"},
+        "contentDetails": {"relatedPlaylists": {"uploads": "UUabc"}},
+    }]}
+    playlist_payload = {"items": [
+        {"contentDetails": {"videoPublishedAt": "2026-06-01T00:00:00Z"}},
+        {"contentDetails": {"videoPublishedAt": "2020-01-01T00:00:00Z"}},
+    ]}
+
+    def fake_get(url, params=None, timeout=None):
+        resp = MagicMock(status_code=200)
+        resp.json.return_value = (playlist_payload if "playlistItems" in url
+                                  else channels_payload)
+        return resp
+
+    with patch("backend.targeted_review.youtube_provider.requests.get",
+               side_effect=fake_get):
+        result = provider._channel_metrics("key", "https://youtube.com/@Firman")
+
+    assert result["channel_subscribers"] == 15200
+    assert result["channel_video_count"] == 240
+    assert result["channel_uploads_365d"] == 1   # only the 2026 upload counts
+    assert result["channel_latest_upload"] == "2026-06-01"
+
+
+def test_channel_metrics_degrade_to_empty_without_url():
+    from backend.targeted_review.youtube_provider import YouTubePlatformProvider
+    result = YouTubePlatformProvider()._channel_metrics("key", "")
+    assert result["channel_subscribers"] is None
+    assert result["channel_url"] == ""

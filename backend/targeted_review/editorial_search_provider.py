@@ -77,8 +77,17 @@ class EditorialSearchProvider(PlatformProvider):
                 # going — the realistic failure is quota exhaustion mid-run,
                 # and continuing would produce a silently-undercounted
                 # brand that gap analysis then misreads as a real gap.
-                return {**base, "error": f"Editorial search failed on {label}: "
-                                         f"{_api_error_message(resp)}"}
+                message = _api_error_message(resp)
+                if resp.status_code == 403 and "quota" not in message.lower():
+                    # Real-testing failure mode: API enabled but the key's
+                    # "API restrictions" in Google Cloud Credentials don't
+                    # include Custom Search API (or enablement hasn't
+                    # propagated yet).
+                    message += (" — if the API is enabled, check that the key's "
+                                "'API restrictions' in Google Cloud Credentials "
+                                "include Custom Search API, then retry in a few "
+                                "minutes.")
+                return {**base, "error": f"Editorial search failed on {label}: {message}"}
             per_site_raw.append((label, domain, resp.json()))
             time.sleep(0.25)  # polite pacing under the API's per-second limits
 
