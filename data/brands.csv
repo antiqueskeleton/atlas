@@ -1,4 +1,9 @@
 name,website,description
+Duracell,,
+Genmac,,
+Jiangdong,,
+Pulsar Power,,
+Troy-Bilt,,
 A-iPower,https://www.aipowerusa.com,Portable and inverter generators
 Briggs & Stratton,https://www.briggsandstratton.com,Engines and portable generators
 CAT,https://www.cat.com,Portable and commercial generators
@@ -22,29 +27,29 @@ Ryobi,https://www.ryobitools.com,Portable generators and power tools
 Sportsman,https://www.sportsmangenerators.com,Portable and inverter generators
 WEN,https://wenproducts.com,Value tools and portable generators
 Westinghouse,https://westinghouseoutdoorpower.com,Portable generators and outdoor power equipment
-Yamaha,https://www.yamahagenerators.com,Premium inverter generators
+Yamaha,https://yamaha-motor.com,Premium inverter generators
 All Power America,https://www.apgroupusa.com,Portable generators
 BILT HARD,,Portable generators sold at Sam's Club
 Black Max,,Portable generators sold at Walmart
-Buffalo Tools,,Value portable generators
+Buffalo Tools,https://www.buffalotools.com,Value portable generators
 Coleman,https://www.coleman.com,Portable generators and outdoor products
 Dirty Hand Tools,https://www.dirtyhandtools.com,Outdoor power equipment and generators
 Ducar,,Portable generators and engines
 ETQ,,Portable generators
-Energizer,,Portable power stations and generators
+Energizer,https://energizerpower.com,Portable power stations and generators
 Green-Power America,,Portable generators
 Hyundai,https://www.hyundaipowerproducts.com,Portable generators
 Kipor,,Portable and inverter generators
 Lifan,,Portable generators and engines
 Loncin,,Portable generators and engines
 PowerPro,,Portable generators
-PowerSmart,,Portable generators
+PowerSmart,https://powersmartusa.com,Portable generators
 PowerStroke,,Portable generators sold at Walmart
 Powerland,,Portable generators
 Rainier,https://rainierpowerequipment.com,Portable generators
-SENCI,,Portable generators
+SENCI,https://senci.com,Portable generators
 Smarter Tools,,Portable generators
-Tomahawk,,Portable generators and construction equipment
+Tomahawk,https://www.tomahawk-power.com,Portable generators and construction equipment
 United Power,,Portable generators
 Wacker Neuson,https://www.wackerneuson.com,Construction and portable generators
 Wagan,https://www.wagan.com,Portable power products and generators
@@ -58,12 +63,12 @@ Motomaster,,Portable generators sold at Canadian Tire
 Powerfist,,Portable generators (Princess Auto Canada)
 Yardworks,,Outdoor power equipment (Canadian Tire)
 Earthquake,https://www.earthquakeoutdoor.com,Outdoor power equipment and generators
-Homelite,,Portable generators sold at Home Depot
+Homelite,https://www.homelite.com,Portable generators sold at Home Depot
 Husky,,Tools and generators sold at Home Depot
 JobSmart,,Portable generators sold at Tractor Supply
 Kobalt,,Tools sold at Lowe's (historical generators)
 Masterforce,,Portable generators sold at Menards
-Ridgid,,Tools and generators sold at Home Depot
+Ridgid,https://www.ridgid.com,Tools and generators sold at Home Depot
 Eaton,https://www.eaton.com,Standby power systems (historical generators)
 Honeywell,https://www.honeywellgenerators.com,Licensed standby generators (Generac OEM)
 Siemens,https://www.siemens.com,Standby power systems (historical generators)
@@ -74,7 +79,7 @@ MTU,https://www.mtu-solutions.com,Industrial generator sets
 Multiquip,https://www.multiquip.com,Commercial portable generators
 Pramac,https://www.pramac.com,Commercial and industrial generators
 SDMO,https://www.sdmo.com,Commercial generators
-WhisperWatt,,Commercial portable generators
+WhisperWatt,https://www.whisperwatt.com,Commercial portable generators
 Winco,https://www.wincogen.com,Commercial and industrial generators
 Anker,https://www.anker.com,Portable battery and home backup systems
 Bluetti,https://www.bluettipower.com,Portable power stations and solar generators
@@ -85,7 +90,7 @@ Jackery,https://www.jackery.com,Portable battery and solar generators
 Lion Energy,https://lionenergy.com,Portable power stations
 Mango Power,https://www.mangopower.com,Portable power stations
 Nature's Generator,https://www.naturesgenerator.com,Solar and battery generator systems
-OUPES,,Portable power stations
+OUPES,https://oupes.com,Portable power stations
 Renogy,https://www.renogy.com,Portable solar and battery power systems
-VTOMAN,,Portable power stations
+VTOMAN,https://vtoman.com,Portable power stations
 Zendure,https://www.zendure.com,Portable power stations
