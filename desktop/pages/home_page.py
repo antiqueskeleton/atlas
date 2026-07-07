@@ -105,18 +105,169 @@ class HomePage(QWidget):
 
         self._activity = ActivityFeed("Recent Activity")
 
+        # #104: first-run setup checklist — visible only until the four
+        # required steps are done, then it disappears for good.
+        self._setup_frame, self._setup_lay = self._status_card("Getting Started")
+        self._setup_frame.setVisible(False)
+
+        # #101: Home as mission control — per-source data freshness at a
+        # glance, so "is my data current?" never requires touring five pages.
+        self._health_frame, self._health_lay = self._status_card("Data Health")
+
         root.addWidget(self._title)
         root.addWidget(self._subtitle)
         root.addSpacing(8)
+        root.addWidget(self._setup_frame)
         root.addWidget(kpi_widget)
+        root.addSpacing(8)
+        root.addWidget(self._health_frame)
         root.addSpacing(8)
         root.addWidget(self._activity)
         root.addStretch()
         self.setLayout(root)
 
+    @staticmethod
+    def _status_card(title: str):
+        from PySide6.QtWidgets import QFrame
+        frame = QFrame()
+        frame.setObjectName("StatCard")
+        lay = QVBoxLayout()
+        lay.setSpacing(3)
+        lay.setContentsMargins(14, 10, 14, 12)
+        header = QLabel(title)
+        header.setObjectName("CardTitle")
+        lay.addWidget(header)
+        frame.setLayout(lay)
+        return frame, lay
+
+    @staticmethod
+    def _clear_rows(lay):
+        while lay.count() > 1:  # keep the title
+            item = lay.takeAt(1)
+            if item.widget():
+                item.widget().deleteLater()
+
+    @staticmethod
+    def _status_row(state: str, text: str) -> QLabel:
+        """state: ok | warn | todo — one glanceable line per source/step."""
+        mark, color = {
+            "ok":   ("\u2713", "#16A34A"),
+            "warn": ("\u26a0", "#B45309"),
+            "todo": ("\u25cb", "#6B7280"),
+        }[state]
+        row = QLabel(f'<span style="color:{color}; font-weight:bold;">{mark}</span>'
+                     f'&nbsp;&nbsp;<span style="color:#374151;">{text}</span>')
+        row.setStyleSheet("font-size: 12px;")
+        row.setWordWrap(True)
+        return row
+
+    def _refresh_setup_and_health(self):
+        from datetime import datetime
+        from backend.intelligence.intelligence_repository import IntelligenceRepository
+        from backend.services.backup_service import list_backups
+        from backend.targeted_review.targeted_review_repository import (
+            TargetedReviewRepository)
+        from backend.targeted_review.targeted_review_service import PLATFORMS
+
+        cfg = self.app.config_service
+        vis_repo = VisibilityRepository()
+        n_responses = vis_repo.count_responses()
+        vis_runs = [r for r in (vis_repo.list_runs() or []) if r[6] == "completed"]
+        intel_runs = [r for r in IntelligenceRepository().list_runs()
+                      if r[6] == "completed"]
+        ai_keys = sum(1 for v in (cfg.settings.get("api_keys") or {}).values() if v)
+
+        # ── Setup checklist (#104) ────────────────────────────────────────────
+        steps = [
+            (bool(cfg.get_target_brand()),
+             "Set the target brand (Settings)"),
+            (ai_keys > 0,
+             "Add at least one AI provider key (Settings)"),
+            (n_responses > 0,
+             "Run a Visibility Collection (Visibility page) to start the dataset"),
+            (len(intel_runs) > 0,
+             "Run an Intelligence Analysis (Intelligence page) for the first briefing"),
+        ]
+        if all(done for done, _ in steps):
+            self._setup_frame.setVisible(False)
+        else:
+            self._clear_rows(self._setup_lay)
+            for done, text in steps:
+                self._setup_lay.addWidget(
+                    self._status_row("ok" if done else "todo", text))
+            platform_creds = cfg.settings.get("platform_credentials") or {}
+            has_platform = any(any(v for v in fields.values())
+                               for fields in platform_creds.values())
+            self._setup_lay.addWidget(self._status_row(
+                "ok" if has_platform else "todo",
+                "Optional: add platform research keys for Targeted Review "
+                "(Settings → Platform Research)"))
+            self._setup_frame.setVisible(True)
+
+        # ── Data health (#101) ────────────────────────────────────────────────
+        self._clear_rows(self._health_lay)
+
+        def age_days(iso: str):
+            try:
+                return (datetime.now() - datetime.fromisoformat(iso)).days
+            except (ValueError, TypeError):
+                return None
+
+        if vis_runs:
+            days = age_days(vis_runs[0][4])
+            stale = days is None or days >= 7
+            self._health_lay.addWidget(self._status_row(
+                "warn" if stale else "ok",
+                f"Visibility: last collection {vis_runs[0][4][:10]}"
+                + (f" ({days}d ago)" if days is not None else "")
+                + f" · {len(vis_runs)} runs · {n_responses:,} responses"
+                + (" — run the Standard Panel to keep trends comparable"
+                   if stale else "")))
+        else:
+            self._health_lay.addWidget(self._status_row(
+                "warn", "Visibility: no collections yet"))
+
+        if intel_runs:
+            days = age_days(intel_runs[0][4])
+            self._health_lay.addWidget(self._status_row(
+                "ok" if days is not None and days < 7 else "warn",
+                f"Intelligence: last analysis {intel_runs[0][4][:10]}"
+                + (f" ({days}d ago)" if days is not None else "")
+                + f" · {len(intel_runs)} runs"))
+        else:
+            self._health_lay.addWidget(self._status_row(
+                "warn", "Intelligence: no analysis yet"))
+
+        tr_repo = TargetedReviewRepository()
+        parts = []
+        any_collected = False
+        for key, provider_cls in PLATFORMS.items():
+            latest = tr_repo.latest_findings(provider_cls.platform_name)
+            dates = [m.get("collected_at", "")[:10] for m in latest.values()
+                     if m.get("collected_at")]
+            if dates:
+                any_collected = True
+                parts.append(f"{provider_cls.platform_name} {max(dates)[5:]}")
+            else:
+                parts.append(f"{provider_cls.platform_name} —")
+        self._health_lay.addWidget(self._status_row(
+            "ok" if any_collected else "todo",
+            "Targeted Review: " + " · ".join(parts)))
+
+        backups = list_backups()
+        if backups:
+            hours = (datetime.now().timestamp() - backups[0].stat().st_mtime) / 3600
+            self._health_lay.addWidget(self._status_row(
+                "ok" if hours < 48 else "warn",
+                f"Backups: {len(backups)} on disk, newest {hours:.0f}h old"))
+        else:
+            self._health_lay.addWidget(self._status_row(
+                "warn", "Backups: none yet (created automatically at launch)"))
+
     # ── Data ──────────────────────────────────────────────────────────────────
 
     def refresh(self):
+        self._refresh_setup_and_health()
         vis_repo   = VisibilityRepository()
         know_repo  = KnowledgeRepository()
         intel_svc  = IntelligenceService(
