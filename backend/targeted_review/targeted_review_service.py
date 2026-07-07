@@ -249,6 +249,13 @@ def _summarize_brand_metrics(platform_key: str, m: dict) -> str:
         if m.get("channel_subscribers") is not None:
             text += (f", official channel: {m['channel_subscribers']:,} subscribers, "
                      f"{m.get('channel_uploads_365d') or 0} uploads in last year")
+        voice = m.get("owner_voice") or {}
+        if voice.get("comments_sampled"):
+            text += (f"; owner voice ({voice['comments_sampled']} top comments "
+                     f"sampled): {voice.get('mentioning_brand', 0)} mention the "
+                     f"brand, {voice.get('recommendation_cues', 0)} with "
+                     f"recommendation cues, {voice.get('negative_cues', 0)} with "
+                     f"negative cues")
         return text
     if platform_key == "reddit":
         capped = "+" if m.get("posts_capped") else ""

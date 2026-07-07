@@ -488,3 +488,56 @@ def test_channel_metrics_degrade_to_empty_without_url():
     result = YouTubePlatformProvider()._channel_metrics("key", "")
     assert result["channel_subscribers"] is None
     assert result["channel_url"] == ""
+
+
+# ── Owner-voice comment mining (user request 2026-07-06) ─────────────────────
+
+def test_analyze_comments_tags_signals_and_counts():
+    from backend.targeted_review.youtube_provider import _analyze_comments
+    comments = [
+        {"text": "I would definitely recommend the Firman tri-fuel.", "likes": 5},
+        {"text": "My Firman would not start after two months, avoid it.", "likes": 9},
+        {"text": "Firman runs my whole panel.", "likes": 2},
+        {"text": "Great video, thanks for sharing!", "likes": 1},
+        {"text": "Firmania is a made-up word.", "likes": 0},  # word boundary
+    ]
+    voice = _analyze_comments(comments, "Firman")
+    assert voice["comments_sampled"] == 5
+    assert voice["mentioning_brand"] == 3        # boundary excludes 'Firmania'
+    assert voice["recommendation_cues"] >= 1
+    assert voice["negative_cues"] >= 1
+    signals = [c["signal"] for c in comments]
+    assert "recommend" in signals and "negative" in signals
+    assert comments[3]["signal"] == ""           # non-mention untouched
+
+
+def test_top_video_comments_skips_disabled_and_caps(tmp_path):
+    from backend.targeted_review.youtube_provider import YouTubePlatformProvider
+    provider = YouTubePlatformProvider()
+
+    ok_payload = {"items": [
+        {"snippet": {"topLevelComment": {"snippet": {
+            "textDisplay": f"comment {i}", "likeCount": i}}}}
+        for i in range(15)
+    ]}
+
+    calls = []
+    def fake_get(url, params=None, timeout=None):
+        calls.append(params["videoId"])
+        resp = MagicMock()
+        if params["videoId"] == "disabled":
+            resp.status_code = 403   # commentsDisabled
+        else:
+            resp.status_code = 200
+            resp.json.return_value = ok_payload
+        return resp
+
+    videos = [{"video_id": "a", "title": "T1"}, {"video_id": "disabled", "title": "T2"},
+              {"video_id": "b", "title": "T3"}]
+    with patch("backend.targeted_review.youtube_provider.requests.get",
+               side_effect=fake_get):
+        comments = provider._top_video_comments("key", videos)
+
+    assert len(calls) == 3
+    assert len(comments) == 30            # 15 + 0 (disabled skipped) + 15
+    assert all(c["video"] in ("T1", "T3") for c in comments)

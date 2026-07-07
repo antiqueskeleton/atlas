@@ -40,6 +40,9 @@ _SEARCH_URL = "https://www.googleapis.com/youtube/v3/search"
 _VIDEOS_URL = "https://www.googleapis.com/youtube/v3/videos"
 _CHANNELS_URL = "https://www.googleapis.com/youtube/v3/channels"
 _PLAYLIST_URL = "https://www.googleapis.com/youtube/v3/playlistItems"
+_COMMENTS_URL = "https://www.googleapis.com/youtube/v3/commentThreads"
+_COMMENT_VIDEOS = 5    # top relevant videos to sample comments from
+_COMMENTS_PER_VIDEO = 15
 _TIMEOUT = 20
 _PAGES = 2          # 2 pages × 50 = top-100 sample per query
 _PAGE_SIZE = 50
@@ -126,6 +129,8 @@ class YouTubePlatformProvider(PlatformProvider):
         relevant.sort(key=lambda v: -v["views"])
 
         channel = self._channel_metrics(api_key, self.channel_urls.get(brand, ""))
+        comments = self._top_video_comments(api_key, relevant[:_COMMENT_VIDEOS])
+        owner_voice = _analyze_comments(comments, brand)
 
         return {
             **base,
@@ -135,8 +140,46 @@ class YouTubePlatformProvider(PlatformProvider):
             "top_videos": relevant[:10],
             "top_videos_total_views": sum(v["views"] for v in relevant[:10]),
             **channel,
+            "top_comments": comments,
+            "owner_voice": owner_voice,
             "error": "",
         }
+
+    def _top_video_comments(self, api_key: str, videos: list[dict]) -> list[dict]:
+        """Top comments (relevance-ranked) on the brand's top relevant
+        videos — real owner speech, the deepest signal this provider has
+        (user request 2026-07-06: 'capture more information from these
+        connections'). Costs 1 quota unit per video (~5/brand). Videos with
+        comments disabled are skipped silently; comment capture must never
+        fail a brand whose search sampling worked."""
+        comments: list[dict] = []
+        for video in videos:
+            try:
+                resp = requests.get(_COMMENTS_URL, params={
+                    "part": "snippet", "videoId": video["video_id"],
+                    "maxResults": _COMMENTS_PER_VIDEO, "order": "relevance",
+                    "textFormat": "plainText", "key": api_key,
+                }, timeout=_TIMEOUT)
+                if resp.status_code != 200:
+                    continue  # commentsDisabled and similar — skip, don't fail
+                for thread in resp.json().get("items", []):
+                    snippet = (thread.get("snippet", {})
+                               .get("topLevelComment", {}).get("snippet", {}))
+                    text = (snippet.get("textDisplay") or "").strip()
+                    if not text:
+                        continue
+                    try:
+                        likes = int(snippet.get("likeCount", 0))
+                    except (TypeError, ValueError):
+                        likes = 0
+                    comments.append({
+                        "video": video.get("title", "")[:70],
+                        "text": text[:280],
+                        "likes": likes,
+                    })
+            except requests.RequestException:
+                continue
+        return comments[:40]
 
     def _channel_metrics(self, api_key: str, channel_url: str) -> dict:
         """Official-channel statistics for a brand with a discovered channel
@@ -262,3 +305,44 @@ def _channel_lookup_params(channel_url: str) -> dict | None:
     if match:
         return {"forUsername": match.group(1)}
     return None
+
+
+def _analyze_comments(comments: list[dict], brand: str) -> dict:
+    """
+    Deterministic owner-voice analysis over sampled comment text — the same
+    rule-based negation/recommendation cue detection the core visibility
+    pipeline uses, applied to what real owners say under the brand's top
+    videos. Each comment is also tagged in place ("signal") for the
+    drill-down. Small sample by design — displayed as counts over the
+    sample, never extrapolated.
+    """
+    from backend.visibility.negation import detect_negative_brands
+    from backend.visibility.recommendation import detect_recommended_brands
+
+    flat_terms = [(brand.lower(), brand)]
+    brand_re = _brand_pattern(brand)
+
+    mentioning = negative = recommending = 0
+    for comment in comments:
+        text = comment.get("text", "")
+        signal = ""
+        if brand_re.search(text):
+            mentioning += 1
+            signal = "mention"
+            try:
+                if brand in detect_negative_brands(text, flat_terms):
+                    negative += 1
+                    signal = "negative"
+                elif brand in detect_recommended_brands(text, flat_terms):
+                    recommending += 1
+                    signal = "recommend"
+            except Exception:
+                pass
+        comment["signal"] = signal
+
+    return {
+        "comments_sampled": len(comments),
+        "mentioning_brand": mentioning,
+        "negative_cues": negative,
+        "recommendation_cues": recommending,
+    }
