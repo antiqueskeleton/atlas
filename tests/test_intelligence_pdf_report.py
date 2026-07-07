@@ -60,6 +60,20 @@ def test_missing_briefing_and_opportunities_does_not_crash(tmp_path):
     assert out.exists() and out.stat().st_size > 0
 
 
+def test_briefing_only_export_contains_briefing_but_no_analyst_content(tmp_path):
+    """#85 (Export Briefing button): constructing the report with a real
+    briefing but empty results/opportunities must yield a standalone
+    executive-briefing document — briefing text present, analyst Q&A and
+    opportunity content absent."""
+    out = tmp_path / "briefing_only.pdf"
+    IntelligencePDFReport(_RUN, _BRIEFING, [], [], "Firman").generate(str(out))
+
+    text = _extract_text(out)
+    assert "This is the executive briefing" in text
+    assert "Dual fuel and inverter tech." not in text
+    assert "Improve Amazon presence" not in text
+
+
 def test_generate_does_not_crash_with_all_empty_inputs(tmp_path):
     out = tmp_path / "empty.pdf"
     IntelligencePDFReport(run=None, briefing=None, results=None, opportunities=None).generate(str(out))

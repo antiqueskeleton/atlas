@@ -31,6 +31,7 @@ from backend.knowledge.knowledge_repository import KnowledgeRepository
 from backend.visibility.visibility_service import VisibilityService
 from desktop.run_logger import RunLogger
 from desktop.sleep_guard import allow_sleep, prevent_sleep
+from desktop.widgets.export_buttons import export_button
 from desktop.widgets.stat_card import StatCard
 
 
@@ -368,7 +369,11 @@ class VisibilityPage(QWidget):
             b.setStyleSheet("font-size: 11px; padding: 3px 4px;")
         btn_all.clicked.connect(self._select_all_sets)
         btn_none.clicked.connect(self._clear_sets)
-        btn_top.clicked.connect(self._select_top_families)
+        # Lambda, NOT a direct connect: QPushButton.clicked emits a `checked`
+        # bool, and connecting the method directly fed that False into the
+        # n=20 default parameter — [:False] == [:0] == select nothing, which
+        # made the Top 20 button appear completely dead (#83).
+        btn_top.clicked.connect(lambda: self._select_top_families())
         btn_all.setToolTip("Select every prompt family and scenario")
         btn_none.setToolTip("Clear all selections")
         btn_top.setToolTip("Select the 20 highest-influence prompt families")
@@ -904,31 +909,20 @@ class VisibilityPage(QWidget):
         self._prov_collapse_btn.clicked.connect(self._toggle_provider_panel)
         self._prov_collapse_btn.setToolTip("Show or hide the provider selection list")
 
-        self._export_pdf_btn = QPushButton("Export PDF Report")
-        self._export_pdf_btn.setFixedHeight(28)
-        self._export_pdf_btn.setCursor(Qt.PointingHandCursor)
-        self._export_pdf_btn.setStyleSheet(
-            "QPushButton { font-size: 12px; font-weight: 600; color: white; "
-            "background: #0B84FF; border: none; border-radius: 5px; padding: 4px 14px; }"
-            "QPushButton:hover { background: #0056CC; }"
-            "QPushButton:pressed { background: #003D99; }"
-            "QPushButton:disabled { background: #9CA3AF; }"
+        # Export controls — shared factory (#86): outline = data exports,
+        # solid blue = the formatted PDF report, PDF right-most.
+        self._export_pdf_btn = export_button(
+            "Export PDF Report",
+            "Generate a formatted PDF report from the current analytics",
+            primary=True,
         )
         self._export_pdf_btn.clicked.connect(self._export_pdf)
-        self._export_pdf_btn.setToolTip("Generate a formatted PDF report from the current analytics")
 
-        self._export_excel_btn = QPushButton("Export Excel")
-        self._export_excel_btn.setFixedHeight(28)
-        self._export_excel_btn.setCursor(Qt.PointingHandCursor)
-        self._export_excel_btn.setStyleSheet(
-            "QPushButton { font-size: 12px; font-weight: 600; color: #0B84FF; "
-            "background: white; border: 1.5px solid #0B84FF; border-radius: 5px; padding: 4px 14px; }"
-            "QPushButton:hover { background: #EFF6FF; }"
-            "QPushButton:pressed { background: #DBEAFE; }"
-            "QPushButton:disabled { color: #9CA3AF; border-color: #9CA3AF; }"
+        self._export_excel_btn = export_button(
+            "Export Excel",
+            "Export all analytics sheets and raw responses to .xlsx",
         )
         self._export_excel_btn.clicked.connect(self._export_excel)
-        self._export_excel_btn.setToolTip("Export all analytics sheets and raw responses to .xlsx")
 
         toolbar_row = QHBoxLayout()
         toolbar_row.setContentsMargins(0, 0, 0, 0)

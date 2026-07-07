@@ -279,15 +279,10 @@ class PriceComparisonPage(QWidget):
         self._last_run_lbl = QLabel("No comparison run yet.")
         self._last_run_lbl.setStyleSheet("font-size: 11px; color: #6B7280;")
 
-        export_btn = QPushButton("Export Excel")
-        export_btn.setFixedHeight(28)
-        export_btn.setCursor(Qt.PointingHandCursor)
-        export_btn.setStyleSheet(
-            "QPushButton { font-size: 11px; font-weight: 600; color: #0B84FF; "
-            "background: white; border: 1.5px solid #0B84FF; border-radius: 5px; "
-            "padding: 2px 12px; }"
-            "QPushButton:hover { background: #EFF6FF; }"
-        )
+        # Shared export-button factory (#86) — same look as every other page.
+        from desktop.widgets.export_buttons import export_button
+        export_btn = export_button(
+            "Export Excel", "Export the comparison table to .xlsx")
         export_btn.clicked.connect(self._export_excel)
 
         toolbar = QHBoxLayout()

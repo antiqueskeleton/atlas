@@ -20,6 +20,7 @@ from backend.intelligence.intelligence_service import IntelligenceService
 from backend.intelligence.opportunity_ranking import rank_opportunities
 from backend.reports.briefing_sections import split_briefing_sections
 from backend.visibility.brand_matcher import resolve_target_brand
+from desktop.widgets.export_buttons import export_button
 from desktop.widgets.info_icon import info_icon
 from desktop.widgets.stat_card import StatCard
 
@@ -179,43 +180,43 @@ class IntelligencePage(QWidget):
 
         self._update_mode_label()
 
-        _export_btn_style = (
-            "QPushButton { font-size: 11px; font-weight: 600; color: #0B84FF; "
-            "background: white; border: 1.5px solid #0B84FF; border-radius: 5px; padding: 3px 10px; }"
-            "QPushButton:hover { background: #EFF6FF; }"
-            "QPushButton:pressed { background: #DBEAFE; }"
-            "QPushButton:disabled { color: #9CA3AF; border-color: #9CA3AF; }"
+        # Export controls — shared factory (#86): outline = scoped/data
+        # exports, solid blue = the full formatted PDF report, PDF right-most.
+        self._export_brief_btn = export_button(
+            "Export Briefing",
+            "Export just the Executive Briefing pane as its own PDF or Word "
+            "document — without the analyst Q&A sections and opportunities "
+            "the full report includes",
         )
-        self._export_pdf_btn = QPushButton("Export PDF")
-        self._export_pdf_btn.setFixedHeight(26)
-        self._export_pdf_btn.setCursor(Qt.PointingHandCursor)
-        self._export_pdf_btn.setStyleSheet(_export_btn_style)
-        self._export_pdf_btn.clicked.connect(self._export_pdf)
-        self._export_pdf_btn.setToolTip("Export the latest briefing as a formatted PDF")
+        self._export_brief_btn.clicked.connect(self._export_briefing_only)
 
-        self._export_docx_btn = QPushButton("Export Word")
-        self._export_docx_btn.setFixedHeight(26)
-        self._export_docx_btn.setCursor(Qt.PointingHandCursor)
-        self._export_docx_btn.setStyleSheet(_export_btn_style)
-        self._export_docx_btn.clicked.connect(self._export_docx)
-        self._export_docx_btn.setToolTip("Export the latest briefing as an editable Word document")
-
-        self._export_tab_btn = QPushButton("Export Tab (Full)")
-        self._export_tab_btn.setFixedHeight(26)
-        self._export_tab_btn.setCursor(Qt.PointingHandCursor)
-        self._export_tab_btn.setStyleSheet(_export_btn_style)
-        self._export_tab_btn.clicked.connect(self._export_current_tab_full)
-        self._export_tab_btn.setToolTip(
+        self._export_tab_btn = export_button(
+            "Export Tab (Full)",
             "Export the currently selected tab's complete results, with no "
-            "10-item cap — unlike Export PDF/Word above, which condense to "
-            "keep the main report a manageable length"
+            "10-item cap — unlike Export PDF/Word, which condense to keep "
+            "the main report a manageable length",
         )
+        self._export_tab_btn.clicked.connect(self._export_current_tab_full)
+
+        self._export_docx_btn = export_button(
+            "Export Word",
+            "Export the full latest analysis as an editable Word document",
+        )
+        self._export_docx_btn.clicked.connect(self._export_docx)
+
+        self._export_pdf_btn = export_button(
+            "Export PDF",
+            "Export the full latest analysis as a formatted PDF report",
+            primary=True,
+        )
+        self._export_pdf_btn.clicked.connect(self._export_pdf)
 
         ctrl.addWidget(self.run_btn)
         ctrl.addWidget(self.last_run_lbl)
         ctrl.addStretch()
         ctrl.addWidget(mode_widget)
         ctrl.addSpacing(8)
+        ctrl.addWidget(self._export_brief_btn)
         ctrl.addWidget(self._export_tab_btn)
         ctrl.addWidget(self._export_docx_btn)
         ctrl.addWidget(self._export_pdf_btn)
@@ -624,6 +625,84 @@ class IntelligencePage(QWidget):
         self._tab_export_worker = _W()
         self._tab_export_worker.finished.connect(_done)
         self._tab_export_worker.start()
+
+    def _export_briefing_only(self):
+        """
+        Export just the Executive Briefing pane as its own document (#85) —
+        the piece that gets forwarded to people who will never open Atlas.
+        Same construction trick as _export_current_tab_full: passing empty
+        results/opportunities to the existing report generators naturally
+        produces a cover page + briefing section and nothing else.
+        """
+        latest = self.service.get_latest_briefing()
+        if not latest or not latest.get("briefing"):
+            QMessageBox.information(
+                self, "No Data",
+                "Run Intelligence Analysis first to generate a briefing to export."
+            )
+            return
+        run = latest["run"]
+        briefing = latest["briefing"]
+        brand = self.app.get_target_brand() or "Report"
+
+        ts = __import__('datetime').datetime.now().strftime("%Y%m%d_%H%M")
+        default = f"Atlas_Executive_Briefing_{brand}_{ts}.pdf"
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Export Executive Briefing", default,
+            "PDF Files (*.pdf);;Word Documents (*.docx)"
+        )
+        if not path:
+            return
+
+        self._export_brief_btn.setEnabled(False)
+        self._export_brief_btn.setText("Generating…")
+        is_docx = path.lower().endswith(".docx")
+
+        def _generate():
+            try:
+                if is_docx:
+                    from backend.reports.intelligence_docx_report import IntelligenceDocxReport
+                    rpt = IntelligenceDocxReport(
+                        run=run, briefing=briefing, results=[], opportunities=[],
+                        target_brand=brand,
+                    )
+                else:
+                    from backend.reports.intelligence_pdf_report import IntelligencePDFReport
+                    rpt = IntelligencePDFReport(
+                        run=run, briefing=briefing, results=[], opportunities=[],
+                        target_brand=brand,
+                    )
+                rpt.generate(path)
+                return path, None
+            except Exception as exc:
+                return None, str(exc)
+
+        def _done(result):
+            out_path, err = result
+            self._export_brief_btn.setEnabled(True)
+            self._export_brief_btn.setText("Export Briefing")
+            if err:
+                QMessageBox.critical(self, "Export Failed", f"Could not generate export:\n\n{err}")
+            else:
+                reply = QMessageBox.information(
+                    self, "Export Ready", f"Saved to:\n{out_path}",
+                    QMessageBox.Open | QMessageBox.Ok, QMessageBox.Ok,
+                )
+                if reply == QMessageBox.Open:
+                    import os
+                    if os.name == 'nt':
+                        os.startfile(out_path)
+
+        from PySide6.QtCore import QThread, Signal as _Signal
+
+        class _W(QThread):
+            finished = _Signal(tuple)
+            def run(self_):
+                self_.finished.emit(_generate())
+
+        self._brief_export_worker = _W()
+        self._brief_export_worker.finished.connect(_done)
+        self._brief_export_worker.start()
 
     # ── Load ─────────────────────────────────────────────────────────────────
 
