@@ -78,6 +78,20 @@ class ConfigService:
         creds.setdefault(platform, {})[field] = value
         self._save()
 
+    def get_standard_panel(self) -> dict:
+        """The saved Standard Panel (#89): a pinned prompt-set + provider
+        selection so recurring collections stay apples-to-apples — provider
+        or prompt mix drift otherwise reads as a market change on Trends."""
+        return self.settings.get("standard_panel", {})
+
+    def set_standard_panel(self, sets: list[str], providers: list[str]):
+        from datetime import datetime
+        self.settings["standard_panel"] = {
+            "sets": list(sets), "providers": list(providers),
+            "saved_at": datetime.now().isoformat(),
+        }
+        self._save()
+
     def get_user_config_path(self) -> Path:
         return self._user_config_path
 
@@ -109,7 +123,7 @@ class ConfigService:
     def _save(self):
         # Only write user-owned keys to user config (never back to project config)
         user_keys = {"target_brand", "api_keys", "models", "volume_credentials",
-                     "volume_site_urls", "platform_credentials"}
+                     "volume_site_urls", "platform_credentials", "standard_panel"}
         user_data = {k: v for k, v in self.settings.items() if k in user_keys}
         with self._user_config_path.open("w", encoding="utf-8") as f:
             json.dump(user_data, f, indent=2)

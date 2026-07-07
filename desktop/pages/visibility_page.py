@@ -935,6 +935,30 @@ class VisibilityPage(QWidget):
         self._prov_collapse_btn.clicked.connect(self._toggle_provider_panel)
         self._prov_collapse_btn.setToolTip("Show or hide the provider selection list")
 
+        # Standard Panel (#89): a pinned prompt-set + provider selection so
+        # recurring collections stay apples-to-apples — mix drift between
+        # runs otherwise reads as a market change on the Trends page.
+        from PySide6.QtWidgets import QMenu
+        self._panel_btn = QPushButton("Standard Panel  ▾")
+        self._panel_btn.setFixedHeight(28)
+        self._panel_btn.setCursor(Qt.PointingHandCursor)
+        self._panel_btn.setStyleSheet(self._collapse_btn.styleSheet())
+        panel_menu = QMenu(self._panel_btn)
+        panel_menu.addAction("Load Standard Panel", self._load_standard_panel)
+        panel_menu.addAction("Save Current Selection as Standard",
+                             self._save_standard_panel)
+        self._panel_btn.setMenu(panel_menu)
+        self._panel_btn.setToolTip(
+            "A saved prompt-set + provider selection for recurring collections. "
+            "Running the SAME panel each time is what makes trend lines "
+            "comparable — changing the mix between runs shows up as fake "
+            "visibility changes."
+        )
+
+        self._cadence_lbl = QLabel("")
+        self._cadence_lbl.setStyleSheet("color: #B45309; font-size: 12px; font-weight: 600;")
+        self._cadence_lbl.setVisible(False)
+
         # Export controls — shared factory (#86): outline = data exports,
         # solid blue = the formatted PDF report, PDF right-most.
         self._export_pdf_btn = export_button(
@@ -955,6 +979,7 @@ class VisibilityPage(QWidget):
         toolbar_row.setSpacing(8)
         toolbar_row.addWidget(self._prov_collapse_btn)
         toolbar_row.addWidget(self._collapse_btn)
+        toolbar_row.addWidget(self._panel_btn)
         toolbar_row.addSpacing(4)
         toolbar_row.addWidget(self._run_btn)
         toolbar_row.addWidget(self._pause_btn)
@@ -963,6 +988,7 @@ class VisibilityPage(QWidget):
         toolbar_row.addWidget(self._status_lbl)
         toolbar_row.addWidget(self._prov_count_lbl)
         toolbar_row.addWidget(self._count_lbl)
+        toolbar_row.addWidget(self._cadence_lbl)
         toolbar_row.addStretch()
         toolbar_row.addWidget(self._export_excel_btn)
         toolbar_row.addWidget(self._export_pdf_btn)
@@ -1001,6 +1027,38 @@ class VisibilityPage(QWidget):
     def _select_configured_providers(self):
         for key, cb in self._provider_checks.items():
             cb.setChecked(bool(self.app.provider_manager.get_provider_api_key(key)))
+
+    def _save_standard_panel(self):
+        sets = [n for n, cb in self._set_checks.items() if cb.isChecked()]
+        providers = self._checked_provider_keys()
+        if not sets or not providers:
+            self._status_lbl.setText(
+                "Select at least one prompt set and one provider before saving a panel.")
+            return
+        self.app.config_service.set_standard_panel(sets, providers)
+        self._status_lbl.setText(
+            f"Standard Panel saved — {len(sets)} sets · {len(providers)} providers.")
+
+    def _load_standard_panel(self):
+        panel = self.app.config_service.get_standard_panel()
+        if not panel:
+            self._status_lbl.setText(
+                "No Standard Panel saved yet — set your selection, then choose "
+                "'Save Current Selection as Standard'.")
+            return
+        saved_sets = set(panel.get("sets", []))
+        saved_providers = set(panel.get("providers", []))
+        for name, cb in self._set_checks.items():
+            cb.setChecked(name in saved_sets)
+        for key, cb in self._provider_checks.items():
+            cb.setChecked(key in saved_providers)
+        missing = (saved_sets - set(self._set_checks)) | (saved_providers - set(self._provider_checks))
+        note = f" ({len(missing)} saved item(s) no longer exist)" if missing else ""
+        self._status_lbl.setText(
+            f"Standard Panel loaded — saved {panel.get('saved_at', '')[:10]}{note}.")
+
+    def _checked_provider_keys(self) -> list[str]:
+        return [k for k, cb in self._provider_checks.items() if cb.isChecked()]
 
     def _toggle_provider_panel(self):
         visible = not self._prov_panel.isVisible()
@@ -1447,6 +1505,21 @@ class VisibilityPage(QWidget):
         # Provenance (#88/#100): every headline number carries its sample
         # size and as-of date — a thin sample turns the line amber instead
         # of letting a percentage masquerade as a solid fact.
+        # Cadence nudge (#93): trends are only meaningful at a consistent
+        # collection rhythm — flag when the newest run is going stale.
+        from datetime import datetime as _dt
+        self._cadence_lbl.setVisible(False)
+        if runs:
+            try:
+                age_days = (_dt.now() - _dt.fromisoformat(runs[0][4])).days
+                if age_days >= 7:
+                    self._cadence_lbl.setText(
+                        f"⚠ Last collection {age_days} days ago — run the "
+                        f"Standard Panel to keep trends comparable")
+                    self._cadence_lbl.setVisible(True)
+            except (ValueError, TypeError):
+                pass
+
         as_of = runs[0][4][:10] if runs else ""
         self._score_card.set_provenance(total, as_of)
         self._top_card.set_provenance(total, as_of)
