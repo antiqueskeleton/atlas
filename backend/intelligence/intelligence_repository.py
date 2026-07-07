@@ -81,6 +81,13 @@ class IntelligenceRepository:
                     FOREIGN KEY(run_id) REFERENCES intelligence_runs(run_id)
                 )
             """)
+            # #95: post-generation number-verification result (JSON) —
+            # additive migration for databases created before it existed.
+            try:
+                conn.execute(
+                    "ALTER TABLE intelligence_briefings ADD COLUMN verification TEXT")
+            except Exception:
+                pass  # column already exists
 
     # ── Writes ────────────────────────────────────────────────────────────────
 
@@ -110,17 +117,20 @@ class IntelligenceRepository:
 
     def save_briefing(
         self, run_id, product_summary, persona_summary,
-        journey_summary, opportunities, executive_briefing, created_at
+        journey_summary, opportunities, executive_briefing, created_at,
+        verification=None,
     ):
         with self.connect() as conn:
             conn.execute("""
                 INSERT OR REPLACE INTO intelligence_briefings
                 (run_id, product_summary, persona_summary,
-                 journey_summary, opportunities, executive_briefing, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                 journey_summary, opportunities, executive_briefing, created_at,
+                 verification)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 run_id, product_summary, persona_summary,
-                journey_summary, opportunities, executive_briefing, created_at
+                journey_summary, opportunities, executive_briefing, created_at,
+                verification,
             ))
 
     # ── Reads ─────────────────────────────────────────────────────────────────
@@ -152,7 +162,8 @@ class IntelligenceRepository:
         with self.connect() as conn:
             return conn.execute("""
                 SELECT product_summary, persona_summary, journey_summary,
-                       opportunities, executive_briefing, created_at
+                       opportunities, executive_briefing, created_at,
+                       verification
                 FROM intelligence_briefings WHERE run_id=?
             """, (run_id,)).fetchone()
 

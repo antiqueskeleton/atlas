@@ -1,4 +1,5 @@
 import csv
+import json
 import re
 import uuid
 from collections import Counter
@@ -6,6 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 
 from backend.intelligence.analysts import BuyingJourneyAnalyst, PersonaAnalyst, ProductAnalyst
+from backend.intelligence.briefing_fact_check import verify_briefing_numbers
 from backend.intelligence.intelligence_repository import IntelligenceRepository
 from backend.targeted_review.targeted_review_repository import TargetedReviewRepository
 from backend.targeted_review.targeted_review_service import build_presence_block
@@ -299,6 +301,7 @@ class IntelligenceService:
                                 portfolio_block, platform_block)
             opportunities = f_opp.result()
             briefing = f_brief.result()
+        verification = getattr(self, "_last_briefing_verification", None)
         parsed_opps = self._parse_opportunities(opportunities)
         if parsed_opps:
             self.repository.save_opportunities(run_id, parsed_opps)
@@ -315,6 +318,7 @@ class IntelligenceService:
             opportunities=opportunities,
             executive_briefing=briefing,
             created_at=completed_at.isoformat(),
+            verification=json.dumps(verification) if verification else None,
         )
         self.repository.complete_run(
             run_id=run_id,
@@ -388,6 +392,7 @@ class IntelligenceService:
                                 portfolio_block, platform_block)
             opportunities = f_opp.result()
             briefing = f_brief.result()
+        verification = getattr(self, "_last_briefing_verification", None)
         parsed_opps = self._parse_opportunities(opportunities)
         if parsed_opps:
             self.repository.save_opportunities(run_id, parsed_opps)
@@ -404,6 +409,7 @@ class IntelligenceService:
             opportunities=opportunities,
             executive_briefing=briefing,
             created_at=completed_at.isoformat(),
+            verification=json.dumps(verification) if verification else None,
         )
         self.repository.complete_run(
             run_id=run_id,
@@ -639,23 +645,34 @@ class IntelligenceService:
         quotes_block = self._extract_brand_quotes(collected, target, max_quotes=5)
 
         all_count = sum(len(v) for v in collected.values())
+        product_block = block("Product Intelligence")
+        persona_block = block("Consumer Personas")
+        journey_block = block("Buying Journey")
+        web_block = self._build_web_block()
         prompt = _BRIEFING_PROMPT_TEMPLATE.format(
             target_brand=target,
             portfolio_block=portfolio_block,
             platform_block=platform_block or "No measured platform data available.",
             brand_block=brand_block,
             quotes_block=quotes_block,
-            product_block=block("Product Intelligence"),
-            persona_block=block("Consumer Personas"),
-            journey_block=block("Buying Journey"),
-            web_block=self._build_web_block(),
+            product_block=product_block,
+            persona_block=persona_block,
+            journey_block=journey_block,
+            web_block=web_block,
         )
+        # #95: the exact source texts the model receives — kept so every
+        # "X of Y" claim in the generated briefing can be verified against
+        # them mechanically after generation.
+        source_texts = [portfolio_block, platform_block or "", brand_block,
+                        quotes_block, product_block, persona_block,
+                        journey_block, web_block]
         def _failure_briefing(detail) -> str:
             return (
                 f"⚠ Executive briefing generation failed — {provider.provider_name} "
                 f"request failed: {detail}\n\nRun Intelligence Analysis again. If this "
                 "persists, check the API key and provider status in Settings."
             )
+        self._last_briefing_verification = None
         try:
             result = provider.ask(prompt)
         except Exception as exc:
@@ -664,7 +681,12 @@ class IntelligenceService:
             # A provider can fail without raising — same fallback text via the
             # non-raising failure path.
             return _failure_briefing(result.executive_summary)
-        return result.executive_summary or ""
+        text = result.executive_summary or ""
+        # Deterministic check of every cited count against the source blocks
+        # (#95) — the verifier itself can't hallucinate; failures are
+        # surfaced for review, never silently edited.
+        self._last_briefing_verification = verify_briefing_numbers(text, source_texts)
+        return text
 
     def _extract_brand_quotes(self, collected: dict, target: str,
                               max_quotes: int = 5) -> str:

@@ -304,6 +304,14 @@ class IntelligencePage(QWidget):
 
         self._brief_frame, self._brief_body = _section_card("Executive Briefing")
 
+        # #95: number-verification badge — every "X of Y" claim in the
+        # generated briefing is mechanically checked against the exact data
+        # blocks the model was given. Hidden for runs from before the check
+        # existed.
+        self._verify_badge = QLabel("")
+        self._verify_badge.setVisible(False)
+        self._brief_frame.layout().insertWidget(1, self._verify_badge)
+
         h_splitter = QSplitter(Qt.Horizontal)
         h_splitter.addWidget(self.tabs)
         h_splitter.addWidget(self._brief_frame)
@@ -765,6 +773,7 @@ class IntelligencePage(QWidget):
         briefing_text = (briefing[4] if briefing else "") or "No executive briefing available."
         self._brief_body.setMarkdown(self._format_briefing(briefing_text))
         _boost_markdown_spacing(self._brief_body)
+        self._update_verification_badge(briefing)
 
         opp_rows = self.service.repository.get_all_opportunities()
         self._render_opportunities(opp_rows)
@@ -799,6 +808,48 @@ class IntelligencePage(QWidget):
             f"full database  ·  as of {run_date}" if run_date else "full database"
         )
         self._kpi_prompts_card.subtitle.show()
+
+    def _update_verification_badge(self, briefing):
+        """
+        #95: show whether the briefing's cited counts were mechanically
+        verified against the source data fed to the model. An unverified
+        claim isn't necessarily false (the model may have legitimately
+        derived it) — the badge flags it for human review, never edits it.
+        """
+        import json as _json
+        verification = None
+        if briefing and len(briefing) > 6 and briefing[6]:
+            try:
+                verification = _json.loads(briefing[6])
+            except (ValueError, TypeError):
+                verification = None
+
+        if not verification or not verification.get("total_claims"):
+            self._verify_badge.setVisible(False)
+            return
+
+        total = verification["total_claims"]
+        verified = verification.get("verified", 0)
+        unverified = verification.get("unverified", [])
+        if not unverified:
+            self._verify_badge.setText(
+                f"✓  All {total} cited counts verified against source data")
+            self._verify_badge.setStyleSheet(
+                "color: #16A34A; font-size: 11px; font-weight: 600;")
+            self._verify_badge.setToolTip(
+                "Every \"X of Y\" number in this briefing appears verbatim in "
+                "the data that was supplied to the model.")
+        else:
+            self._verify_badge.setText(
+                f"⚠  {verified} of {total} cited counts verified — "
+                f"{len(unverified)} not found in source data (hover for details)")
+            self._verify_badge.setStyleSheet(
+                "color: #B45309; font-size: 11px; font-weight: 600;")
+            self._verify_badge.setToolTip(
+                "Not found in the supplied data (may be legitimately derived, "
+                "e.g. summed — review before quoting):\n\n" + "\n".join(
+                    f"• {u['claim']}:  …{u['context']}…" for u in unverified[:8]))
+        self._verify_badge.setVisible(True)
 
     _STATUS_CYCLE = ["new", "in_progress", "done"]
     _STATUS_LABELS = {"new": "New", "in_progress": "In Progress", "done": "Done"}
