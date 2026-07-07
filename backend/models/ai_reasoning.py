@@ -19,3 +19,7 @@ class AIReasoning:
     # explicitly requested structured JSON (the Investigation page's agents,
     # via RESPONSE_SCHEMA) should treat parse_failed as a real problem.
     parse_failed: bool = False
+    # Source URLs the provider itself reported grounding this answer on
+    # (#96) — currently populated by Perplexity (its API returns them with
+    # every response); empty for providers that don't expose citations.
+    citations: list[str] = field(default_factory=list)

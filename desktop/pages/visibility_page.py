@@ -706,6 +706,31 @@ class VisibilityPage(QWidget):
         self._gap_tbl.setColumnWidth(2, 130)
         self._gap_tbl.setColumnWidth(3, 80)
 
+        # AI-Cited Sources (#96) — the domains providers REPORT grounding
+        # their answers on (currently Perplexity returns these per response).
+        # Direct measurement of which sites feed AI answers — the target
+        # list for earned-media work.
+        self._cited_frame, _, self._cited_tbl = _table_section(
+            "AI-Cited Sources",
+            ["Domain", "Citations", "Responses"],
+            stretch_last=False,
+        )
+        self._cited_tbl.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
+        self._cited_tbl.setColumnWidth(1, 80)
+        self._cited_tbl.setColumnWidth(2, 85)
+        self._cited_tbl.horizontalHeaderItem(1).setToolTip(
+            "Total times this domain appeared in provider-reported citations."
+        )
+        self._cited_tbl.horizontalHeaderItem(2).setToolTip(
+            "Number of responses that cited this domain at least once."
+        )
+        self._cited_tbl.setToolTip(
+            "Source URLs the AI provider itself reported using for its answer — "
+            "currently returned by Perplexity. Collected automatically with every "
+            "Visibility run that includes Perplexity; responses collected before "
+            "this feature existed have no citation data."
+        )
+
         # ── Tabbed layout ─────────────────────────────────────────────────────
         tabs = QTabWidget()
         tabs.setStyleSheet("""
@@ -757,6 +782,7 @@ class VisibilityPage(QWidget):
         ch_lay.setSpacing(10)
         ch_lay.addWidget(self._channel_frame, 1)
         ch_lay.addWidget(self._gap_frame, 1)
+        ch_lay.addWidget(self._cited_frame, 1)
 
         # Tab 5 — Raw Data
         raw_tab = QWidget()
@@ -1534,6 +1560,13 @@ class VisibilityPage(QWidget):
         _set_tbl(self._gap_tbl, [
             [g["channel"], g["firman_count"] or 0, g["top_competitor"], g["top_competitor_count"]]
             for g in gap_data[:20]
+        ])
+
+        # ── AI-Cited Sources (#96) ────────────────────────────────────────────
+        cited = self.service.repository.citation_domain_counts()
+        _set_tbl(self._cited_tbl, [
+            [domain, citations, responses]
+            for domain, citations, responses in cited["domains"]
         ])
 
         self._refresh_raw_data()

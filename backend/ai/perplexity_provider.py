@@ -33,7 +33,14 @@ class PerplexityProvider(AIProvider):
                 temperature=0.2,
             )
             text = response.choices[0].message.content or ""
-            return self.parser.parse(text=text, provider=self.provider_name)
+            reasoning = self.parser.parse(text=text, provider=self.provider_name)
+            # #96: Perplexity returns the source URLs it grounded the answer
+            # on with every response — previously discarded. The openai SDK
+            # keeps unknown top-level fields, so they're recoverable from the
+            # response object; extraction failures must never sink a response
+            # that already succeeded.
+            reasoning.citations = _extract_citations(response)
+            return reasoning
 
         except Exception as error:
             return AIReasoning(
@@ -47,3 +54,33 @@ class PerplexityProvider(AIProvider):
                 provider=self.provider_name,
                 is_error=True,
             )
+
+
+def _extract_citations(response) -> list[str]:
+    """Pull cited source URLs off a Perplexity chat response. The API
+    returns them as a top-level "citations" list of URLs (and newer models
+    also as "search_results" objects); the openai SDK surfaces unknown
+    fields via attribute access / model_extra. Defensive by design — an
+    extraction surprise returns [] rather than raising."""
+    urls: list[str] = []
+    try:
+        raw = getattr(response, "citations", None)
+        if not raw and getattr(response, "model_extra", None):
+            raw = response.model_extra.get("citations")
+        for item in raw or []:
+            if isinstance(item, str) and item.startswith("http"):
+                urls.append(item)
+
+        results = getattr(response, "search_results", None)
+        if not results and getattr(response, "model_extra", None):
+            results = response.model_extra.get("search_results")
+        for item in results or []:
+            url = item.get("url", "") if isinstance(item, dict) else getattr(item, "url", "")
+            if isinstance(url, str) and url.startswith("http"):
+                urls.append(url)
+    except Exception:
+        return []
+
+    seen: set[str] = set()
+    unique = [u for u in urls if not (u in seen or seen.add(u))]
+    return unique[:20]

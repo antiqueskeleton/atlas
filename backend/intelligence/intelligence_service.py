@@ -750,7 +750,24 @@ class IntelligenceService:
             if is_own_site and blocks_ai_crawlers:
                 block += f"\n    ⚠ robots.txt BLOCKS these AI crawlers: {blocked_crawler_names}"
             lines.append(block)
-        return "\n\n".join(lines) if lines else "No scraped web data yet — run Scrape All on Knowledge → Web Intelligence tab."
+        web_text = ("\n\n".join(lines) if lines else
+                    "No scraped web data yet — run Scrape All on Knowledge → Web Intelligence tab.")
+        # #96: domains AI providers themselves cited as sources — measured
+        # from stored responses (Perplexity returns citations per answer),
+        # the most direct evidence available of which sites feed AI answers.
+        try:
+            cited = self.visibility_repository.citation_domain_counts(limit=10)
+            if cited["domains"]:
+                cite_lines = ", ".join(
+                    f"{d} ({c} citations)" for d, c, _ in cited["domains"])
+                web_text += (
+                    "\n\nDOMAINS AI PROVIDERS ACTUALLY CITED as sources in "
+                    f"collected responses (measured across "
+                    f"{cited['responses_with_citations']} responses with "
+                    f"citation data): {cite_lines}")
+        except Exception:
+            pass
+        return web_text
 
     def _count_brands(self, collected: dict) -> dict:
         brand_terms = self._load_brands()

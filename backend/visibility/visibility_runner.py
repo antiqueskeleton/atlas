@@ -82,6 +82,7 @@ class VisibilityRunner:
                         response=reasoning.executive_summary,
                         collected_at=datetime.now(),
                         family_name=family,
+                        citations=getattr(reasoning, "citations", None) or None,
                     )
                 )
                 if logger:

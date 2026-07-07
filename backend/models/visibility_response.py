@@ -11,3 +11,6 @@ class VisibilityResponse:
     response: str
     collected_at: datetime
     family_name: str = ""
+    # Source URLs the provider reported grounding this answer on (#96) —
+    # None for providers that don't expose citations.
+    citations: list | None = None

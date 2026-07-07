@@ -1,4 +1,6 @@
+import json
 import sqlite3
+from urllib.parse import urlparse
 from pathlib import Path
 
 from backend.services.paths import get_db_path
@@ -60,6 +62,9 @@ class VisibilityRepository:
                 # from "computed, response has zero cue zones" ('{}').
                 "ALTER TABLE visibility_responses ADD COLUMN negative_cue_cache TEXT",
                 "ALTER TABLE visibility_responses ADD COLUMN recommended_cue_cache TEXT",
+                # #96: provider-reported source URLs (JSON list) — currently
+                # only Perplexity returns these; NULL for other providers.
+                "ALTER TABLE visibility_responses ADD COLUMN citations TEXT",
             ):
                 try:
                     conn.execute(ddl)
@@ -105,9 +110,9 @@ class VisibilityRepository:
             conn.executemany("""
                 INSERT INTO visibility_responses (
                     run_id, provider, model, prompt, response, collected_at, family_name,
-                    negative_cue_cache, recommended_cue_cache
+                    negative_cue_cache, recommended_cue_cache, citations
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, [
                 (
                     r.run_id,
@@ -119,6 +124,7 @@ class VisibilityRepository:
                     getattr(r, "family_name", ""),
                     compute_cue_zone_cache(r.response, negation._cue_zones),
                     compute_cue_zone_cache(r.response, recommendation._cue_zones),
+                    json.dumps(r.citations) if getattr(r, "citations", None) else None,
                 )
                 for r in responses
             ])
@@ -342,4 +348,44 @@ class VisibilityRepository:
             "runs":      row[2] or 0,
             "families":  row[3] or 0,
             "flagged":   row[4] or 0,
+        }
+
+    def citation_domain_counts(self, limit: int = 25) -> dict:
+        """
+        Which web domains AI providers actually cite as sources (#96) —
+        aggregated from the per-response citation URLs Perplexity returns.
+        Returns {"domains": [(domain, citation_count, responses_citing)],
+        "responses_with_citations": n}, domains ordered by citation count.
+        Direct measurement of the sources feeding AI answers — the target
+        list for earned-media work, with zero scraping.
+        """
+        with self.connect() as conn:
+            rows = conn.execute(
+                "SELECT citations FROM visibility_responses "
+                "WHERE citations IS NOT NULL AND citations != ''"
+            ).fetchall()
+
+        citation_totals: dict[str, int] = {}
+        response_counts: dict[str, int] = {}
+        for (raw,) in rows:
+            try:
+                urls = json.loads(raw)
+            except (json.JSONDecodeError, TypeError):
+                continue
+            domains_in_response = set()
+            for url in urls or []:
+                domain = urlparse(url).netloc.lower()
+                if domain.startswith("www."):
+                    domain = domain[4:]
+                if not domain:
+                    continue
+                citation_totals[domain] = citation_totals.get(domain, 0) + 1
+                domains_in_response.add(domain)
+            for domain in domains_in_response:
+                response_counts[domain] = response_counts.get(domain, 0) + 1
+
+        ranked = sorted(citation_totals.items(), key=lambda kv: -kv[1])[:limit]
+        return {
+            "domains": [(d, c, response_counts.get(d, 0)) for d, c in ranked],
+            "responses_with_citations": len(rows),
         }
