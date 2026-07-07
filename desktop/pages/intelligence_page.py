@@ -789,6 +789,17 @@ class IntelligencePage(QWidget):
         else:
             self._kpi_top_val.setText("Unranked")
 
+        # Provenance (#88/#100): these two tiles are computed over the
+        # latest run's classified SAMPLE, not the full database — say so,
+        # with the sample size and run date, and go amber when thin.
+        run_date = started[:10] if started else ""
+        self._kpi_brand_card.set_provenance(total, run_date, unit="sampled responses")
+        self._kpi_top_card.set_provenance(total, run_date, unit="sampled responses")
+        self._kpi_prompts_card.set_subtitle(
+            f"full database  ·  as of {run_date}" if run_date else "full database"
+        )
+        self._kpi_prompts_card.subtitle.show()
+
     _STATUS_CYCLE = ["new", "in_progress", "done"]
     _STATUS_LABELS = {"new": "New", "in_progress": "In Progress", "done": "Done"}
     _STATUS_COLORS = {"new": "#6B7280", "in_progress": "#F59E0B", "done": "#16A34A"}

@@ -1424,7 +1424,11 @@ class VisibilityPage(QWidget):
         # only the "of N" denominator changes, from a misleadingly small
         # mentioned-only count to the true size of the tracked competitive set.
         sorted_brands = sorted(brand_counts.items(), key=lambda x: -x[1])
-        rank = next((i + 1 for i, (b, _) in enumerate(sorted_brands) if b == brand_label), None)
+        # Compare against the analytics' RESOLVED target (canonical casing),
+        # not the raw Settings text — same #82 class of bug as elsewhere.
+        resolved_target = summary.get("target_brand") or brand_label
+        rank = next((i + 1 for i, (b, _) in enumerate(sorted_brands)
+                     if b == resolved_target), None)
         total_tracked = summary.get("total_tracked_brands", len(sorted_brands))
         if rank:
             self._top_title.setText(f"Visibility Mention Rank  —  {brand_label}")
@@ -1439,6 +1443,18 @@ class VisibilityPage(QWidget):
             self._last_val.setText(f"{dt[:10]}\n{dt[11:16]}")
         else:
             self._last_val.setText("Never")
+
+        # Provenance (#88/#100): every headline number carries its sample
+        # size and as-of date — a thin sample turns the line amber instead
+        # of letting a percentage masquerade as a solid fact.
+        as_of = runs[0][4][:10] if runs else ""
+        self._score_card.set_provenance(total, as_of)
+        self._top_card.set_provenance(total, as_of)
+        self._total_card.set_subtitle(
+            f"across {len(runs)} run{'s' if len(runs) != 1 else ''}  ·  as of {as_of}"
+            if runs else "no collections yet"
+        )
+        self._total_card.subtitle.show()
 
         # ── Brand Position Share → sortable table ─────────────────────────────
         pos_counts = summary.get("brand_position_counts", {})
