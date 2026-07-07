@@ -98,6 +98,8 @@ class AtlasMainWindow(QMainWindow):
         help_menu = menu.addMenu("Help")
         guide_action = help_menu.addAction("Usage Guide")
         guide_action.triggered.connect(self._show_usage_guide)
+        methodology_action = help_menu.addAction("Methodology")
+        methodology_action.triggered.connect(self._show_methodology)
         update_action = help_menu.addAction("Check for Updates")
         update_action.triggered.connect(self._check_for_updates_manual)
         help_menu.addSeparator()
@@ -471,6 +473,148 @@ class AtlasMainWindow(QMainWindow):
         lay.addLayout(btn_row)
 
         dlg.setLayout(lay)
+        dlg.exec()
+
+    def _show_methodology(self):
+        """#102: one place stating exactly how every number in Atlas is
+        computed — matching rules, sampling scope, estimates policy, and
+        known limitations. A factual tool owes its users its methodology,
+        especially once the database is shared with coworkers who weren't
+        in the room when these choices were made."""
+        sections = [
+            ("Brand Mention Detection",
+             "A response mentions a brand when any of the brand's detection terms "
+             "(name + aliases from Knowledge) appears as a whole word — case-"
+             "insensitive; plurals and possessives count (“Hondas”, “Honda's”) but "
+             "substrings do not (“category” is not CAT — corrected July 2026 after "
+             "substring matching was found inflating short-named brands). Each brand "
+             "counts at most once per response, no matter how often it appears."),
+            ("Visibility Score & Mention Rank",
+             "Visibility Score = responses mentioning the target brand ÷ ALL stored "
+             "responses × 100, over the full collection history. Mention Rank ranks "
+             "every tracked brand by mention count; the “of N” denominator is the "
+             "full tracked-brand list, including brands with zero mentions. Every "
+             "KPI tile shows its sample size (n=) and as-of date; under 30 responses "
+             "it is flagged as a small sample."),
+            ("Sentiment & Recommendations",
+             "Rule-based, sentence-level detection — deterministic, never AI-judged. "
+             "Negative context uses cues like “lacks”/“unlike X” clamped at clause "
+             "boundaries; recommendations require endorsement language "
+             "(“I'd recommend…”), and a brand flagged negative in a response is "
+             "never credited as recommended there. Known limits: double negatives "
+             "(“not a bad choice”) and sentences naming 3+ brands can misattribute. "
+             "Percentages are of each brand's OWN mentions, not of all responses."),
+            ("Intelligence Engine",
+             "DB Mode reuses stored Visibility responses (3 AI calls: portfolio "
+             "inference, opportunities, executive briefing); Live Mode first "
+             "collects 14 fresh prompts when stored data is insufficient. The "
+             "briefing's cited counts come from the FULL stored history (scope-"
+             "labeled in the data given to the model); the synthesis text reads a "
+             "capped ~25-per-topic sample for token budget. After generation, every "
+             "“X of Y” claim is mechanically checked against the exact data "
+             "supplied — the badge on the briefing shows the result; unverified "
+             "claims are flagged for review, never silently edited."),
+            ("Targeted Review",
+             "Platform numbers are COUNTED from real results, never platform "
+             "estimates: YouTube metrics count title-filtered videos (brand word + "
+             "generator term) within the top-100 search results — YouTube's own "
+             "“total results” figure is an approximation capped at 1,000,000 and is "
+             "not used. Reddit counts stop at the API's 100-result cap (shown as "
+             "100+). Editorial coverage runs one site-restricted Google query per "
+             "authority site. Retail numbers come from each listing's own structured "
+             "data on user-saved product URLs. A gap requires a 1.5× lead (counts) "
+             "or a 0.2-star spread / sub-4.0 rating; the Why/Tactics text is rule-"
+             "based so the explanation layer cannot hallucinate."),
+            ("AI-Cited Sources",
+             "Source URLs reported by the AI provider itself with each answer "
+             "(currently Perplexity). Aggregated by domain on the Visibility → "
+             "Channels tab — a direct measurement of which sites feed AI answers, "
+             "not an inference."),
+            ("Trends & Event Markers",
+             "Each point is one collection run, scored independently. Dotted "
+             "vertical markers flag moments the measurement itself changed — "
+             "brands/aliases/prompts edited, or a provider's model version changing "
+             "(detected automatically from run history) — so instrument changes "
+             "aren't read as market changes. Comparable trends require a consistent "
+             "panel: save one with the Standard Panel button on the Visibility page "
+             "and re-run it on a regular cadence."),
+            ("Data Safety",
+             "A rotating backup of the database (newest 5) is taken at each app "
+             "launch via SQLite's online backup API, stored in the backups folder "
+             "next to the database. The Health Check card verifies database "
+             "integrity (PRAGMA integrity_check) and backup freshness."),
+        ]
+        self._show_reference_dialog(
+            "Methodology", "How every number in Atlas is computed.", sections)
+
+    def _show_reference_dialog(self, title: str, subtitle: str, sections):
+        """Shared scaffold for Usage Guide / Methodology style dialogs."""
+        from PySide6.QtWidgets import (
+            QDialog, QVBoxLayout, QLabel, QPushButton, QScrollArea, QWidget,
+        )
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle(f"Atlas — {title}")
+        dlg.setFixedSize(560, 620)
+
+        outer = QVBoxLayout()
+        outer.setSpacing(0)
+        outer.setContentsMargins(0, 0, 0, 0)
+
+        header = QWidget()
+        header.setStyleSheet("background: #111827;")
+        h_lay = QVBoxLayout()
+        h_lay.setContentsMargins(32, 22, 32, 18)
+        h_lay.setSpacing(2)
+        title_lbl = QLabel(title)
+        title_lbl.setStyleSheet("font-size: 22px; font-weight: 700; color: white;")
+        sub_lbl = QLabel(subtitle)
+        sub_lbl.setStyleSheet("font-size: 12px; color: #9CA3AF;")
+        h_lay.addWidget(title_lbl)
+        h_lay.addWidget(sub_lbl)
+        header.setLayout(h_lay)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setStyleSheet("background: white;")
+
+        body = QWidget()
+        body.setStyleSheet("background: white;")
+        b_lay = QVBoxLayout()
+        b_lay.setContentsMargins(32, 20, 32, 20)
+        b_lay.setSpacing(16)
+        for sec_title, sec_text in sections:
+            w = QWidget()
+            lay = QVBoxLayout()
+            lay.setContentsMargins(0, 0, 0, 0)
+            lay.setSpacing(3)
+            t = QLabel(sec_title)
+            t.setStyleSheet("font-size: 13.5px; font-weight: 700; color: #111827;")
+            d = QLabel(sec_text)
+            d.setWordWrap(True)
+            d.setStyleSheet("font-size: 12px; color: #4B5563;")
+            lay.addWidget(t)
+            lay.addWidget(d)
+            w.setLayout(lay)
+            b_lay.addWidget(w)
+        b_lay.addStretch()
+        body.setLayout(b_lay)
+        scroll.setWidget(body)
+
+        close_btn = QPushButton("Close")
+        close_btn.setFixedHeight(38)
+        close_btn.setStyleSheet(
+            "QPushButton { background: #0B84FF; color: white; border: none; "
+            "font-size: 13px; font-weight: 600; }"
+            "QPushButton:hover { background: #0056CC; }"
+        )
+        close_btn.clicked.connect(dlg.accept)
+
+        outer.addWidget(header)
+        outer.addWidget(scroll, 1)
+        outer.addWidget(close_btn)
+        dlg.setLayout(outer)
         dlg.exec()
 
     def _show_usage_guide(self):
