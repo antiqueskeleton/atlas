@@ -100,6 +100,40 @@ _TABLE_COLUMNS = {
 }
 
 
+
+# Drill-down detail specs (#103): the collection already stores per-brand
+# detail (top videos, top posts, per-site coverage, per-listing results)
+# that the summary table can't show — double-clicking a brand row opens it.
+_DETAIL_SPECS = {
+    "youtube": ("top_videos", "Top relevant videos", [
+        ("Title", lambda v: v.get("title", "")),
+        ("Channel", lambda v: v.get("channel", "")),
+        ("Views", lambda v: f"{v.get('views', 0):,}"),
+        ("Published", lambda v: v.get("published", "")),
+    ]),
+    "reddit": ("top_posts", "Top posts (last year)", [
+        ("Title", lambda v: v.get("title", "")),
+        ("Subreddit", lambda v: f"r/{v.get('subreddit', '')}"),
+        ("Score", lambda v: f"{v.get('score', 0):,}"),
+        ("Comments", lambda v: f"{v.get('comments', 0):,}"),
+        ("Date", lambda v: v.get("created", "")),
+    ]),
+    "editorial": ("per_site", "Coverage by authority site", [
+        ("Site", lambda v: v.get("site", "")),
+        ("Articles (est.)", lambda v: f"{v.get('results', 0):,}"),
+        ("Top article", lambda v: v.get("top_title", "")),
+        ("URL", lambda v: v.get("top_url", "")),
+    ]),
+    "retail": ("listings", "Saved listings", [
+        ("Retailer", lambda v: v.get("retailer", "")),
+        ("Product", lambda v: v.get("title", "")),
+        ("Rating", lambda v: "" if v.get("rating") is None else f"{v['rating']} ★"),
+        ("Reviews", lambda v: "" if v.get("review_count") is None else f"{v['review_count']:,}"),
+        ("Status", lambda v: v.get("error") or "OK"),
+    ]),
+}
+
+
 class _CollectWorker(QThread):
     progress = Signal(int, int, str)
     done = Signal(list)
@@ -303,6 +337,10 @@ class TargetedReviewPage(QWidget):
         table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         for col, (_, _, tip) in enumerate(_TABLE_COLUMNS[key], start=1):
             table.horizontalHeaderItem(col).setToolTip(tip)
+        table.cellDoubleClicked.connect(
+            lambda row, _col, k=key: self._show_brand_detail(k, row))
+        table.setToolTip("Double-click a brand row for its collected detail "
+                         "(top videos / posts / sites / listings).")
         self._tables[key] = table
 
         table_frame = QFrame()
@@ -559,6 +597,50 @@ class TargetedReviewPage(QWidget):
         self._collect_btns[key].setEnabled(True)
         self._status_lbls[key].setStyleSheet("color: #DC2626; font-size: 12px;")
         self._status_lbls[key].setText(f"Error: {message}")
+
+    def _show_brand_detail(self, key: str, row: int):
+        """#103: the per-brand detail behind the summary numbers."""
+        from PySide6.QtWidgets import QDialog, QVBoxLayout
+
+        table = self._tables[key]
+        item = table.item(row, 0)
+        if item is None:
+            return
+        brand = item.text()
+        metrics = self.service.repository.latest_findings(
+            PLATFORMS[key].platform_name).get(brand)
+        if not metrics:
+            return
+        metrics_key, title_suffix, columns = _DETAIL_SPECS[key]
+        rows = metrics.get(metrics_key) or []
+        if not rows:
+            QMessageBox.information(
+                self, "No Detail",
+                f"No stored detail for {brand} — collect again to capture it.")
+            return
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle(f"{brand} — {title_suffix}")
+        dlg.resize(860, 380)
+        lay = QVBoxLayout(dlg)
+
+        detail = QTableWidget(len(rows), len(columns))
+        detail.setHorizontalHeaderLabels([c[0] for c in columns])
+        detail.verticalHeader().setVisible(False)
+        detail.setEditTriggers(QTableWidget.NoEditTriggers)
+        detail.setAlternatingRowColors(True)
+        detail.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
+        for r, entry in enumerate(rows):
+            for c, (_, getter) in enumerate(columns):
+                try:
+                    text = str(getter(entry))
+                except Exception:
+                    text = ""
+                cell = QTableWidgetItem(text)
+                cell.setToolTip(text)
+                detail.setItem(r, c, cell)
+        lay.addWidget(detail)
+        dlg.exec()
 
     # ── Display ───────────────────────────────────────────────────────────────
 
