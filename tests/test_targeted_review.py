@@ -71,6 +71,14 @@ def test_youtube_relevance_filter_deduplicates_video_ids():
     assert len(_filter_relevant(items, "Firman")) == 1
 
 
+def test_youtube_relevance_filter_allows_plural_brand():
+    """Pinned to real data (2026-07-07): titles/comments using the plural
+    ("Firmans") must match, same as the core pipeline's word-boundary rule
+    (#87) — a bespoke regex here previously lacked that plural allowance."""
+    items = [_yt_item("a", "The Firmans are great generators for camping")]
+    assert len(_filter_relevant(items, "Firman")) == 1
+
+
 def test_youtube_counted_metrics_and_error_path():
     provider = YouTubePlatformProvider()
     provider.set_credentials({"api_key": "k"})
@@ -500,10 +508,12 @@ def test_analyze_comments_tags_signals_and_counts():
         {"text": "Firman runs my whole panel.", "likes": 2},
         {"text": "Great video, thanks for sharing!", "likes": 1},
         {"text": "Firmania is a made-up word.", "likes": 0},  # word boundary
+        {"text": "The firmans are good generators, very reliable.", "likes": 3},
     ]
     voice = _analyze_comments(comments, "Firman")
-    assert voice["comments_sampled"] == 5
-    assert voice["mentioning_brand"] == 3        # boundary excludes 'Firmania'
+    assert voice["comments_sampled"] == 6
+    assert voice["mentioning_brand"] == 4        # boundary excludes 'Firmania'
+    assert comments[5]["signal"] == "mention"    # plural 'firmans' still counts
     assert voice["recommendation_cues"] >= 1
     assert voice["negative_cues"] >= 1
     signals = [c["signal"] for c in comments]

@@ -139,11 +139,15 @@ _DETAIL_SPECS = {
         ("Views", lambda v: f"{v.get('views', 0):,}"),
         ("Comments", lambda v: f"{v.get('comments', 0):,}"),
         ("Published", lambda v: v.get("published", "")),
+        ("Link", lambda v: (f"https://youtube.com/watch?v={v['video_id']}"
+                            if v.get("video_id") else ""), "link"),
     ]), ("top_comments", "Owner voice — top comments on those videos", [
         ("Comment", lambda v: v.get("text", "")),
         ("Video", lambda v: v.get("video", "")),
         ("Likes", lambda v: f"{v.get('likes', 0):,}"),
         ("Signal", lambda v: v.get("signal", "")),
+        ("Link", lambda v: (f"https://youtube.com/watch?v={v['video_id']}"
+                            if v.get("video_id") else ""), "link"),
     ])],
     "reddit": [("top_posts", "Top posts (last year)", [
         ("Title", lambda v: v.get("title", "")),
@@ -763,11 +767,20 @@ class TargetedReviewPage(QWidget):
             detail.setWordWrap(True)
             detail.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
             for r, entry in enumerate(rows):
-                for c, (_, getter) in enumerate(columns):
+                for c, col in enumerate(columns):
+                    getter = col[1]
+                    kind = col[2] if len(col) > 2 else ""
                     try:
-                        text = str(getter(entry))
+                        value = getter(entry)
                     except Exception:
-                        text = ""
+                        value = ""
+                    if kind == "link" and value:
+                        link = QLabel(f'<a href="{value}">Watch &#8599;</a>')
+                        link.setOpenExternalLinks(True)
+                        link.setContentsMargins(6, 0, 6, 0)
+                        detail.setCellWidget(r, c, link)
+                        continue
+                    text = str(value)
                     cell = QTableWidgetItem(text)
                     cell.setToolTip(text)
                     detail.setItem(r, c, cell)

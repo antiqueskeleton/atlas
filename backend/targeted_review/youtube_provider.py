@@ -35,6 +35,7 @@ from datetime import datetime, timedelta, timezone
 import requests
 
 from backend.targeted_review.base_platform_provider import PlatformProvider
+from backend.visibility.brand_matcher import text_contains_term
 
 _SEARCH_URL = "https://www.googleapis.com/youtube/v3/search"
 _VIDEOS_URL = "https://www.googleapis.com/youtube/v3/videos"
@@ -64,10 +65,13 @@ def _api_error_message(response) -> str:
         return f"HTTP {response.status_code}"
 
 
-def _brand_pattern(brand: str) -> re.Pattern:
-    """Word-boundary matcher so 'CAT' doesn't match 'category' — multi-word
-    brands ('Briggs & Stratton') match on the full phrase."""
-    return re.compile(r"\b" + re.escape(brand.strip()) + r"\b", re.IGNORECASE)
+def _brand_mentioned(text: str, brand: str) -> bool:
+    """Word-boundary check so 'CAT' doesn't match 'category', with the same
+    plural/possessive allowance ("Hondas", "Firman's") as the core pipeline —
+    shares text_contains_term rather than a bespoke regex so a video/comment
+    using the plural form isn't silently dropped from relevance or signal
+    counts."""
+    return text_contains_term(text.lower(), brand.strip().lower())
 
 
 class YouTubePlatformProvider(PlatformProvider):
@@ -174,6 +178,7 @@ class YouTubePlatformProvider(PlatformProvider):
                         likes = 0
                     comments.append({
                         "video": video.get("title", "")[:70],
+                        "video_id": video.get("video_id", ""),
                         "text": text[:280],
                         "likes": likes,
                     })
@@ -277,14 +282,13 @@ def _filter_relevant(items: list[dict], brand: str) -> list[dict]:
     """Title must mention the brand (word boundary) AND a generator-market
     term — pure and separately testable, since this filter is the whole
     difference between real brand presence and cat videos."""
-    brand_re = _brand_pattern(brand)
     seen: set[str] = set()
     relevant = []
     for item in items:
         title = item.get("title", "")
         if item["video_id"] in seen:
             continue
-        if brand_re.search(title) and _MARKET_TERMS.search(title):
+        if _brand_mentioned(title, brand) and _MARKET_TERMS.search(title):
             seen.add(item["video_id"])
             relevant.append(dict(item))
     return relevant
@@ -320,13 +324,12 @@ def _analyze_comments(comments: list[dict], brand: str) -> dict:
     from backend.visibility.recommendation import detect_recommended_brands
 
     flat_terms = [(brand.lower(), brand)]
-    brand_re = _brand_pattern(brand)
 
     mentioning = negative = recommending = 0
     for comment in comments:
         text = comment.get("text", "")
         signal = ""
-        if brand_re.search(text):
+        if _brand_mentioned(text, brand):
             mentioning += 1
             signal = "mention"
             try:
