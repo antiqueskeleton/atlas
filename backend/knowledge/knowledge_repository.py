@@ -331,13 +331,23 @@ class KnowledgeRepository:
                 )
             """)
 
-    def log_event(self, event_type: str, description: str):
+    def log_event(self, event_type: str, description: str,
+                  occurred_at: str = None):
+        """occurred_at (ISO string) lets backfilled events land on the date
+        the change actually happened (#90) — omitted, the DB stamps now."""
         self._ensure_events_table()
         with self._conn() as c:
-            c.execute(
-                "INSERT INTO atlas_events (event_type, description) VALUES (?, ?)",
-                (event_type, description),
-            )
+            if occurred_at:
+                c.execute(
+                    "INSERT INTO atlas_events (event_type, description, occurred_at) "
+                    "VALUES (?, ?, ?)",
+                    (event_type, description, occurred_at),
+                )
+            else:
+                c.execute(
+                    "INSERT INTO atlas_events (event_type, description) VALUES (?, ?)",
+                    (event_type, description),
+                )
 
     def list_events(self, since: str = None) -> list:
         """Returns [(event_type, description, occurred_at)] ordered oldest

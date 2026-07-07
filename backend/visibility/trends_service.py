@@ -15,6 +15,52 @@ _MIN_PRIOR_RUNS = 3
 _BASELINE_WINDOW = 5
 
 
+def sync_model_change_events(visibility_repository, knowledge_repository) -> int:
+    """
+    #90: a provider silently swapping models (its own default rotation, or
+    a manual change in Settings) shifts visibility scores with zero market
+    change behind it. Detect every model transition in the stored run
+    history and log it into the existing #67 event system, dated at the
+    transition, so every Trends chart gets a dotted marker where the
+    measuring instrument changed. Idempotent — already-logged transitions
+    (matched on description + date) are skipped. Returns how many new
+    events were logged.
+    """
+    runs = visibility_repository.list_runs() or []
+    # rows: (run_id, provider, model, prompt_set, started_at, ...) newest
+    # first — walk oldest→newest per provider to see transitions in order.
+    by_provider: dict[str, list] = {}
+    for row in sorted(runs, key=lambda r: r[4] or ""):
+        provider, model, started_at = row[1], row[2], row[4]
+        if provider and model:
+            by_provider.setdefault(provider, []).append((model, started_at))
+
+    try:
+        existing = {
+            (description, (occurred_at or "")[:10])
+            for event_type, description, occurred_at
+            in knowledge_repository.list_events()
+            if event_type == "model_change"
+        }
+    except Exception:
+        existing = set()
+
+    logged = 0
+    for provider, sequence in by_provider.items():
+        previous_model = None
+        for model, started_at in sequence:
+            if previous_model is not None and model != previous_model:
+                description = f"{provider} model changed: {previous_model} → {model}"
+                key = (description, (started_at or "")[:10])
+                if key not in existing:
+                    knowledge_repository.log_event(
+                        "model_change", description, occurred_at=started_at)
+                    existing.add(key)
+                    logged += 1
+            previous_model = model
+    return logged
+
+
 class TrendsService:
     """Aggregates per-run visibility data into time-series structures for charting."""
 
@@ -27,6 +73,14 @@ class TrendsService:
         # this, since page construction order isn't guaranteed.
         self.repository.backfill_cue_zone_cache()
         self.analytics = VisibilityAnalytics(target_brand=target_brand)
+        # #90: keep model-change markers in sync with run history — cheap
+        # (one pass over the runs list) and idempotent, and a failure here
+        # must never block the Trends page from loading.
+        try:
+            from backend.knowledge.knowledge_repository import KnowledgeRepository
+            sync_model_change_events(self.repository, KnowledgeRepository())
+        except Exception:
+            pass
 
     def _resolved_target(self) -> str:
         """
