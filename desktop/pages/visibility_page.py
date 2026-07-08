@@ -414,9 +414,10 @@ class VisibilityPage(QWidget):
                 "No API key set — add one in Settings before running this provider"
             )
             dot = QLabel("⬤")
-            dot.setFixedWidth(16)
+            dot.setFixedWidth(20)
+            dot.setAlignment(Qt.AlignCenter)
             dot.setStyleSheet(
-                f"color: {'#16A34A' if has_key else '#DC2626'}; font-size: 14px; padding: 0 1px;"
+                f"color: {'#16A34A' if has_key else '#DC2626'}; font-size: 14px;"
             )
             dot.setToolTip(dot_tip)
             cb.setToolTip(dot_tip)
@@ -427,7 +428,7 @@ class VisibilityPage(QWidget):
             name_lbl.mousePressEvent = lambda _e, c=cb: c.setChecked(not c.isChecked())
 
             item_row = QHBoxLayout()
-            item_row.setSpacing(4)
+            item_row.setSpacing(8)
             item_row.setContentsMargins(0, 0, 0, 0)
             item_row.addWidget(cb)
             item_row.addWidget(dot)
