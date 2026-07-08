@@ -437,27 +437,31 @@ class AtlasMainWindow(QMainWindow):
             s.setStyleSheet("background: #E5E7EB; margin: 0px;")
             return s
 
-        # Description
+        # Description — no hard-coded line breaks; word wrap alone decides
+        # where lines break based on the dialog's actual width, so it wraps
+        # evenly instead of double-wrapping mid-sentence.
         desc = QLabel(
-            "Atlas tracks brand visibility across AI providers, measures your\n"
-            "real footprint on YouTube, Reddit, editorial coverage, retail\n"
-            "listings, and Google AI Overviews, and synthesizes it all into a\n"
-            "strategic intelligence briefing — so you always know how your\n"
+            "Atlas tracks brand visibility across AI providers, measures your "
+            "real footprint on YouTube, Reddit, editorial coverage, retail "
+            "listings, and Google AI Overviews, and synthesizes it all into a "
+            "strategic intelligence briefing — so you always know how your "
             "brand appears, and why, everywhere AI is shaping buying decisions."
         )
         desc.setStyleSheet("font-size: 13px; color: #374151; line-height: 1.5;")
         desc.setAlignment(Qt.AlignCenter)
         desc.setWordWrap(True)
 
-        # Plain-text copyright — no hyperlink styling/underline on dweeb.co.
-        # The (c) itself is a hidden easter egg: same color as the rest of
-        # the line, no underline, so nothing visually marks it as clickable.
+        # Copyright line — both dweeb.co and the (c) are real links, but
+        # styled identically to the surrounding plain text (same gray, no
+        # underline) so neither visually announces itself as clickable.
+        # (c) opens the hidden easter egg; dweeb.co opens the real site.
         copy_lbl = QLabel(
             '<a href="egg" style="color:#9CA3AF; text-decoration:none;">©</a>'
-            ' 2026 dweeb.co'
+            ' 2026 '
+            '<a href="https://dweeb.co" style="color:#9CA3AF; text-decoration:none;">dweeb.co</a>'
         )
         copy_lbl.setStyleSheet("font-size: 12px; color: #9CA3AF;")
-        copy_lbl.linkActivated.connect(lambda _: self._show_easter_egg())
+        copy_lbl.linkActivated.connect(self._on_copyright_link)
         copy_lbl.setAlignment(Qt.AlignCenter)
 
         close_btn = QPushButton("Close")
@@ -491,6 +495,14 @@ class AtlasMainWindow(QMainWindow):
 
         dlg.setLayout(lay)
         dlg.exec()
+
+    def _on_copyright_link(self, href: str):
+        if href == "egg":
+            self._show_easter_egg()
+        else:
+            from PySide6.QtGui import QDesktopServices
+            from PySide6.QtCore import QUrl
+            QDesktopServices.openUrl(QUrl(href))
 
     def _show_easter_egg(self):
         """Hidden behind the © in About Atlas — not linked from anywhere
