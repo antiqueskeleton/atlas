@@ -205,6 +205,74 @@ class _CollectWorker(QThread):
             self.fail.emit(str(exc))
 
 
+class _CreatorCollectWorker(QThread):
+    progress = Signal(int, int, str)
+    done = Signal(list)
+    fail = Signal(str)
+
+    def __init__(self, service):
+        super().__init__()
+        self._service = service
+
+    def run(self):
+        try:
+            findings = self._service.collect_creator_performance(
+                progress_cb=lambda done, total, label: self.progress.emit(done, total, label),
+            )
+            self.done.emit(findings)
+        except Exception as exc:
+            self.fail.emit(str(exc))
+
+
+# Drill-down detail columns for tracked creators — same shape/"link" column
+# convention as _DETAIL_SPECS, keyed by platform since a creator has no
+# brand-scoped metrics table to hang off of.
+_CREATOR_DETAIL_COLUMNS = {
+    "youtube": [
+        ("Title", lambda v: v.get("title", "")),
+        ("Views", lambda v: f"{v.get('views', 0):,}"),
+        ("Likes", lambda v: f"{v.get('likes', 0):,}"),
+        ("Comments", lambda v: f"{v.get('comments', 0):,}"),
+        ("Published", lambda v: v.get("published", "")),
+        ("Link", lambda v: (f"https://youtube.com/watch?v={v['video_id']}"
+                            if v.get("video_id") else ""), "link"),
+    ],
+    "reddit": [
+        ("Title", lambda v: v.get("title", "")),
+        ("Subreddit", lambda v: f"r/{v.get('subreddit', '')}"),
+        ("Score", lambda v: f"{v.get('score', 0):,}"),
+        ("Comments", lambda v: f"{v.get('comments', 0):,}"),
+        ("Date", lambda v: v.get("created", "")),
+        ("Link", lambda v: v.get("permalink", ""), "link"),
+    ],
+}
+
+
+def _populate_detail_table(table: QTableWidget, rows: list[dict], columns) -> None:
+    """Shared cell-population loop for drill-down detail tables (brand and
+    creator dialogs both use it) — "link" columns render as a clickable
+    QLabel cell widget instead of plain text."""
+    table.setRowCount(len(rows))
+    for r, entry in enumerate(rows):
+        for c, col in enumerate(columns):
+            getter = col[1]
+            kind = col[2] if len(col) > 2 else ""
+            try:
+                value = getter(entry)
+            except Exception:
+                value = ""
+            if kind == "link" and value:
+                link = QLabel(f'<a href="{value}">Watch &#8599;</a>')
+                link.setOpenExternalLinks(True)
+                link.setContentsMargins(6, 0, 6, 0)
+                table.setCellWidget(r, c, link)
+                continue
+            text = str(value)
+            cell = QTableWidgetItem(text)
+            cell.setToolTip(text)
+            table.setItem(r, c, cell)
+
+
 class TargetedReviewPage(QWidget):
     def __init__(self, app):
         super().__init__()
@@ -214,6 +282,7 @@ class TargetedReviewPage(QWidget):
         )
         self._workers: list[_CollectWorker] = []
         self._brand_checks: dict[str, QCheckBox] = {}
+        self._creator_rows: list[tuple] = []
         # per-platform widget registries, filled by _build_platform_tab
         self._tables: dict[str, QTableWidget] = {}
         self._findings_layouts: dict[str, QVBoxLayout] = {}
@@ -264,6 +333,7 @@ class TargetedReviewPage(QWidget):
         self.tabs.addTab(self._build_platform_tab("aioverview"), "AI Overviews")
         self.tabs.addTab(self._build_platform_tab("bestbuy"), "Best Buy")
         self.tabs.addTab(self._build_platform_tab("retail"), "Retail Listings")
+        self.tabs.addTab(self._build_influencers_tab(), "Influencers")
         root.addWidget(self.tabs, 1)
 
         self.setLayout(root)
@@ -525,7 +595,7 @@ class TargetedReviewPage(QWidget):
         add_btn.setFixedWidth(60)
         add_btn.clicked.connect(self._add_url)
         remove_btn = QPushButton("Remove Selected")
-        remove_btn.setFixedWidth(120)
+        remove_btn.setFixedWidth(145)
         remove_btn.clicked.connect(self._remove_url)
         add_row.addWidget(self._url_brand_combo)
         add_row.addWidget(self._url_input, 1)
@@ -709,6 +779,225 @@ class TargetedReviewPage(QWidget):
         self.service.repository.delete_product_url(self._url_row_ids[row])
         self._reload_urls()
 
+    # ── Tracked creators (influencers) ────────────────────────────────────────
+
+    def _build_influencers_tab(self) -> QWidget:
+        """Track a specific named creator (not a brand) over time — cadence
+        and engagement, no gap comparison (there's no "competitor creator").
+        Modeled on _build_url_manager's add/remove pattern rather than the
+        brand-checkbox platform tabs, since a creator list isn't brand-scoped
+        — one reviewer may cover several brands."""
+        tab = QWidget()
+        lay = QVBoxLayout(tab)
+        lay.setSpacing(10)
+        lay.setContentsMargins(4, 10, 4, 4)
+
+        manager = QFrame()
+        manager.setObjectName("StatCard")
+        m_lay = QVBoxLayout(manager)
+        m_lay.setSpacing(6)
+
+        hdr_row = QHBoxLayout()
+        hdr = QLabel("Tracked Creators")
+        hdr.setObjectName("CardTitle")
+        hdr_row.addWidget(hdr)
+        hdr_row.addWidget(info_icon(
+            "Track a specific YouTube channel or Reddit user over time — "
+            "upload/post cadence and engagement, not a brand comparison. "
+            "Costs only a few quota units per creator per collection "
+            "(YouTube ~5-6 units, Reddit 2 requests), so every tracked "
+            "creator collects together in one pass."
+        ))
+        hdr_row.addStretch()
+        m_lay.addLayout(hdr_row)
+
+        add_row = QHBoxLayout()
+        add_row.setSpacing(6)
+        self._creator_platform_combo = QComboBox()
+        self._creator_platform_combo.setFixedWidth(100)
+        self._creator_platform_combo.addItems(["YouTube", "Reddit"])
+        self._creator_handle_input = QLineEdit()
+        self._creator_handle_input.setPlaceholderText(
+            "YouTube channel URL (/@handle, /channel/UC…) or Reddit username"
+        )
+        self._creator_name_input = QLineEdit()
+        self._creator_name_input.setPlaceholderText("Display name")
+        self._creator_name_input.setFixedWidth(160)
+        add_btn = QPushButton("Add")
+        add_btn.setFixedWidth(60)
+        add_btn.clicked.connect(self._add_creator)
+        remove_btn = QPushButton("Remove Selected")
+        remove_btn.setFixedWidth(145)
+        remove_btn.clicked.connect(self._remove_creator)
+        add_row.addWidget(self._creator_platform_combo)
+        add_row.addWidget(self._creator_handle_input, 1)
+        add_row.addWidget(self._creator_name_input)
+        add_row.addWidget(add_btn)
+        add_row.addWidget(remove_btn)
+        m_lay.addLayout(add_row)
+
+        collect_row = QHBoxLayout()
+        collect_row.setSpacing(10)
+        self._creator_collect_btn = QPushButton("Collect Creator Data")
+        self._creator_collect_btn.clicked.connect(self._start_creator_collect)
+        self._creator_status_lbl = QLabel("")
+        self._creator_status_lbl.setStyleSheet("color: #6B7280; font-size: 12px;")
+        collect_row.addWidget(self._creator_collect_btn)
+        collect_row.addWidget(self._creator_status_lbl)
+        collect_row.addStretch()
+        m_lay.addLayout(collect_row)
+
+        self._creator_table = QTableWidget(0, 6)
+        self._creator_table.setHorizontalHeaderLabels(
+            ["Creator", "Platform", "Posts (period)", "Avg Views/Score",
+             "Avg Comments", "Last Collected"])
+        self._creator_table.verticalHeader().setVisible(False)
+        self._creator_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self._creator_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self._creator_table.setAlternatingRowColors(True)
+        self._creator_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
+        self._creator_table.doubleClicked.connect(
+            lambda idx: self._show_creator_detail(idx.row()))
+        m_lay.addWidget(self._creator_table)
+
+        lay.addWidget(manager)
+        lay.addStretch()
+
+        self._reload_creators()
+        return tab
+
+    def _reload_creators(self):
+        rows = self.service.list_tracked_creators()
+        latest = self.service.latest_creator_findings()
+
+        self._creator_rows = rows
+        self._creator_table.setRowCount(len(rows))
+        for r, (_id, platform, _handle, display_name, _notes, _added) in enumerate(rows):
+            metrics = latest.get(display_name, {})
+            self._creator_table.setItem(r, 0, QTableWidgetItem(display_name))
+            self._creator_table.setItem(r, 1, QTableWidgetItem(platform.capitalize()))
+
+            posts = metrics.get("posts_in_period")
+            self._creator_table.setItem(r, 2, QTableWidgetItem(
+                "—" if posts is None else str(posts)))
+
+            engagement = (metrics.get("avg_views") if platform == "youtube"
+                         else metrics.get("avg_score"))
+            self._creator_table.setItem(r, 3, QTableWidgetItem(
+                "—" if engagement is None else f"{engagement:,.1f}"))
+
+            comments = (metrics.get("avg_comments") if platform == "youtube"
+                       else metrics.get("avg_num_comments"))
+            self._creator_table.setItem(r, 4, QTableWidgetItem(
+                "—" if comments is None else f"{comments:,.1f}"))
+
+            collected = metrics.get("collected_at", "")
+            error = metrics.get("error", "")
+            last_item = QTableWidgetItem(
+                error if error else (collected[:10] if collected else "—"))
+            if error:
+                last_item.setToolTip(error)
+            self._creator_table.setItem(r, 5, last_item)
+
+    def _add_creator(self):
+        handle = self._creator_handle_input.text().strip()
+        display_name = self._creator_name_input.text().strip()
+        if not handle or not display_name:
+            QMessageBox.information(
+                self, "Missing Info",
+                "Enter both a channel URL/username and a display name.")
+            return
+        platform = self._creator_platform_combo.currentText().lower()
+        if self.service.add_creator(platform, handle, display_name):
+            self._creator_handle_input.clear()
+            self._creator_name_input.clear()
+            self._reload_creators()
+        else:
+            QMessageBox.information(self, "Already Tracked",
+                                    "This creator is already in the list.")
+
+    def _remove_creator(self):
+        row = self._creator_table.currentRow()
+        if row < 0 or row >= len(self._creator_rows):
+            return
+        creator_id = self._creator_rows[row][0]
+        self.service.remove_creator(creator_id)
+        self._reload_creators()
+
+    def _start_creator_collect(self):
+        if not self.service.list_tracked_creators():
+            self._creator_status_lbl.setText("Add at least one creator first.")
+            self._creator_status_lbl.setStyleSheet("color: #DC2626; font-size: 12px;")
+            return
+
+        self._creator_collect_btn.setEnabled(False)
+        self._creator_status_lbl.setStyleSheet("color: #0B84FF; font-size: 12px;")
+        self._creator_status_lbl.setText("Collecting…")
+
+        worker = _CreatorCollectWorker(self.service)
+        worker.progress.connect(
+            lambda done, total, label: self._creator_status_lbl.setText(
+                f"Collecting {done + 1}/{total} — {label}"))
+        worker.done.connect(self._on_creator_collect_done)
+        worker.fail.connect(self._on_creator_collect_fail)
+        worker.finished.connect(
+            lambda w=worker: self._workers.remove(w) if w in self._workers else None)
+        self._workers.append(worker)
+        worker.start()
+
+    def _on_creator_collect_done(self, findings: list):
+        self._creator_collect_btn.setEnabled(True)
+        failed = [f for f in findings if f.get("error")]
+        ok = len(findings) - len(failed)
+        self._reload_creators()
+        if failed:
+            first_error = failed[0].get("error", "")
+            self._creator_status_lbl.setStyleSheet("color: #DC2626; font-size: 12px;")
+            self._creator_status_lbl.setText(
+                f"Done — {ok} collected, {len(failed)} failed. First error: {first_error}")
+            self._creator_status_lbl.setToolTip(first_error)
+        else:
+            self._creator_status_lbl.setStyleSheet("color: #6B7280; font-size: 12px;")
+            self._creator_status_lbl.setText(f"Done — {ok} creator(s) collected")
+            self._creator_status_lbl.setToolTip("")
+
+    def _on_creator_collect_fail(self, message: str):
+        self._creator_collect_btn.setEnabled(True)
+        self._creator_status_lbl.setStyleSheet("color: #DC2626; font-size: 12px;")
+        self._creator_status_lbl.setText(f"Error: {message}")
+
+    def _show_creator_detail(self, row: int):
+        if row < 0 or row >= len(self._creator_rows):
+            return
+        _id, platform, _handle, display_name, _notes, _added = self._creator_rows[row]
+        latest = self.service.latest_creator_findings().get(display_name)
+        if not latest:
+            return
+        posts_key = "videos" if platform == "youtube" else "posts"
+        rows = latest.get(posts_key) or []
+        if not rows:
+            QMessageBox.information(
+                self, "No Detail",
+                f"No stored detail for {display_name} — collect again to capture it.")
+            return
+        columns = _CREATOR_DETAIL_COLUMNS[platform]
+
+        from PySide6.QtWidgets import QDialog
+        dlg = QDialog(self)
+        dlg.setWindowTitle(f"{display_name} — recent activity")
+        dlg.resize(900, 420)
+        lay = QVBoxLayout(dlg)
+        detail = QTableWidget(0, len(columns))
+        detail.setHorizontalHeaderLabels([c[0] for c in columns])
+        detail.verticalHeader().setVisible(False)
+        detail.setEditTriggers(QTableWidget.NoEditTriggers)
+        detail.setAlternatingRowColors(True)
+        detail.setWordWrap(True)
+        detail.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
+        _populate_detail_table(detail, rows, columns)
+        lay.addWidget(detail)
+        dlg.exec()
+
     # ── Collection ────────────────────────────────────────────────────────────
 
     def _start_collect(self, key: str):
@@ -807,31 +1096,14 @@ class TargetedReviewPage(QWidget):
                 hdr = QLabel(title)
                 hdr.setStyleSheet("font-weight: bold; font-size: 12px; color: #374151;")
                 lay.addWidget(hdr)
-            detail = QTableWidget(len(rows), len(columns))
+            detail = QTableWidget(0, len(columns))
             detail.setHorizontalHeaderLabels([c[0] for c in columns])
             detail.verticalHeader().setVisible(False)
             detail.setEditTriggers(QTableWidget.NoEditTriggers)
             detail.setAlternatingRowColors(True)
             detail.setWordWrap(True)
             detail.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
-            for r, entry in enumerate(rows):
-                for c, col in enumerate(columns):
-                    getter = col[1]
-                    kind = col[2] if len(col) > 2 else ""
-                    try:
-                        value = getter(entry)
-                    except Exception:
-                        value = ""
-                    if kind == "link" and value:
-                        link = QLabel(f'<a href="{value}">Watch &#8599;</a>')
-                        link.setOpenExternalLinks(True)
-                        link.setContentsMargins(6, 0, 6, 0)
-                        detail.setCellWidget(r, c, link)
-                        continue
-                    text = str(value)
-                    cell = QTableWidgetItem(text)
-                    cell.setToolTip(text)
-                    detail.setItem(r, c, cell)
+            _populate_detail_table(detail, rows, columns)
             lay.addWidget(detail)
         dlg.exec()
 

@@ -11,7 +11,7 @@ from backend.targeted_review.editorial_search_provider import (
     EditorialSearchProvider, parse_editorial_results,
 )
 from backend.targeted_review.reddit_provider import (
-    RedditPlatformProvider, parse_reddit_results,
+    RedditPlatformProvider, parse_reddit_results, parse_user_activity,
 )
 from backend.targeted_review.retailer_provider import parse_listing_html
 from backend.targeted_review.targeted_review_repository import TargetedReviewRepository
@@ -623,3 +623,194 @@ def test_ai_overview_no_key_fails_all_brands_in_band():
     findings = AIOverviewProvider().fetch_all(["Firman", "Honda"])
     assert len(findings) == 2
     assert all("No SerpApi key" in f["error"] for f in findings)
+
+
+# ── Tracked creators / influencers (user request 2026-07-07) ─────────────────
+
+def _iso(days_ago: int) -> str:
+    from datetime import datetime, timedelta, timezone
+    return (datetime.now(timezone.utc) - timedelta(days=days_ago)).strftime(
+        "%Y-%m-%dT%H:%M:%SZ")
+
+
+def test_youtube_creator_performance_computes_cadence_and_averages():
+    provider = YouTubePlatformProvider()
+    channels_payload = {"items": [{
+        "statistics": {"subscriberCount": "5000"},
+        "contentDetails": {"relatedPlaylists": {"uploads": "UUcreator"}},
+    }]}
+    playlist_payload = {"items": [
+        {"contentDetails": {"videoId": "recent1", "videoPublishedAt": _iso(5)},
+         "snippet": {"title": "Recent video"}},
+        {"contentDetails": {"videoId": "old1", "videoPublishedAt": _iso(400)},
+         "snippet": {"title": "Old video, outside the window"}},
+    ]}
+    videos_payload = {"items": [
+        {"id": "recent1", "statistics": {"viewCount": "2000", "likeCount": "100",
+                                        "commentCount": "10"}},
+    ]}
+
+    def fake_get(url, params=None, timeout=None):
+        resp = MagicMock(status_code=200)
+        if "playlistItems" in url:
+            resp.json.return_value = playlist_payload
+        elif "channels" in url:
+            resp.json.return_value = channels_payload
+        else:
+            resp.json.return_value = videos_payload
+        return resp
+
+    with patch("backend.targeted_review.youtube_provider.requests.get",
+               side_effect=fake_get):
+        result = provider.fetch_creator_performance(
+            "key", "https://youtube.com/@SomeCreator", lookback_days=30)
+
+    assert result["error"] == ""
+    assert result["channel_subscribers"] == 5000
+    assert result["posts_in_period"] == 1        # old1 excluded by the window
+    assert result["avg_views"] == 2000.0
+    assert result["avg_likes"] == 100.0
+    assert result["avg_comments"] == 10.0
+    assert result["videos"][0]["video_id"] == "recent1"
+
+
+def test_youtube_creator_performance_no_uploads_in_window():
+    provider = YouTubePlatformProvider()
+    channels_payload = {"items": [{
+        "statistics": {"subscriberCount": "100"},
+        "contentDetails": {"relatedPlaylists": {"uploads": "UUquiet"}},
+    }]}
+    playlist_payload = {"items": [
+        {"contentDetails": {"videoId": "old1", "videoPublishedAt": _iso(400)},
+         "snippet": {"title": "Ancient video"}},
+    ]}
+
+    def fake_get(url, params=None, timeout=None):
+        resp = MagicMock(status_code=200)
+        resp.json.return_value = (playlist_payload if "playlistItems" in url
+                                  else channels_payload)
+        return resp
+
+    with patch("backend.targeted_review.youtube_provider.requests.get",
+               side_effect=fake_get):
+        result = provider.fetch_creator_performance(
+            "key", "https://youtube.com/@QuietChannel", lookback_days=30)
+
+    assert result["error"] == ""
+    assert result["posts_in_period"] == 0
+    assert result["avg_views"] == 0.0
+    assert result["videos"] == []
+
+
+def test_youtube_creator_performance_unresolvable_url_is_in_band():
+    provider = YouTubePlatformProvider()
+    result = provider.fetch_creator_performance("key", "https://youtube.com/c/CustomName")
+    assert "resolve" in result["error"].lower()
+
+
+def test_youtube_creator_performance_no_key_is_in_band():
+    provider = YouTubePlatformProvider()
+    result = provider.fetch_creator_performance("", "https://youtube.com/@X")
+    assert "No YouTube API key" in result["error"]
+
+
+def test_reddit_creator_performance_computes_cadence_and_averages():
+    provider = RedditPlatformProvider()
+    provider._token = "tok"   # pre-seeded, skips the token exchange call
+
+    submitted_payload = {"data": {"children": [
+        {"kind": "t3", "data": {"title": "Recent post", "subreddit": "generators",
+         "score": 50, "num_comments": 4, "created_utc":
+         __import__("datetime").datetime.now(__import__("datetime").timezone.utc)
+         .timestamp() - 5 * 86400, "permalink": "/r/generators/1"}},
+        {"kind": "t3", "data": {"title": "Old post", "subreddit": "generators",
+         "score": 999, "num_comments": 999, "created_utc":
+         __import__("datetime").datetime.now(__import__("datetime").timezone.utc)
+         .timestamp() - 400 * 86400, "permalink": "/r/generators/2"}},
+    ]}}
+    comments_payload = {"data": {"children": [
+        {"kind": "t1", "data": {"created_utc":
+         __import__("datetime").datetime.now(__import__("datetime").timezone.utc)
+         .timestamp() - 3 * 86400}},
+    ]}}
+
+    def fake_get(url, params=None, headers=None, timeout=None):
+        resp = MagicMock(status_code=200)
+        resp.json.return_value = (comments_payload if "comments" in url
+                                  else submitted_payload)
+        return resp
+
+    with patch("backend.targeted_review.reddit_provider.requests.get",
+               side_effect=fake_get):
+        result = provider.fetch_creator_performance("cid", "csecret", "someuser",
+                                                     lookback_days=30)
+
+    assert result["error"] == ""
+    assert result["posts_in_period"] == 1     # the 400-days-old post is excluded
+    assert result["comments_in_period"] == 1
+    assert result["avg_score"] == 50.0
+    assert result["posts"][0]["permalink"] == "https://reddit.com/r/generators/1"
+
+
+def test_reddit_creator_performance_bad_username_is_in_band():
+    provider = RedditPlatformProvider()
+    provider._token = "tok"
+    bad = MagicMock(status_code=404)
+    with patch("backend.targeted_review.reddit_provider.requests.get", return_value=bad):
+        result = provider.fetch_creator_performance("cid", "csecret", "nosuchuser")
+    assert "404" in result["error"]
+
+
+def test_parse_user_activity_filters_window_and_averages():
+    now_ts = __import__("datetime").datetime.now(__import__("datetime").timezone.utc).timestamp()
+    posts_data = {"data": {"children": [
+        {"kind": "t3", "data": {"title": "A", "score": 10, "num_comments": 2,
+         "created_utc": now_ts - 86400}},
+        {"kind": "t3", "data": {"title": "B", "score": 20, "num_comments": 4,
+         "created_utc": now_ts - 60 * 86400}},   # outside a 30-day window
+    ]}}
+    comments_data = {"data": {"children": []}}
+    result = parse_user_activity(posts_data, comments_data, lookback_days=30)
+    assert result["posts_in_period"] == 1
+    assert result["avg_score"] == 10.0
+    assert result["comments_in_period"] == 0
+
+
+def test_creator_repository_crud_and_duplicate_rejection(tmp_path):
+    repo = TargetedReviewRepository(db_path=tmp_path / "test.db")
+    assert repo.add_creator("youtube", "https://youtube.com/@x", "Creator X") is True
+    assert repo.add_creator("youtube", "https://youtube.com/@x", "Creator X") is False
+
+    rows = repo.list_creators()
+    assert len(rows) == 1
+    creator_id, platform, handle, display_name, notes, added = rows[0]
+    assert platform == "youtube" and display_name == "Creator X"
+
+    repo.remove_creator(creator_id)
+    assert repo.list_creators() == []
+
+
+def test_collect_creator_performance_saves_under_distinct_platform_names(tmp_path):
+    repo = TargetedReviewRepository(db_path=tmp_path / "test.db")
+    config = FakeConfig({("youtube", "api_key"): "yk",
+                         ("reddit", "client_id"): "cid",
+                         ("reddit", "client_secret"): "cs"})
+    service = TargetedReviewService(config, target_brand="Firman", repository=repo)
+    service.add_creator("youtube", "https://youtube.com/@x", "YT Creator")
+    service.add_creator("reddit", "someuser", "Reddit Creator")
+
+    with patch("backend.targeted_review.youtube_provider.YouTubePlatformProvider."
+              "fetch_creator_performance") as yt_mock, \
+         patch("backend.targeted_review.reddit_provider.RedditPlatformProvider."
+              "fetch_creator_performance") as rd_mock:
+        yt_mock.return_value = {"posts_in_period": 2, "avg_views": 500.0, "error": ""}
+        rd_mock.return_value = {"posts_in_period": 3, "avg_score": 10.0, "error": ""}
+        findings = service.collect_creator_performance()
+
+    assert len(findings) == 2
+    latest = service.latest_creator_findings()
+    assert latest["YT Creator"]["platform"] == "youtube"
+    assert latest["Reddit Creator"]["platform"] == "reddit"
+    # Confirmed stored under distinct platform-name keys, not mixed with brands.
+    assert repo.latest_findings("YouTube Creators") != {}
+    assert repo.latest_findings("Reddit Creators") != {}

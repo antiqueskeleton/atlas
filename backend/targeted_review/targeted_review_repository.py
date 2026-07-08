@@ -58,6 +58,24 @@ class TargetedReviewRepository:
                     discovered_at TEXT NOT NULL
                 )
             """)
+            # Influencer tracking — flat, NOT brand-nested (a creator can
+            # cover several brands; forcing one brand per creator would be
+            # awkward). Snapshots of their performance reuse
+            # targeted_review_findings itself (platform="YouTube Creators"/
+            # "Reddit Creators", brand column holds the creator's display
+            # name) — only the curated list of who to track needs its own
+            # table.
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS targeted_review_creators (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    platform TEXT NOT NULL,
+                    handle TEXT NOT NULL,
+                    display_name TEXT NOT NULL,
+                    notes TEXT DEFAULT '',
+                    added_at TEXT NOT NULL,
+                    UNIQUE(platform, handle)
+                )
+            """)
 
     # ── Findings ──────────────────────────────────────────────────────────────
 
@@ -184,3 +202,35 @@ class TargetedReviewRepository:
             except (json.JSONDecodeError, TypeError):
                 continue
         return result
+
+    # ── Tracked creators (influencers) ────────────────────────────────────────
+
+    def add_creator(self, platform: str, handle: str, display_name: str,
+                    notes: str = "") -> bool:
+        """Returns False when this (platform, handle) is already tracked
+        (UNIQUE constraint) — a duplicate add is a no-op, not an error."""
+        try:
+            with self.connect() as conn:
+                conn.execute("""
+                    INSERT INTO targeted_review_creators
+                        (platform, handle, display_name, notes, added_at)
+                    VALUES (?, ?, ?, ?, ?)
+                """, (platform, handle.strip(), display_name.strip(),
+                      notes.strip(), datetime.now().isoformat()))
+            return True
+        except sqlite3.IntegrityError:
+            return False
+
+    def list_creators(self) -> list[tuple]:
+        """[(id, platform, handle, display_name, notes, added_at)] ordered
+        by display name."""
+        with self.connect() as conn:
+            return conn.execute("""
+                SELECT id, platform, handle, display_name, notes, added_at
+                FROM targeted_review_creators
+                ORDER BY display_name COLLATE NOCASE ASC, id ASC
+            """).fetchall()
+
+    def remove_creator(self, creator_id: int):
+        with self.connect() as conn:
+            conn.execute("DELETE FROM targeted_review_creators WHERE id = ?", (creator_id,))

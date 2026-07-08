@@ -131,6 +131,75 @@ class TargetedReviewService:
             findings.append(_aggregate_retail(provider.platform_name, brand, listings))
         return findings
 
+    # ── Tracked creators (influencers) ────────────────────────────────────────
+    # A different shape from brand tracking: one specific named channel/user
+    # followed over time, not a target-vs-competitor comparison — no gap
+    # analysis applies here, just cadence and engagement. Flat list, not
+    # nested under a brand, since one creator may cover several.
+
+    def list_tracked_creators(self) -> list[tuple]:
+        """[(id, platform, handle, display_name, notes, added_at)]."""
+        return self.repository.list_creators()
+
+    def add_creator(self, platform: str, handle: str, display_name: str,
+                    notes: str = "") -> bool:
+        return self.repository.add_creator(platform, handle, display_name, notes)
+
+    def remove_creator(self, creator_id: int):
+        self.repository.remove_creator(creator_id)
+
+    def collect_creator_performance(self, progress_cb=None) -> list[dict]:
+        """
+        Refresh every tracked creator across both platforms in one pass —
+        each check costs only a handful of quota units (versus ~400 for a
+        brand search), so unlike brand collection, granular per-platform
+        control isn't needed here. Findings are saved under distinct
+        platform-name keys ("YouTube Creators"/"Reddit Creators") in the
+        same generic findings table brand collection uses, keyed by the
+        creator's display name in the existing "brand" column.
+        """
+        creators = self.repository.list_creators()
+        if not creators:
+            return []
+
+        yt_provider = self.get_provider("youtube")
+        reddit_provider = self.get_provider("reddit")
+
+        yt_findings: list[dict] = []
+        reddit_findings: list[dict] = []
+        total = len(creators)
+        for i, (_id, platform, handle, display_name, _notes, _added) in enumerate(creators):
+            if progress_cb:
+                progress_cb(i, total, display_name)
+            if platform == "youtube":
+                api_key = yt_provider.credentials.get("api_key", "")
+                result = yt_provider.fetch_creator_performance(api_key, handle)
+                result["brand"] = display_name
+                yt_findings.append(result)
+            elif platform == "reddit":
+                client_id = reddit_provider.credentials.get("client_id", "")
+                client_secret = reddit_provider.credentials.get("client_secret", "")
+                result = reddit_provider.fetch_creator_performance(
+                    client_id, client_secret, handle)
+                result["brand"] = display_name
+                reddit_findings.append(result)
+
+        if yt_findings:
+            self.repository.save_findings("YouTube Creators", yt_findings)
+        if reddit_findings:
+            self.repository.save_findings("Reddit Creators", reddit_findings)
+        return yt_findings + reddit_findings
+
+    def latest_creator_findings(self) -> dict[str, dict]:
+        """{display_name: metrics} across both platforms, each tagged with
+        which platform it came from for the UI table."""
+        combined: dict[str, dict] = {}
+        for platform_name, key in (("YouTube Creators", "youtube"),
+                                    ("Reddit Creators", "reddit")):
+            for name, metrics in self.repository.latest_findings(platform_name).items():
+                combined[name] = {**metrics, "platform": key}
+        return combined
+
     # ── Gap analysis ──────────────────────────────────────────────────────────
 
     def gap_analysis(self, platform_key: str) -> list[dict]:

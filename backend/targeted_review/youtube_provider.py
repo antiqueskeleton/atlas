@@ -241,6 +241,107 @@ class YouTubePlatformProvider(PlatformProvider):
         except requests.RequestException:
             return empty
 
+    def fetch_creator_performance(self, api_key: str, channel_url: str,
+                                  lookback_days: int = 30) -> dict:
+        """
+        Cadence and engagement for ONE specific creator's channel — a fixed
+        identity being followed over time, not a brand-mention search.
+        Reuses the exact channels.list -> uploads playlist chain
+        _channel_metrics() already does, just widened to also pull each
+        upload's own view/like/comment stats instead of only counting them.
+        Same single-page (maxResults=50) assumption _channel_metrics makes
+        for its 365-day window: fine for a 30-day window unless the channel
+        posts more than 50 times a month. Costs ~5-6 quota units regardless
+        of upload volume, versus ~400 for the brand search path — cheap
+        enough to collect every tracked creator in one pass.
+        """
+        base = {"channel_url": channel_url, "lookback_days": lookback_days}
+        if not api_key:
+            return {**base, "error": "No YouTube API key configured — add one in Settings."}
+        params = _channel_lookup_params(channel_url)
+        if not params:
+            return {**base, "error": "Could not resolve this channel URL — use a "
+                                      "/channel/UC…, /@handle, or /user/ form."}
+        try:
+            resp = requests.get(_CHANNELS_URL, params={
+                "part": "statistics,contentDetails", "key": api_key, **params,
+            }, timeout=_TIMEOUT)
+            if resp.status_code != 200:
+                return {**base, "error": f"YouTube channel lookup failed: {_api_error_message(resp)}"}
+            items = resp.json().get("items", [])
+            if not items:
+                return {**base, "error": "No channel found for this URL."}
+            stats = items[0].get("statistics", {})
+            uploads_id = (items[0].get("contentDetails", {})
+                          .get("relatedPlaylists", {}).get("uploads", ""))
+            if not uploads_id:
+                return {**base, "error": "This channel has no public uploads playlist."}
+
+            pl = requests.get(_PLAYLIST_URL, params={
+                "part": "contentDetails,snippet", "playlistId": uploads_id,
+                "maxResults": 50, "key": api_key,
+            }, timeout=_TIMEOUT)
+            if pl.status_code != 200:
+                return {**base, "error": f"YouTube upload list failed: {_api_error_message(pl)}"}
+
+            cutoff = (datetime.now(timezone.utc)
+                      - timedelta(days=lookback_days)).strftime("%Y-%m-%d")
+            videos = []
+            for item in pl.json().get("items", []):
+                cd = item.get("contentDetails", {})
+                published = (cd.get("videoPublishedAt", "") or "")[:10]
+                if not published or published < cutoff:
+                    continue
+                videos.append({
+                    "video_id": cd.get("videoId", ""),
+                    "title": item.get("snippet", {}).get("title", ""),
+                    "published": published,
+                })
+
+            video_ids = [v["video_id"] for v in videos if v["video_id"]]
+            stats_by_id = {}
+            if video_ids:
+                vresp = requests.get(_VIDEOS_URL, params={
+                    "part": "statistics", "id": ",".join(video_ids), "key": api_key,
+                }, timeout=_TIMEOUT)
+                if vresp.status_code == 200:
+                    stats_by_id = {
+                        v["id"]: v.get("statistics", {})
+                        for v in vresp.json().get("items", [])
+                    }
+        except requests.RequestException as exc:
+            return {**base, "error": f"YouTube request failed: {exc}"}
+
+        def _int(value):
+            try:
+                return int(value)
+            except (TypeError, ValueError):
+                return 0
+
+        for v in videos:
+            vs = stats_by_id.get(v["video_id"], {})
+            v["views"] = _int(vs.get("viewCount"))
+            v["likes"] = _int(vs.get("likeCount"))
+            v["comments"] = _int(vs.get("commentCount"))
+        videos.sort(key=lambda v: v["published"], reverse=True)
+
+        n = len(videos)
+
+        def _avg(key):
+            return round(sum(v[key] for v in videos) / n, 1) if n else 0.0
+
+        return {
+            **base,
+            "channel_subscribers": _int(stats.get("subscriberCount")),
+            "posts_in_period": n,
+            "posts_per_day": round(n / lookback_days, 2) if lookback_days else 0.0,
+            "avg_views": _avg("views"),
+            "avg_likes": _avg("likes"),
+            "avg_comments": _avg("comments"),
+            "videos": videos,
+            "error": "",
+        }
+
     def _paged_search(self, api_key: str, query: str,
                       published_after: str = "") -> tuple[list[dict], str]:
         """Up to _PAGES × _PAGE_SIZE real results (not estimates).

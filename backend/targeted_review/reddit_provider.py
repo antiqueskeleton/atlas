@@ -27,6 +27,8 @@ from backend.targeted_review.base_platform_provider import PlatformProvider
 
 _TOKEN_URL = "https://www.reddit.com/api/v1/access_token"
 _SEARCH_URL = "https://oauth.reddit.com/search"
+_USER_SUBMITTED_URL = "https://oauth.reddit.com/user/{username}/submitted"
+_USER_COMMENTS_URL = "https://oauth.reddit.com/user/{username}/comments"
 _USER_AGENT = "windows:atlas-ai-targeted-review:v0.9 (competitive research tool)"
 _TIMEOUT = 20
 
@@ -97,6 +99,50 @@ class RedditPlatformProvider(PlatformProvider):
 
         return {**base, **parse_reddit_results(search_data), "error": ""}
 
+    def fetch_creator_performance(self, client_id: str, client_secret: str,
+                                  username: str, lookback_days: int = 30) -> dict:
+        """
+        Cadence and engagement for ONE specific Reddit user being followed
+        over time — not a brand-mention search. Reddit's public
+        /user/{name}/submitted and /comments listings work with the exact
+        same app-only bearer token fetch_brand_presence already gets from
+        _get_token(); no extra auth scope needed.
+        """
+        base = {"username": username, "lookback_days": lookback_days}
+        if not client_id or not client_secret:
+            return {**base, "error": "Reddit app credentials not configured — "
+                                     "add client ID + secret in Settings."}
+        try:
+            token, auth_error = self._get_token(client_id, client_secret)
+            if auth_error:
+                return {**base, "error": auth_error}
+
+            headers = {"Authorization": f"bearer {token}", "User-Agent": _USER_AGENT}
+            posts_resp = requests.get(
+                _USER_SUBMITTED_URL.format(username=username),
+                params={"limit": 100, "sort": "new", "raw_json": 1},
+                headers=headers, timeout=_TIMEOUT,
+            )
+            if posts_resp.status_code != 200:
+                return {**base, "error": f"Reddit user lookup failed "
+                                         f"(HTTP {posts_resp.status_code}) — check the username."}
+            posts_data = posts_resp.json()
+
+            # Comments are a secondary signal — a failed fetch degrades to
+            # zero rather than failing the whole creator (posts already
+            # succeeded).
+            comments_resp = requests.get(
+                _USER_COMMENTS_URL.format(username=username),
+                params={"limit": 100, "sort": "new", "raw_json": 1},
+                headers=headers, timeout=_TIMEOUT,
+            )
+            comments_data = comments_resp.json() if comments_resp.status_code == 200 else {}
+        except requests.RequestException as exc:
+            return {**base, "error": f"Reddit request failed: {exc}"}
+
+        return {**base, **parse_user_activity(posts_data, comments_data, lookback_days),
+                "error": ""}
+
 
 def parse_reddit_results(search_data: dict) -> dict:
     """
@@ -133,4 +179,60 @@ def parse_reddit_results(search_data: dict) -> dict:
         "total_comments": sum(p.get("num_comments") or 0 for p in posts),
         "top_subreddits": subreddit_counts.most_common(5),
         "top_posts": top_posts,
+    }
+
+
+def parse_user_activity(posts_data: dict, comments_data: dict, lookback_days: int) -> dict:
+    """
+    Pure transform of a Reddit user's /submitted + /comments listings into
+    the stored metric shape — mirrors parse_reddit_results's separation of
+    parsing from network calls for testability. Both listings return posts/
+    comments newest-first; filtered to lookback_days here rather than at
+    the request level, since Reddit's user listings don't support a
+    server-side date filter.
+    """
+    cutoff_ts = datetime.now(timezone.utc).timestamp() - lookback_days * 86400
+
+    def _in_window(item):
+        try:
+            return (item.get("created_utc") or 0) >= cutoff_ts
+        except TypeError:
+            return False
+
+    def _created(item):
+        try:
+            return datetime.fromtimestamp(
+                item.get("created_utc", 0), tz=timezone.utc
+            ).strftime("%Y-%m-%d")
+        except (TypeError, ValueError, OSError):
+            return ""
+
+    post_children = posts_data.get("data", {}).get("children", [])
+    posts = [c.get("data", {}) for c in post_children if c.get("kind") == "t3"]
+    posts = [p for p in posts if _in_window(p)]
+
+    comment_children = comments_data.get("data", {}).get("children", [])
+    comments = [c.get("data", {}) for c in comment_children if c.get("kind") == "t1"]
+    comments = [c for c in comments if _in_window(c)]
+
+    n = len(posts)
+    top_posts = []
+    for p in sorted(posts, key=lambda p: -(p.get("score") or 0))[:10]:
+        top_posts.append({
+            "title": p.get("title", ""),
+            "subreddit": p.get("subreddit", ""),
+            "score": p.get("score") or 0,
+            "comments": p.get("num_comments") or 0,
+            "created": _created(p),
+            "permalink": (f"https://reddit.com{p['permalink']}"
+                          if p.get("permalink") else ""),
+        })
+
+    return {
+        "posts_in_period": n,
+        "posts_per_day": round(n / lookback_days, 2) if lookback_days else 0.0,
+        "comments_in_period": len(comments),
+        "avg_score": round(sum(p.get("score") or 0 for p in posts) / n, 1) if n else 0.0,
+        "avg_num_comments": round(sum(p.get("num_comments") or 0 for p in posts) / n, 1) if n else 0.0,
+        "posts": top_posts,
     }
