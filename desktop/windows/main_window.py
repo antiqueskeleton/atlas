@@ -28,16 +28,12 @@ from PySide6.QtWidgets import QPushButton
 
 from app.atlas_application import AtlasApplication
 from desktop.pages.home_page import HomePage
-from desktop.pages.investigation_page import InvestigationPage
-from desktop.pages.trends_page import TrendsPage
-from desktop.pages.price_comparison_page import PriceComparisonPage
-from desktop.pages.knowledge_page import KnowledgePage
-from desktop.pages.intelligence_page import IntelligencePage
-from desktop.pages.settings_page import SettingsPage
-from desktop.pages.targeted_review_page import TargetedReviewPage
-from desktop.pages.visibility_page import VisibilityPage
 from desktop.theme.colors import NAVY, SLATE, STEEL, SILVER, LIGHT, PRIMARY, TEXT_MUTED
 from desktop.updater import UpdateChecker, APP_VERSION
+
+# Other pages are imported inside their lazy factories (_build_pages) — the
+# import itself is part of the deferred cost (trends_page alone pulls in
+# matplotlib), so it's paid on first visit, not at startup.
 
 
 _NAV_ITEMS = [
@@ -291,42 +287,79 @@ class AtlasMainWindow(QMainWindow):
         self.pages = QTabWidget()
         self.pages.tabBar().hide()
 
-        self.home_page       = HomePage(self.app)
-        self.investigation_page = InvestigationPage(self.app)
-        self.visibility_page = VisibilityPage(self.app)
-        self.intelligence_page = IntelligencePage(self.app)
-        self.targeted_review_page = TargetedReviewPage(self.app)
-        self.price_comparison_page = PriceComparisonPage(self.app)
+        # Lazy page construction (pre-v1.0 startup polish): every page used
+        # to be built synchronously here before the window could appear, and
+        # the heavy ones (Visibility, Trends) each scan the full response
+        # history at construction — startup cost grew with every collection
+        # ever run. Now only Home is built up front; each other page is
+        # built on its first visit (_ensure_page), behind a brief wait
+        # cursor. Side benefit: a page built later sees data added after
+        # launch (e.g. brands Discovered mid-session) without a restart.
+        def _lazy(module_name, class_name):
+            def factory():
+                import importlib
+                module = importlib.import_module(f"desktop.pages.{module_name}")
+                return getattr(module, class_name)(self.app)
+            return factory
 
-        # Order matches _NAV_ITEMS and the actual collect-then-analyze
-        # workflow, not construction convenience — keep both in sync.
-        self.pages.addTab(self.home_page,          "Home")
-        self.pages.addTab(self.visibility_page,     "Visibility")
-        self.pages.addTab(self.targeted_review_page, "Targeted Review")
-        self.pages.addTab(TrendsPage(self.app),     "Trends")
-        self.pages.addTab(self.intelligence_page,   "Intelligence")
-        self.pages.addTab(self.investigation_page,  "Investigate")
-        self.pages.addTab(KnowledgePage(self.app),  "Knowledge")
-        self.pages.addTab(self.price_comparison_page,  "Price Comparison")
-        self.pages.addTab(SettingsPage(self.app),   "Settings")
+        self._page_factories = {
+            "Home":             lambda: HomePage(self.app),
+            "Visibility":       _lazy("visibility_page", "VisibilityPage"),
+            "Targeted Review":  _lazy("targeted_review_page", "TargetedReviewPage"),
+            "Trends":           _lazy("trends_page", "TrendsPage"),
+            "Intelligence":     _lazy("intelligence_page", "IntelligencePage"),
+            "Investigate":      _lazy("investigation_page", "InvestigationPage"),
+            "Knowledge":        _lazy("knowledge_page", "KnowledgePage"),
+            "Price Comparison": _lazy("price_comparison_page", "PriceComparisonPage"),
+            "Settings":         _lazy("settings_page", "SettingsPage"),
+        }
+        self._built_pages: dict[str, QWidget] = {}
+
+        # One empty container per nav row (order matches _NAV_ITEMS); the
+        # real page is inserted into its container on first visit.
+        for _, label, _ in _NAV_ITEMS:
+            container = QWidget()
+            c_lay = QVBoxLayout(container)
+            c_lay.setContentsMargins(0, 0, 0, 0)
+            c_lay.setSpacing(0)
+            self.pages.addTab(container, label)
+
+        self.home_page = self._ensure_page("Home")
 
         lay.addWidget(self.pages)
         wrapper.setLayout(lay)
         return wrapper
 
+    def _ensure_page(self, label: str) -> QWidget:
+        """Build the page on first visit; return the existing one after."""
+        if label in self._built_pages:
+            return self._built_pages[label]
+        from PySide6.QtGui import QGuiApplication
+        QGuiApplication.setOverrideCursor(Qt.WaitCursor)
+        try:
+            page = self._page_factories[label]()
+            self._built_pages[label] = page
+            container = self.pages.widget(_NAV_ROW[label])
+            container.layout().addWidget(page)
+        finally:
+            QGuiApplication.restoreOverrideCursor()
+        return page
+
     # ── Handlers ──────────────────────────────────────────────────────────────
 
     def _on_nav_changed(self, row: int):
+        label = _NAV_ITEMS[row][1]
+        page = self._ensure_page(label)   # lazily built on first visit
         self.pages.setCurrentIndex(row)
-        if row == _NAV_ROW["Home"]:
-            self.home_page.refresh()
-        elif row == _NAV_ROW["Visibility"]:
-            self.visibility_page.refresh_provider_status()
-        elif row == _NAV_ROW["Targeted Review"]:
+        if label == "Home":
+            page.refresh()
+        elif label == "Visibility":
+            page.refresh_provider_status()
+        elif label == "Targeted Review":
             # Pick up brands added via Knowledge's Discover button since last visit.
-            self.targeted_review_page.refresh_brand_list()
-        elif row == _NAV_ROW["Price Comparison"]:
-            self.price_comparison_page.refresh()
+            page.refresh_brand_list()
+        elif label == "Price Comparison":
+            page.refresh()
 
     # ── Update checker ────────────────────────────────────────────────────────
 
@@ -560,6 +593,24 @@ class AtlasMainWindow(QMainWindow):
              "data on user-saved product URLs. A gap requires a 1.5× lead (counts) "
              "or a 0.2-star spread / sub-4.0 rating; the Why/Tactics text is rule-"
              "based so the explanation layer cannot hallucinate."),
+            ("Influencer Tracking",
+             "Creator numbers come straight from each platform's official API for "
+             "the specific channel/user you added: YouTube upload cadence and "
+             "per-video view/like/comment counts from the channel's own uploads "
+             "playlist; Reddit post cadence and scores from the user's public "
+             "post history. Averages are over the lookback window (30 days) and "
+             "only over posts actually returned — never extrapolated. No AI is "
+             "involved anywhere in these numbers."),
+            ("Price Comparison Matching",
+             "The AI's ONLY role is nominating each brand's closest comparable "
+             "model (matched on wattage, fuel type, start type, generator type) — "
+             "a name, not a number. Every displayed price comes from a real "
+             "source (manufacturer Shopify data, Google Shopping listings, or a "
+             "URL you pasted); every spec comes from the manufacturer's own spec "
+             "page; ratings come from the listing's structured data. Anything "
+             "that cannot be confirmed displays as “—”, never estimated. The "
+             "Data Status tab records whether each model was user-entered, "
+             "AI-matched, or a top search result."),
             ("AI-Cited Sources",
              "Source URLs reported by the AI provider itself with each answer "
              "(currently Perplexity). Aggregated by domain on the Visibility → "
@@ -710,42 +761,70 @@ class AtlasMainWindow(QMainWindow):
         b_lay.addWidget(_section(
             "Recommended Workflow",
             "1. Settings — set your Target Brand and add AI provider API keys.  "
-            "2. Visibility — run a collection to gather AI responses (this is the raw data "
-            "every other page builds on).  3. Trends &amp; Intelligence — analyze that data over "
-            "time and generate briefings.  4. Investigate — ask specific follow-up questions."
+            "2. Knowledge — confirm the brands, features, and prompt sets Atlas tracks.  "
+            "3. Visibility — run a collection to gather AI responses (the raw data every "
+            "other page builds on); save a panel and re-run the SAME panel on a regular "
+            "cadence.  4. Targeted Review — optional but recommended: collect real "
+            "platform numbers (YouTube, Reddit, editorial, retail, AI Overviews) that "
+            "feed the Intelligence briefing as ground truth.  5. Trends — review how "
+            "visibility changes across runs (a view, nothing to run).  6. Intelligence — "
+            "run last: it synthesizes everything collected above.  Investigate and "
+            "Price Comparison are independent — use them any time."
         ))
 
+        # Same order as the left navigation.
         pages = [
             ("Home",
-             "Dashboard snapshot — mention rate, responses stored, run counts, and a recent "
-             "activity feed. No actions here, just a quick status check."),
-            ("Investigate",
-             "Ask a natural-language business question (e.g. \"Why is Honda winning on Amazon "
-             "reviews?\"). Atlas dispatches specialized AI agents to research it and returns a "
-             "synthesized answer with ranked evidence and recommendations."),
+             "Dashboard snapshot — mention rate, responses stored, per-source Data "
+             "Health freshness, and a Getting Started checklist that disappears once "
+             "the required setup steps are complete."),
             ("Visibility",
-             "The core data collection engine. Select prompt families and AI providers, then "
-             "Run Visibility Collection to query every selected provider with every selected "
-             "prompt and store the responses. Run this regularly — Trends and Intelligence both "
-             "depend on this data existing."),
-            ("Intelligence",
-             "Synthesizes stored Visibility responses into an executive briefing, consumer "
-             "personas, buying-journey insights, and strategic opportunities. Requires Visibility "
-             "data first. Export the result as PDF or Word."),
+             "The core data collection engine. Select prompt families and AI providers, "
+             "then Run to query every selected provider with every selected prompt and "
+             "store the responses. Use Saved Panel to pin a fixed prompt+provider "
+             "selection so repeated runs stay comparable. Run this regularly — Trends "
+             "and Intelligence both depend on this data existing."),
+            ("Targeted Review",
+             "Real platform numbers per brand — YouTube content volume and channel "
+             "stats, Reddit conversation share, editorial coverage, Google AI Overview "
+             "presence, Best Buy and retailer listings — with rule-based gap analysis "
+             "(Gap → Why It Matters → Tactics). Find Socials discovers each brand's "
+             "official channels from its website. The Influencers tab tracks specific "
+             "named YouTube channels or Reddit users over time (posting cadence and "
+             "engagement). Everything collected here feeds the Intelligence briefing "
+             "as measured ground truth."),
             ("Trends",
              "Charts how visibility score, brand standing, provider performance, feature "
-             "associations, and first-mention position change across multiple Visibility runs. "
-             "Time-series charts need at least 2 days of collection history to render."),
-            ("Price Comparison",
-             "Currently being rebuilt (Coming Soon) — will compare pricing and specs across "
-             "brands using an AI-assisted product catalog."),
+             "associations, and first-mention position change across multiple Visibility "
+             "runs. Time-series charts need at least 2 days of collection history to "
+             "render. Nothing to run here — just Refresh after a new collection."),
+            ("Intelligence",
+             "Run this last — synthesizes stored Visibility responses AND measured "
+             "Targeted Review data into an executive briefing, consumer personas, "
+             "buying-journey insights, and strategic opportunities. Every cited count "
+             "in the briefing is mechanically verified after generation (see the badge). "
+             "Export as PDF or Word."),
+            ("Investigate",
+             "Ask a natural-language business question (e.g. \"Why is Honda winning on "
+             "Amazon reviews?\"). Atlas dispatches specialized AI agents to research it "
+             "and returns a synthesized answer with ranked evidence and recommendations. "
+             "Independent of the workflow — use any time."),
             ("Knowledge",
-             "Manage the reference data Atlas uses for detection: Brands, Features, Personas, "
-             "Scenarios, Stages, Prompt Families, and Prompts. \"Discover Brands\" scans AI "
-             "responses for newly-mentioned competitor brands not yet tracked."),
+             "Manage the reference data Atlas uses for detection: Brands, Features, "
+             "Personas, Scenarios, Stages, Prompt Families, and Prompts. \"Discover "
+             "Brands\" queries your AI providers for competitor brands not yet tracked; "
+             "newly added brands appear in Targeted Review automatically."),
+            ("Price Comparison",
+             "Give Atlas a brand + product model and it finds each competitor's closest "
+             "comparable product — matched on wattage, fuel type, start type, and "
+             "generator type — then shows an Amazon-style comparison table of confirmed "
+             "prices, ratings, and specs. The AI only nominates candidate models; every "
+             "displayed number is independently confirmed from manufacturer/retailer "
+             "pages, or shown as \"—\"."),
             ("Settings",
-             "Configure your Target Brand, active AI provider, and per-provider API keys (use "
-             "Test to verify a key works). Run Health Check to verify the database and "
+             "Configure your Target Brand, active AI provider, per-provider API keys "
+             "(use Test to verify a key works), and Platform Research credentials for "
+             "Targeted Review. Run Health Check to verify the database and "
              "configuration are sound."),
         ]
         for name, desc in pages:

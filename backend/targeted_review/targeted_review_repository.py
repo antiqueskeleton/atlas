@@ -98,17 +98,27 @@ class TargetedReviewRepository:
         with the snapshot's collected_at injected into each metrics dict.
         Brands collected in different runs are each represented by their own
         latest row, so a partial re-run (one brand) doesn't hide the others.
+
+        Only the newest row per brand is fetched/parsed — the previous
+        version loaded and json.loads()'d EVERY historical snapshot (multi-KB
+        blobs of top_videos/top_comments), so this call got slower with every
+        collection ever run, multiplied across 7+ platforms × 2 pages at app
+        startup (found in the pre-v1.0 startup profiling pass).
         """
         with self.connect() as conn:
             rows = conn.execute("""
                 SELECT brand, metrics_json, collected_at
                 FROM targeted_review_findings
                 WHERE platform = ?
-                ORDER BY collected_at ASC, id ASC
-            """, (platform,)).fetchall()
+                  AND id IN (
+                      SELECT MAX(id) FROM targeted_review_findings
+                      WHERE platform = ?
+                      GROUP BY brand
+                  )
+            """, (platform, platform)).fetchall()
 
         latest: dict[str, dict] = {}
-        for brand, metrics_json, collected_at in rows:  # ASC → last write wins
+        for brand, metrics_json, collected_at in rows:
             try:
                 metrics = json.loads(metrics_json)
             except json.JSONDecodeError:
