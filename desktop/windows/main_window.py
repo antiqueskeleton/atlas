@@ -42,15 +42,22 @@ from desktop.updater import UpdateChecker, APP_VERSION
 
 _NAV_ITEMS = [
     ("🏠", "Home",         "nav_home.png"),
-    ("🔍", "Investigate",  "nav_investigate.png"),
     ("👁",  "Visibility",  "nav_visibility.png"),
-    ("💡", "Intelligence", "nav_intelligence.png"),
-    ("📈", "Trends",       "nav_trends.png"),
     ("🎯", "Targeted Review", "nav_target.png"),
-    ("🛒", "Price Comparison", "nav_comp.png"),
+    ("📈", "Trends",       "nav_trends.png"),
+    ("💡", "Intelligence", "nav_intelligence.png"),
+    ("🔍", "Investigate",  "nav_investigate.png"),
     ("🧠", "Knowledge",    "nav_knowledge.png"),
+    ("🛒", "Price Comparison", "nav_comp.png"),
     ("⚙",  "Settings",    "nav_settings.png"),
 ]
+
+# Name -> row lookup, not hardcoded numbers — reordering _NAV_ITEMS has
+# silently broken hardcoded row references twice before (Price Comparison's
+# index shifted when Targeted Review was inserted, then again here when the
+# whole nav was reordered to match the workflow sequence). Every row check
+# in this file should go through this instead.
+_NAV_ROW = {label: i for i, (_, label, _) in enumerate(_NAV_ITEMS)}
 
 
 class AtlasMainWindow(QMainWindow):
@@ -83,11 +90,8 @@ class AtlasMainWindow(QMainWindow):
         import_action = tools_menu.addAction("Import Responses")
         import_action.triggered.connect(self._import_responses)
         knowledge_action = tools_menu.addAction("Manage Knowledge")
-        # Knowledge's row in _NAV_ITEMS — this hardcoded index has broken
-        # once before when the nav list changed (was 5/Price Comparison,
-        # fixed 2026-07-02; shifted again 2026-07-06 when Targeted Review
-        # was inserted at row 5). Keep in sync with _NAV_ITEMS.
-        knowledge_action.triggered.connect(lambda: self.nav.setCurrentRow(7))
+        knowledge_action.triggered.connect(
+            lambda: self.nav.setCurrentRow(_NAV_ROW["Knowledge"]))
         logs_action = tools_menu.addAction("Open Logs Folder")
         logs_action.setToolTip(
             "Diagnostic logs from Visibility Collection runs (#75) — useful if a run "
@@ -291,17 +295,19 @@ class AtlasMainWindow(QMainWindow):
         self.investigation_page = InvestigationPage(self.app)
         self.visibility_page = VisibilityPage(self.app)
         self.intelligence_page = IntelligencePage(self.app)
-
-        self.pages.addTab(self.home_page,          "Home")
-        self.pages.addTab(self.investigation_page,  "Investigate")
-        self.pages.addTab(self.visibility_page,     "Visibility")
-        self.pages.addTab(self.intelligence_page,   "Intelligence")
-        self.pages.addTab(TrendsPage(self.app),     "Trends")
         self.targeted_review_page = TargetedReviewPage(self.app)
-        self.pages.addTab(self.targeted_review_page, "Targeted Review")
         self.price_comparison_page = PriceComparisonPage(self.app)
-        self.pages.addTab(self.price_comparison_page,  "Price Comparison")
+
+        # Order matches _NAV_ITEMS and the actual collect-then-analyze
+        # workflow, not construction convenience — keep both in sync.
+        self.pages.addTab(self.home_page,          "Home")
+        self.pages.addTab(self.visibility_page,     "Visibility")
+        self.pages.addTab(self.targeted_review_page, "Targeted Review")
+        self.pages.addTab(TrendsPage(self.app),     "Trends")
+        self.pages.addTab(self.intelligence_page,   "Intelligence")
+        self.pages.addTab(self.investigation_page,  "Investigate")
         self.pages.addTab(KnowledgePage(self.app),  "Knowledge")
+        self.pages.addTab(self.price_comparison_page,  "Price Comparison")
         self.pages.addTab(SettingsPage(self.app),   "Settings")
 
         lay.addWidget(self.pages)
@@ -312,14 +318,15 @@ class AtlasMainWindow(QMainWindow):
 
     def _on_nav_changed(self, row: int):
         self.pages.setCurrentIndex(row)
-        if row == 0:
+        if row == _NAV_ROW["Home"]:
             self.home_page.refresh()
-        elif row == 2:   # Visibility
+        elif row == _NAV_ROW["Visibility"]:
             self.visibility_page.refresh_provider_status()
-        elif row == 5:   # Targeted Review — pick up brands added via
-            self.targeted_review_page.refresh_brand_list()  # Knowledge's Discover button since last visit
-        elif row == 6:   # Price Comparison (shifted from 5 when Targeted
-            self.price_comparison_page.refresh()  # Review was inserted at 5)
+        elif row == _NAV_ROW["Targeted Review"]:
+            # Pick up brands added via Knowledge's Discover button since last visit.
+            self.targeted_review_page.refresh_brand_list()
+        elif row == _NAV_ROW["Price Comparison"]:
+            self.price_comparison_page.refresh()
 
     # ── Update checker ────────────────────────────────────────────────────────
 

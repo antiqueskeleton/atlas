@@ -451,10 +451,10 @@ class VisibilityPage(QWidget):
                 "No API key set — add one in Settings before running this provider"
             )
             dot = QLabel("⬤")
-            dot.setFixedWidth(20)
+            dot.setFixedWidth(16)
             dot.setAlignment(Qt.AlignCenter)
             dot.setStyleSheet(
-                f"color: {'#16A34A' if has_key else '#DC2626'}; font-size: 14px;"
+                f"color: {'#16A34A' if has_key else '#DC2626'}; font-size: 9px;"
             )
             dot.setToolTip(dot_tip)
             cb.setToolTip(dot_tip)
