@@ -221,7 +221,7 @@ class HomePage(QWidget):
                 f"Visibility: last collection {vis_runs[0][4][:10]}"
                 + (f" ({days}d ago)" if days is not None else "")
                 + f" · {len(vis_runs)} runs · {n_responses:,} responses"
-                + (" — run the Standard Panel to keep trends comparable"
+                + (" — run the Saved Panel to keep trends comparable"
                    if stale else "")))
         else:
             self._health_lay.addWidget(self._status_row(

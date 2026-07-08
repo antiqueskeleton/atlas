@@ -31,8 +31,45 @@ from backend.knowledge.knowledge_repository import KnowledgeRepository
 from backend.visibility.visibility_service import VisibilityService
 from desktop.run_logger import RunLogger
 from desktop.sleep_guard import allow_sleep, prevent_sleep
-from desktop.widgets.export_buttons import export_button
 from desktop.widgets.stat_card import StatCard
+
+
+# ── Icon-only export buttons ──────────────────────────────────────────────────
+# This toolbar was flagged as visually cluttered — text-labeled Export
+# buttons swapped for small colored app icons (Excel green / Acrobat red),
+# the recognizable-at-a-glance convention most apps use for this, drawn
+# with QPainter rather than bundling actual Microsoft/Adobe artwork.
+
+def _export_icon_button(kind: str, tooltip: str) -> QPushButton:
+    from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPixmap
+    from PySide6.QtCore import QSize
+
+    color, glyph = {"excel": ("#217346", "XLS"), "pdf": ("#DC2626", "PDF")}[kind]
+    size = 30
+    pix = QPixmap(size, size)
+    pix.fill(Qt.transparent)
+    p = QPainter(pix)
+    p.setRenderHint(QPainter.Antialiasing)
+    p.setPen(Qt.NoPen)
+    p.setBrush(QColor(color))
+    p.drawRoundedRect(0, 0, size, size, 6, 6)
+    p.setPen(QColor("white"))
+    p.setFont(QFont("Inter", 8, QFont.Bold))
+    p.drawText(pix.rect(), Qt.AlignCenter, glyph)
+    p.end()
+
+    btn = QPushButton()
+    btn.setIcon(QIcon(pix))
+    btn.setIconSize(QSize(size, size))
+    btn.setFixedSize(size + 6, size + 6)
+    btn.setCursor(Qt.PointingHandCursor)
+    btn.setStyleSheet(
+        "QPushButton { border: none; background: transparent; border-radius: 6px; }"
+        "QPushButton:hover { background: #F3F4F6; }"
+        "QPushButton:pressed { background: #E5E7EB; }"
+    )
+    btn.setToolTip(tooltip)
+    return btn
 
 
 # ── Worker thread ─────────────────────────────────────────────────────────────
@@ -480,14 +517,8 @@ class VisibilityPage(QWidget):
         # ── Run / Pause / Stop / progress — live in the toolbar row up top,
         # next to the Export buttons, so they stay visible even when the
         # Prompt Sets panel below is collapsed (see toolbar_row).
-        self._run_btn = QPushButton("Run Visibility Collection")
-        self._run_btn.setFixedWidth(200)
-        self._run_btn.setStyleSheet(
-            "QPushButton { background: #0B84FF; color: white; border: none; "
-            "border-radius: 5px; padding: 7px 14px; font-size: 13px; font-weight: bold; }"
-            "QPushButton:hover { background: #0056CC; }"
-            "QPushButton:disabled { background: #9CA3AF; }"
-        )
+        self._run_btn = QPushButton("Run")
+        self._run_btn.setFixedWidth(70)
         self._run_btn.clicked.connect(self._start_run)
         self._run_btn.setToolTip(
             "Query every selected AI provider with every selected prompt and store the responses"
@@ -933,7 +964,7 @@ class VisibilityPage(QWidget):
 
         self._ctrl_frame = ctrl_frame
 
-        self._collapse_btn = QPushButton("▲  Hide Prompt Sets")
+        self._collapse_btn = QPushButton("▲  Hide Prompts")
         self._collapse_btn.setCursor(Qt.PointingHandCursor)
         self._collapse_btn.setFixedHeight(28)
         self._collapse_btn.setStyleSheet(
@@ -963,13 +994,13 @@ class VisibilityPage(QWidget):
         # recurring collections stay apples-to-apples — mix drift between
         # runs otherwise reads as a market change on the Trends page.
         from PySide6.QtWidgets import QMenu
-        self._panel_btn = QPushButton("Standard Panel  ▾")
+        self._panel_btn = QPushButton("Saved Panel  ▾")
         self._panel_btn.setFixedHeight(28)
         self._panel_btn.setCursor(Qt.PointingHandCursor)
         self._panel_btn.setStyleSheet(self._collapse_btn.styleSheet())
         panel_menu = QMenu(self._panel_btn)
-        panel_menu.addAction("Load Standard Panel", self._load_standard_panel)
-        panel_menu.addAction("Save Current Selection as Standard",
+        panel_menu.addAction("Load Saved Panel", self._load_standard_panel)
+        panel_menu.addAction("Save Current Selection",
                              self._save_standard_panel)
         self._panel_btn.setMenu(panel_menu)
         self._panel_btn.setToolTip(
@@ -983,19 +1014,15 @@ class VisibilityPage(QWidget):
         self._cadence_lbl.setStyleSheet("color: #B45309; font-size: 12px; font-weight: 600;")
         self._cadence_lbl.setVisible(False)
 
-        # Export controls — shared factory (#86): outline = data exports,
-        # solid blue = the formatted PDF report, PDF right-most.
-        self._export_pdf_btn = export_button(
-            "Export PDF Report",
-            "Generate a formatted PDF report from the current analytics",
-            primary=True,
-        )
+        # Export controls — icon-only (user request: the text-labeled
+        # buttons felt cluttered); order in toolbar_row below is Excel then
+        # PDF, both right-most.
+        self._export_pdf_tip = "Generate a formatted PDF report from the current analytics"
+        self._export_pdf_btn = _export_icon_button("pdf", self._export_pdf_tip)
         self._export_pdf_btn.clicked.connect(self._export_pdf)
 
-        self._export_excel_btn = export_button(
-            "Export Excel",
-            "Export all analytics sheets and raw responses to .xlsx",
-        )
+        self._export_excel_tip = "Export all analytics sheets and raw responses to .xlsx"
+        self._export_excel_btn = _export_icon_button("excel", self._export_excel_tip)
         self._export_excel_btn.clicked.connect(self._export_excel)
 
         toolbar_row = QHBoxLayout()
@@ -1061,14 +1088,14 @@ class VisibilityPage(QWidget):
             return
         self.app.config_service.set_standard_panel(sets, providers)
         self._status_lbl.setText(
-            f"Standard Panel saved — {len(sets)} sets · {len(providers)} providers.")
+            f"Saved Panel saved — {len(sets)} sets · {len(providers)} providers.")
 
     def _load_standard_panel(self):
         panel = self.app.config_service.get_standard_panel()
         if not panel:
             self._status_lbl.setText(
-                "No Standard Panel saved yet — set your selection, then choose "
-                "'Save Current Selection as Standard'.")
+                "No Saved Panel yet — set your selection, then choose "
+                "'Save Current Selection'.")
             return
         saved_sets = set(panel.get("sets", []))
         saved_providers = set(panel.get("providers", []))
@@ -1079,7 +1106,7 @@ class VisibilityPage(QWidget):
         missing = (saved_sets - set(self._set_checks)) | (saved_providers - set(self._provider_checks))
         note = f" ({len(missing)} saved item(s) no longer exist)" if missing else ""
         self._status_lbl.setText(
-            f"Standard Panel loaded — saved {panel.get('saved_at', '')[:10]}{note}.")
+            f"Saved Panel loaded — saved {panel.get('saved_at', '')[:10]}{note}.")
 
     def _checked_provider_keys(self) -> list[str]:
         return [k for k, cb in self._provider_checks.items() if cb.isChecked()]
@@ -1159,7 +1186,7 @@ class VisibilityPage(QWidget):
     def _toggle_ctrl_panel(self):
         visible = not self._ps_panel.isVisible()
         self._ps_panel.setVisible(visible)
-        self._collapse_btn.setText("▲  Hide Prompt Sets" if visible else "▼  Show Prompt Sets")
+        self._collapse_btn.setText("▲  Hide Prompts" if visible else "▼  Show Prompts")
 
     def _export_pdf(self):
         default_name = (
@@ -1178,7 +1205,7 @@ class VisibilityPage(QWidget):
             return
 
         self._export_pdf_btn.setEnabled(False)
-        self._export_pdf_btn.setText("Generating…")
+        self._export_pdf_btn.setToolTip("Generating…")
 
         def _generate():
             try:
@@ -1200,7 +1227,7 @@ class VisibilityPage(QWidget):
         def _done(result):
             out_path, err = result
             self._export_pdf_btn.setEnabled(True)
-            self._export_pdf_btn.setText("Export PDF Report")
+            self._export_pdf_btn.setToolTip(self._export_pdf_tip)
             if err:
                 QMessageBox.critical(self, "Export Failed", f"Could not generate PDF:\n\n{err}")
             else:
@@ -1235,7 +1262,7 @@ class VisibilityPage(QWidget):
             return
 
         self._export_excel_btn.setEnabled(False)
-        self._export_excel_btn.setText("Generating…")
+        self._export_excel_btn.setToolTip("Generating…")
 
         def _generate():
             try:
@@ -1259,7 +1286,7 @@ class VisibilityPage(QWidget):
         def _done(result):
             out_path, err = result
             self._export_excel_btn.setEnabled(True)
-            self._export_excel_btn.setText("Export Excel")
+            self._export_excel_btn.setToolTip(self._export_excel_tip)
             if err:
                 QMessageBox.critical(self, "Export Failed",
                                      f"Could not generate Excel file:\n\n{err}")
@@ -1539,7 +1566,7 @@ class VisibilityPage(QWidget):
                 if age_days >= 7:
                     self._cadence_lbl.setText(
                         f"⚠ Last collection {age_days} days ago — run the "
-                        f"Standard Panel to keep trends comparable")
+                        f"Saved Panel to keep trends comparable")
                     self._cadence_lbl.setVisible(True)
             except (ValueError, TypeError):
                 pass

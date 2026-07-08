@@ -552,7 +552,7 @@ class AtlasMainWindow(QMainWindow):
              "brands/aliases/prompts edited, or a provider's model version changing "
              "(detected automatically from run history) — so instrument changes "
              "aren't read as market changes. Comparable trends require a consistent "
-             "panel: save one with the Standard Panel button on the Visibility page "
+             "panel: save one with the Saved Panel button on the Visibility page "
              "and re-run it on a regular cadence."),
             ("Data Safety",
              "A rotating backup of the database (newest 5) is taken at each app "
