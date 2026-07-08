@@ -268,16 +268,16 @@ class TargetedReviewPage(QWidget):
 
         self.setLayout(root)
 
-    def _build_brand_panel(self) -> QWidget:
-        """Checkbox grid of tracked brands — which brands each collection
-        run researches. Target brand is pre-checked; competitors are opt-in
-        because every checked brand costs real API quota per platform."""
-        grid = QGridLayout()
-        grid.setSpacing(4)
-        grid.setContentsMargins(8, 6, 8, 6)
+    def _active_brand_names(self) -> list[str]:
+        """Alphabetical, active brands from Knowledge — the single source
+        of truth this page's brand checkboxes and retail-URL combo both
+        read from, so a brand added via Knowledge's Discover button shows
+        up here too (once refresh_brand_list() is called)."""
+        return sorted(row[1] for row in KnowledgeRepository().list_brands() if row[4])
 
+    def _populate_brand_grid(self):
         target = self.app.get_target_brand()
-        brands = [row[1] for row in KnowledgeRepository().list_brands() if row[4]]
+        brands = self._active_brand_names()
         resolved_target = resolve_target_brand(target, brands)
 
         for i, name in enumerate(brands):
@@ -287,7 +287,46 @@ class TargetedReviewPage(QWidget):
                 cb.setChecked(True)
                 cb.setStyleSheet("font-size: 12px; font-weight: bold; color: #0B84FF;")
             self._brand_checks[name] = cb
-            grid.addWidget(cb, i // 5, i % 5)
+            self._brand_grid.addWidget(cb, i // 5, i % 5)
+
+    def refresh_brand_list(self):
+        """Rebuild the brand checkboxes and retail-URL brand combo from
+        Knowledge's current list. Pages are all constructed once at app
+        startup (#53), so without this, a brand added via Knowledge's
+        Discover button — or via Discover's Candidates dialog — would only
+        appear here after a full restart. Called on every visit to this tab
+        (main_window.py's nav-change dispatch), same pattern as Home/
+        Visibility/Price Comparison's own refresh-on-navigate."""
+        checked = set(self._checked_brands())
+        while self._brand_grid.count():
+            item = self._brand_grid.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        self._brand_checks.clear()
+        self._populate_brand_grid()
+        for name, cb in self._brand_checks.items():
+            if name in checked:
+                cb.setChecked(True)
+
+        current = self._url_brand_combo.currentText()
+        self._url_brand_combo.blockSignals(True)
+        self._url_brand_combo.clear()
+        self._url_brand_combo.addItems(self._active_brand_names())
+        idx = self._url_brand_combo.findText(current)
+        if idx >= 0:
+            self._url_brand_combo.setCurrentIndex(idx)
+        self._url_brand_combo.blockSignals(False)
+
+    def _build_brand_panel(self) -> QWidget:
+        """Checkbox grid of tracked brands — which brands each collection
+        run researches. Target brand is pre-checked; competitors are opt-in
+        because every checked brand costs real API quota per platform."""
+        grid = QGridLayout()
+        grid.setSpacing(4)
+        grid.setContentsMargins(8, 6, 8, 6)
+        self._brand_grid = grid
+
+        self._populate_brand_grid()
 
         inner = QWidget()
         inner.setLayout(grid)
@@ -476,9 +515,7 @@ class TargetedReviewPage(QWidget):
         add_row.setSpacing(6)
         self._url_brand_combo = QComboBox()
         self._url_brand_combo.setFixedWidth(170)
-        for row in KnowledgeRepository().list_brands():
-            if row[4]:
-                self._url_brand_combo.addItem(row[1])
+        self._url_brand_combo.addItems(self._active_brand_names())
         self._url_input = QLineEdit()
         self._url_input.setPlaceholderText(
             "Paste a product page URL — Amazon or Walmart "

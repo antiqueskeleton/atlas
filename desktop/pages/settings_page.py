@@ -216,9 +216,10 @@ class SettingsPage(QWidget):
         self.provider_select = QComboBox()
         self.provider_select.setMinimumWidth(200)
         self.provider_select.setMaximumWidth(280)
-        for key in self.app.provider_manager.list_providers():
-            p = self.app.provider_manager.registry.create_provider(key)
-            self.provider_select.addItem(p.provider_name, key)
+        entries = [(self.app.provider_manager.registry.create_provider(key).provider_name, key)
+                   for key in self.app.provider_manager.list_providers()]
+        for provider_name, key in sorted(entries):
+            self.provider_select.addItem(provider_name, key)
 
         active = self.app.provider_manager.active_provider_name
         for i in range(self.provider_select.count()):

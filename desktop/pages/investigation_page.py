@@ -250,9 +250,9 @@ class InvestigationPage(QWidget):
     def _populate_providers(self):
         self._provider_combo.clear()
         self._provider_combo.addItem("— Active Provider —", None)
-        for name in self.app.provider_manager.list_providers():
-            if name == "mock":
-                continue
+        names = sorted(n for n in self.app.provider_manager.list_providers()
+                       if n != "mock")
+        for name in names:
             self._provider_combo.addItem(name, name)
 
     # ── Run ───────────────────────────────────────────────────────────────────

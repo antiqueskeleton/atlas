@@ -297,7 +297,8 @@ class AtlasMainWindow(QMainWindow):
         self.pages.addTab(self.visibility_page,     "Visibility")
         self.pages.addTab(self.intelligence_page,   "Intelligence")
         self.pages.addTab(TrendsPage(self.app),     "Trends")
-        self.pages.addTab(TargetedReviewPage(self.app), "Targeted Review")
+        self.targeted_review_page = TargetedReviewPage(self.app)
+        self.pages.addTab(self.targeted_review_page, "Targeted Review")
         self.price_comparison_page = PriceComparisonPage(self.app)
         self.pages.addTab(self.price_comparison_page,  "Price Comparison")
         self.pages.addTab(KnowledgePage(self.app),  "Knowledge")
@@ -315,6 +316,8 @@ class AtlasMainWindow(QMainWindow):
             self.home_page.refresh()
         elif row == 2:   # Visibility
             self.visibility_page.refresh_provider_status()
+        elif row == 5:   # Targeted Review — pick up brands added via
+            self.targeted_review_page.refresh_brand_list()  # Knowledge's Discover button since last visit
         elif row == 6:   # Price Comparison (shifted from 5 when Targeted
             self.price_comparison_page.refresh()  # Review was inserted at 5)
 

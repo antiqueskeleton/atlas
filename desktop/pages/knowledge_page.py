@@ -390,7 +390,9 @@ class KnowledgePage(QWidget):
         return w
 
     def _refresh_brands(self):
-        rows = self.repo.list_brands()
+        # Alphabetical, not list_brands()'s tier-then-name order — with no
+        # visible tier column, tier order looked like a random shuffle.
+        rows = sorted(self.repo.list_brands(), key=lambda r: r[1].lower())
         t = self._brands_table
         t.setRowCount(0)
         for row in rows:
@@ -1302,7 +1304,7 @@ class KnowledgePage(QWidget):
 
     def _add_web(self):
         brands = [(bid, bname) for bid, bname, *_ in self.repo.list_brands()]
-        brand_names = [bname for _, bname in brands]
+        brand_names = sorted(bname for _, bname in brands)
         if not brand_names:
             QMessageBox.information(self, "No Brands", "Add brands on the Brands tab first.")
             return
@@ -1337,7 +1339,7 @@ class KnowledgePage(QWidget):
          is_own_site) = rec
 
         brands = [(bid, bname) for bid, bname, *_ in self.repo.list_brands()]
-        brand_names = [bname for _, bname in brands]
+        brand_names = sorted(bname for _, bname in brands)
         initial = {
             "brand": brand_name, "domain": domain or "",
             "is_own_site": bool(is_own_site),
