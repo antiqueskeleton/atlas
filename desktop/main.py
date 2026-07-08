@@ -2,7 +2,7 @@ import sys
 from pathlib import Path
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPixmap
+from PySide6.QtGui import QColor, QFont, QFontDatabase, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import QApplication, QSplashScreen
 
 from desktop.windows.main_window import AtlasMainWindow
@@ -30,6 +30,30 @@ def _images_dir() -> Path:
 _IMAGES_DIR = _images_dir()
 
 
+def _fonts_dir() -> Path:
+    """Frozen-aware, same pattern as _images_dir() (#37)."""
+    if getattr(sys, "frozen", False):
+        return Path(sys._MEIPASS) / "fonts"
+    return Path(__file__).resolve().parent / "assets" / "fonts"
+
+
+def _register_inter_font():
+    """Bundled Inter (SIL OFL) replaces the Segoe UI system default — built
+    for small-size UI text (taller x-height, tighter apertures) rather than
+    Segoe's general-purpose print/body-text design, which is the better fit
+    for Atlas's dense KPI tables and small labels. Static weights only
+    (Regular/Medium/SemiBold/Bold), not the variable font: Qt's weight
+    selection for static families is far more reliably supported across
+    Qt/FreeType versions than variable-font axis selection. Registration
+    failure (missing file, bad font data) degrades silently to the
+    Segoe UI/Arial fallback already in styles.py's font-family list —
+    never a startup error over a cosmetic font swap."""
+    fonts_dir = _fonts_dir()
+    for name in ("Inter-Regular.ttf", "Inter-Medium.ttf",
+                 "Inter-SemiBold.ttf", "Inter-Bold.ttf"):
+        QFontDatabase.addApplicationFont(str(fonts_dir / name))
+
+
 def _make_splash() -> QSplashScreen:
     pix = QPixmap(str(_IMAGES_DIR / "atlas_splash.png"))
     if pix.isNull():
@@ -40,12 +64,12 @@ def _make_splash() -> QSplashScreen:
         pix.fill(QColor(NAVY))
         p = QPainter(pix)
         p.setRenderHint(QPainter.Antialiasing)
-        f = QFont("Segoe UI", 54, QFont.Bold)
+        f = QFont("Inter", 54, QFont.Bold)
         f.setLetterSpacing(QFont.AbsoluteSpacing, 10)
         p.setFont(f)
         p.setPen(QColor(PRIMARY))
         p.drawText(0, 60, W, 100, Qt.AlignHCenter | Qt.AlignVCenter, "ATLAS")
-        f2 = QFont("Segoe UI", 10)
+        f2 = QFont("Inter", 10)
         f2.setLetterSpacing(QFont.AbsoluteSpacing, 3)
         p.setFont(f2)
         p.setPen(QColor(ACCENT))
@@ -54,7 +78,7 @@ def _make_splash() -> QSplashScreen:
     else:
         pix = pix.scaledToWidth(700, Qt.SmoothTransformation)
         p = QPainter(pix)
-        f = QFont("Segoe UI", 8)
+        f = QFont("Inter", 8)
         p.setFont(f)
         p.setPen(QColor(STEEL))
         p.drawText(
@@ -69,6 +93,7 @@ def _make_splash() -> QSplashScreen:
 
 def main():
     app = QApplication(sys.argv)
+    _register_inter_font()
 
     icon = QIcon(str(_IMAGES_DIR / "atlas_icon.png"))
     app.setWindowIcon(icon)

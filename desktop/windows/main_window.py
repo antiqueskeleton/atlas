@@ -443,8 +443,14 @@ class AtlasMainWindow(QMainWindow):
         desc.setWordWrap(True)
 
         # Plain-text copyright — no hyperlink styling/underline on dweeb.co.
-        copy_lbl = QLabel("© 2026 dweeb.co")
+        # The (c) itself is a hidden easter egg: same color as the rest of
+        # the line, no underline, so nothing visually marks it as clickable.
+        copy_lbl = QLabel(
+            '<a href="egg" style="color:#9CA3AF; text-decoration:none;">©</a>'
+            ' 2026 dweeb.co'
+        )
         copy_lbl.setStyleSheet("font-size: 12px; color: #9CA3AF;")
+        copy_lbl.linkActivated.connect(lambda _: self._show_easter_egg())
         copy_lbl.setAlignment(Qt.AlignCenter)
 
         close_btn = QPushButton("Close")
@@ -478,6 +484,12 @@ class AtlasMainWindow(QMainWindow):
 
         dlg.setLayout(lay)
         dlg.exec()
+
+    def _show_easter_egg(self):
+        """Hidden behind the © in About Atlas — not linked from anywhere
+        else, not mentioned anywhere in the UI. Find it or don't."""
+        from desktop.widgets.easter_egg import KeepTheLightsOnDialog
+        KeepTheLightsOnDialog(self, self.app.config_service).exec()
 
     def _show_methodology(self):
         """#102: one place stating exactly how every number in Atlas is

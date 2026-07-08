@@ -44,6 +44,7 @@ a = Analysis(
         ("data",   "data"),
         ("config", "config"),
         ("images", "images"),
+        ("desktop/assets/fonts", "fonts"),
     ],
     hiddenimports=hidden,
     hookspath=[],

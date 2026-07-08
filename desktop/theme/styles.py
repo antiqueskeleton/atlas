@@ -12,7 +12,7 @@ QMainWindow {{
 }}
 
 QWidget {{
-    font-family: "Segoe UI", Arial, sans-serif;
+    font-family: "Inter", "Segoe UI", Arial, sans-serif;
     font-size: 13px;
     color: {TEXT};
 }}
