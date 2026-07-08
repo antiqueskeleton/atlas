@@ -31,45 +31,8 @@ from backend.knowledge.knowledge_repository import KnowledgeRepository
 from backend.visibility.visibility_service import VisibilityService
 from desktop.run_logger import RunLogger
 from desktop.sleep_guard import allow_sleep, prevent_sleep
+from desktop.widgets.export_buttons import icon_export_button
 from desktop.widgets.stat_card import StatCard
-
-
-# ── Icon-only export buttons ──────────────────────────────────────────────────
-# This toolbar was flagged as visually cluttered — text-labeled Export
-# buttons swapped for small colored app icons (Excel green / Acrobat red),
-# the recognizable-at-a-glance convention most apps use for this, drawn
-# with QPainter rather than bundling actual Microsoft/Adobe artwork.
-
-def _export_icon_button(kind: str, tooltip: str) -> QPushButton:
-    from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPixmap
-    from PySide6.QtCore import QSize
-
-    color, glyph = {"excel": ("#217346", "XLS"), "pdf": ("#DC2626", "PDF")}[kind]
-    size = 30
-    pix = QPixmap(size, size)
-    pix.fill(Qt.transparent)
-    p = QPainter(pix)
-    p.setRenderHint(QPainter.Antialiasing)
-    p.setPen(Qt.NoPen)
-    p.setBrush(QColor(color))
-    p.drawRoundedRect(0, 0, size, size, 6, 6)
-    p.setPen(QColor("white"))
-    p.setFont(QFont("Inter", 8, QFont.Bold))
-    p.drawText(pix.rect(), Qt.AlignCenter, glyph)
-    p.end()
-
-    btn = QPushButton()
-    btn.setIcon(QIcon(pix))
-    btn.setIconSize(QSize(size, size))
-    btn.setFixedSize(size + 6, size + 6)
-    btn.setCursor(Qt.PointingHandCursor)
-    btn.setStyleSheet(
-        "QPushButton { border: none; background: transparent; border-radius: 6px; }"
-        "QPushButton:hover { background: #F3F4F6; }"
-        "QPushButton:pressed { background: #E5E7EB; }"
-    )
-    btn.setToolTip(tooltip)
-    return btn
 
 
 # ── Worker thread ─────────────────────────────────────────────────────────────
@@ -1018,11 +981,11 @@ class VisibilityPage(QWidget):
         # buttons felt cluttered); order in toolbar_row below is Excel then
         # PDF, both right-most.
         self._export_pdf_tip = "Generate a formatted PDF report from the current analytics"
-        self._export_pdf_btn = _export_icon_button("pdf", self._export_pdf_tip)
+        self._export_pdf_btn = icon_export_button("pdf", self._export_pdf_tip)
         self._export_pdf_btn.clicked.connect(self._export_pdf)
 
         self._export_excel_tip = "Export all analytics sheets and raw responses to .xlsx"
-        self._export_excel_btn = _export_icon_button("excel", self._export_excel_tip)
+        self._export_excel_btn = icon_export_button("excel", self._export_excel_tip)
         self._export_excel_btn.clicked.connect(self._export_excel)
 
         toolbar_row = QHBoxLayout()

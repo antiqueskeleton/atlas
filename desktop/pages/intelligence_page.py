@@ -20,7 +20,7 @@ from backend.intelligence.intelligence_service import IntelligenceService
 from backend.intelligence.opportunity_ranking import rank_opportunities
 from backend.reports.briefing_sections import split_briefing_sections
 from backend.visibility.brand_matcher import resolve_target_brand, text_contains_term
-from desktop.widgets.export_buttons import export_button
+from desktop.widgets.export_buttons import icon_export_button
 from desktop.widgets.info_icon import info_icon
 from desktop.widgets.stat_card import StatCard
 
@@ -42,7 +42,7 @@ class _RunWorker(QThread):
             self.error.emit(str(exc))
 
 
-def _section_card(title: str):
+def _section_card(title: str, header_extra: QWidget = None):
     frame = QFrame()
     frame.setObjectName("StatCard")
     frame.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
@@ -59,7 +59,15 @@ def _section_card(title: str):
     body.document().setDocumentMargin(10)
     body.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
-    layout.addWidget(lbl)
+    if header_extra is not None:
+        header_row = QHBoxLayout()
+        header_row.setContentsMargins(0, 0, 0, 0)
+        header_row.addWidget(lbl)
+        header_row.addStretch()
+        header_row.addWidget(header_extra)
+        layout.addLayout(header_row)
+    else:
+        layout.addWidget(lbl)
     layout.addWidget(body)
     frame.setLayout(layout)
     return frame, body
@@ -132,28 +140,28 @@ class IntelligencePage(QWidget):
         subtitle.setWordWrap(True)
         subtitle.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
-        # ── Toolbar: Run button + status + Mode badge + Export buttons, all in
-        # one row (mirrors the Visibility page's toolbar pattern — previously
-        # split across two rows per #38, but that left a nearly-empty second
-        # row and a large dead gap in the first). ───────────────────────────────
+        # ── Toolbar: Run button + transient status + Mode badge + Export
+        # buttons, one row. Export Briefing/Export Tab moved down next to the
+        # sections they actually export (user request — this row was too
+        # crowded); only Word/PDF (the two whole-report exports) stay here,
+        # as icon buttons rather than text.
         ctrl = QHBoxLayout()
         ctrl.setSpacing(12)
         ctrl.setContentsMargins(0, 0, 0, 0)
 
-        self.run_btn = QPushButton("Run Intelligence Analysis")
-        self.run_btn.setFixedWidth(210)
+        self.run_btn = QPushButton("Run Analysis")
         self.run_btn.clicked.connect(self._start_run)
         self.run_btn.setToolTip(
             "Synthesize stored Visibility responses into a briefing, personas, "
             "buying-journey insights, and strategic opportunities"
         )
 
-        # Single status line — shows run history normally, and temporarily
-        # switches to a running/error message during and right after a run
-        # (previously a separate self.status_lbl row duplicated this same
-        # provider/duration info a second time right under it — #84).
-        self.last_run_lbl = QLabel("No runs yet.")
+        # Transient-only now — the persistent run history moved to the "Last
+        # Run" KPI tile below. Hidden except while running or on error, so it
+        # no longer sits there permanently duplicating that tile's info.
+        self.last_run_lbl = QLabel("")
         self.last_run_lbl.setStyleSheet("color:#6B7280; font-size:12px;")
+        self.last_run_lbl.setVisible(False)
 
         self._mode_lbl = QLabel()
         self._mode_lbl.setStyleSheet("font-size:12px;")
@@ -181,35 +189,12 @@ class IntelligencePage(QWidget):
 
         self._update_mode_label()
 
-        # Export controls — shared factory (#86): outline = scoped/data
-        # exports, solid blue = the full formatted PDF report, PDF right-most.
-        self._export_brief_btn = export_button(
-            "Export Briefing",
-            "Export just the Executive Briefing pane as its own PDF or Word "
-            "document — without the analyst Q&A sections and opportunities "
-            "the full report includes",
-        )
-        self._export_brief_btn.clicked.connect(self._export_briefing_only)
-
-        self._export_tab_btn = export_button(
-            "Export Tab (Full)",
-            "Export the currently selected tab's complete results, with no "
-            "10-item cap — unlike Export PDF/Word, which condense to keep "
-            "the main report a manageable length",
-        )
-        self._export_tab_btn.clicked.connect(self._export_current_tab_full)
-
-        self._export_docx_btn = export_button(
-            "Export Word",
-            "Export the full latest analysis as an editable Word document",
-        )
+        self._export_docx_tip = "Export the full latest analysis as an editable Word document"
+        self._export_docx_btn = icon_export_button("word", self._export_docx_tip)
         self._export_docx_btn.clicked.connect(self._export_docx)
 
-        self._export_pdf_btn = export_button(
-            "Export PDF",
-            "Export the full latest analysis as a formatted PDF report",
-            primary=True,
-        )
+        self._export_pdf_tip = "Export the full latest analysis as a formatted PDF report"
+        self._export_pdf_btn = icon_export_button("pdf", self._export_pdf_tip)
         self._export_pdf_btn.clicked.connect(self._export_pdf)
 
         ctrl.addWidget(self.run_btn)
@@ -217,14 +202,35 @@ class IntelligencePage(QWidget):
         ctrl.addStretch()
         ctrl.addWidget(mode_widget)
         ctrl.addSpacing(8)
-        ctrl.addWidget(self._export_brief_btn)
-        ctrl.addWidget(self._export_tab_btn)
         ctrl.addWidget(self._export_docx_btn)
         ctrl.addWidget(self._export_pdf_btn)
 
         ctrl_widget = QWidget()
         ctrl_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         ctrl_widget.setLayout(ctrl)
+
+        # Export Briefing button (icon) — built here, placed on the Executive
+        # Briefing card's own header row further down via _section_card's
+        # header_extra.
+        self._export_brief_tip = (
+            "Export just the Executive Briefing pane as its own PDF or Word "
+            "document — without the analyst Q&A sections and opportunities "
+            "the full report includes"
+        )
+        self._export_brief_btn = icon_export_button("pdf", self._export_brief_tip)
+        self._export_brief_btn.clicked.connect(self._export_briefing_only)
+
+        # Export Tab (Full) button — plain neutral style (matches Run
+        # Analysis, no blue/white), placed in the tabs' corner widget further
+        # down so it sits in line with the Product/Personas/Journey/
+        # Opportunities tab row it actually exports.
+        self._export_tab_btn = QPushButton("Export Tab (Full)")
+        self._export_tab_btn.setToolTip(
+            "Export the currently selected tab's complete results, with no "
+            "10-item cap — unlike Export PDF/Word, which condense to keep "
+            "the main report a manageable length"
+        )
+        self._export_tab_btn.clicked.connect(self._export_current_tab_full)
 
         # ── KPI row ───────────────────────────────────────────────────────────
         kpi_row = QHBoxLayout()
@@ -264,10 +270,20 @@ class IntelligencePage(QWidget):
             expanding=True, spacing=2, always_show_subtitle=False,
         )
         self._kpi_prompts_val = self._kpi_prompts_card.value
+        self._kpi_lastrun_card = StatCard(
+            "Last Run", "—", "",
+            info=(
+                "Date of the most recent Intelligence Analysis run, and which provider "
+                "generated it."
+            ),
+            expanding=True, spacing=2, always_show_subtitle=True,
+        )
+        self._kpi_lastrun_val = self._kpi_lastrun_card.value
 
         kpi_row.addWidget(self._kpi_brand_card)
         kpi_row.addWidget(self._kpi_top_card)
         kpi_row.addWidget(self._kpi_prompts_card)
+        kpi_row.addWidget(self._kpi_lastrun_card)
 
         kpi_widget = QWidget()
         kpi_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -302,8 +318,12 @@ class IntelligencePage(QWidget):
         self.tabs.addTab(self._persona_frame, "Personas")
         self.tabs.addTab(self._journey_frame, "Journey")
         self.tabs.addTab(self._opp_tab, "Opportunities")
+        # In line with the tab row itself (Qt's corner-widget slot), not a
+        # separate toolbar row — this is what it exports.
+        self.tabs.setCornerWidget(self._export_tab_btn, Qt.TopRightCorner)
 
-        self._brief_frame, self._brief_body = _section_card("Executive Briefing")
+        self._brief_frame, self._brief_body = _section_card(
+            "Executive Briefing", header_extra=self._export_brief_btn)
 
         # #95: number-verification badge — every "X of Y" claim in the
         # generated briefing is mechanically checked against the exact data
@@ -336,6 +356,7 @@ class IntelligencePage(QWidget):
         self.last_run_lbl.setText(
             "Running analysis — classifying stored responses and generating briefing…"
         )
+        self.last_run_lbl.setVisible(True)
         # Clear panels so user sees fresh generation, not stale data
         for body in (self._product_body, self._persona_body, self._journey_body):
             body.setPlainText("Analyzing stored responses…")
@@ -348,11 +369,14 @@ class IntelligencePage(QWidget):
         self._worker.start()
 
     def _update_mode_label(self):
+        # Label text is just "DB Mode"/"Live Mode" — the response-count/
+        # API-call detail lives in the info-icon tooltip instead of the
+        # label itself now (user request: too cluttered).
         counts = self.service.db_response_counts()
         total = counts.get("total", 0)
         if total == 0:
-            self._mode_lbl.setText("Live Mode  (no stored data yet)")
-            self._mode_lbl.setStyleSheet("font-size:12px; color:#6B7280;")
+            self._mode_lbl.setText("Live Mode")
+            self._mode_lbl.setStyleSheet("font-size:12px; color:#F59E0B; font-weight:bold;")
         else:
             from backend.intelligence.intelligence_service import _MIN_PER_BUCKET
             buckets_ok = all(
@@ -360,33 +384,31 @@ class IntelligencePage(QWidget):
                 for k in ("Product Intelligence", "Consumer Personas", "Buying Journey")
             )
             if buckets_ok:
-                self._mode_lbl.setText(f"DB Mode  ({total} stored responses — 3 API calls)")
+                self._mode_lbl.setText("DB Mode")
                 self._mode_lbl.setStyleSheet("font-size:12px; color:#16A34A; font-weight:bold;")
             else:
-                self._mode_lbl.setText(f"Live Mode  (DB has {total} responses but missing buckets)")
-                self._mode_lbl.setStyleSheet("font-size:12px; color:#F59E0B;")
+                self._mode_lbl.setText("Live Mode")
+                self._mode_lbl.setStyleSheet("font-size:12px; color:#F59E0B; font-weight:bold;")
 
     def _on_run_finished(self, result: dict):
         self.run_btn.setEnabled(True)
         self._update_mode_label()
-        self._load_latest()
+        self._load_latest()  # hides last_run_lbl once the new run's data is in
 
-        # _load_latest() just rebuilt last_run_lbl with the persistent
-        # "Runs completed / Last run / provider / duration" summary — append
-        # anything transient that's only known right after THIS run and never
-        # persisted to the DB (a failed-prompt count), rather than repeating
-        # provider/duration a second time in a separate line (#84).
+        # Only known right after THIS run, never persisted to the DB — the
+        # one thing still worth a transient line once the run completes.
         errors = result.get("error_count", 0)
         if errors:
+            self.last_run_lbl.setStyleSheet("color:#B45309; font-size:12px;")
             self.last_run_lbl.setText(
-                self.last_run_lbl.text()
-                + f"  ·  {errors} prompt(s) failed and were excluded this run"
-            )
+                f"{errors} prompt(s) failed and were excluded from this run.")
+            self.last_run_lbl.setVisible(True)
 
     def _on_run_error(self, message: str):
         self.run_btn.setEnabled(True)
         self.last_run_lbl.setStyleSheet("color:#DC2626; font-size:12px;")
         self.last_run_lbl.setText(f"Error: {message}")
+        self.last_run_lbl.setVisible(True)
 
     # ── Export ───────────────────────────────────────────────────────────────
 
@@ -421,7 +443,7 @@ class IntelligencePage(QWidget):
             return
 
         self._export_pdf_btn.setEnabled(False)
-        self._export_pdf_btn.setText("Generating…")
+        self._export_pdf_btn.setToolTip("Generating…")
 
         run, briefing, results, opps = data
 
@@ -440,7 +462,7 @@ class IntelligencePage(QWidget):
         def _done(result):
             out_path, err = result
             self._export_pdf_btn.setEnabled(True)
-            self._export_pdf_btn.setText("Export PDF")
+            self._export_pdf_btn.setToolTip(self._export_pdf_tip)
             if err:
                 QMessageBox.critical(self, "Export Failed",
                                      f"Could not generate PDF:\n\n{err}")
@@ -483,7 +505,7 @@ class IntelligencePage(QWidget):
             return
 
         self._export_docx_btn.setEnabled(False)
-        self._export_docx_btn.setText("Generating…")
+        self._export_docx_btn.setToolTip("Generating…")
 
         run, briefing, results, opps = data
 
@@ -502,7 +524,7 @@ class IntelligencePage(QWidget):
         def _done(result):
             out_path, err = result
             self._export_docx_btn.setEnabled(True)
-            self._export_docx_btn.setText("Export Word")
+            self._export_docx_btn.setToolTip(self._export_docx_tip)
             if err:
                 QMessageBox.critical(self, "Export Failed",
                                      f"Could not generate Word document:\n\n{err}")
@@ -664,7 +686,7 @@ class IntelligencePage(QWidget):
             return
 
         self._export_brief_btn.setEnabled(False)
-        self._export_brief_btn.setText("Generating…")
+        self._export_brief_btn.setToolTip("Generating…")
         is_docx = path.lower().endswith(".docx")
 
         def _generate():
@@ -689,7 +711,7 @@ class IntelligencePage(QWidget):
         def _done(result):
             out_path, err = result
             self._export_brief_btn.setEnabled(True)
-            self._export_brief_btn.setText("Export Briefing")
+            self._export_brief_btn.setToolTip(self._export_brief_tip)
             if err:
                 QMessageBox.critical(self, "Export Failed", f"Could not generate export:\n\n{err}")
             else:
@@ -716,7 +738,6 @@ class IntelligencePage(QWidget):
     # ── Load ─────────────────────────────────────────────────────────────────
 
     def _load_latest(self):
-        runs = self.service.list_runs()
         self._kpi_prompts_val.setText(str(self.service.total_response_count()))
 
         latest = self.service.get_latest_briefing()
@@ -731,17 +752,17 @@ class IntelligencePage(QWidget):
         briefing = latest["briefing"]
         results = latest["results"]
 
-        # Last run label — also shows runs completed count. Reset the style in
-        # case a prior run left it blue (running) or red (error) — see
-        # _start_run()/_on_run_error().
+        # Last Run KPI tile — replaces the old "Runs Completed / Last run"
+        # toolbar text (#104-era feedback: run count had no clear user
+        # purpose, and this reads better as a tile matching the other 3).
         provider = run[1]
         started = run[4][:19].replace("T", " ")
         dur = f"{run[7]:.0f}s" if run[7] else ""
-        n_runs = len(runs)
-        self.last_run_lbl.setStyleSheet("color:#6B7280; font-size:12px;")
-        self.last_run_lbl.setText(
-            f"Runs Completed: {n_runs}  ·  Last run: {started} · {provider} {dur}"
-        )
+        self._kpi_lastrun_val.setText(started[:10] if started else "—")
+        self._kpi_lastrun_card.set_subtitle(f"{provider} · {dur}" if dur else provider)
+        # Transient run-status line (running/error) has nothing left to say
+        # once a completed run has loaded successfully.
+        self.last_run_lbl.setVisible(False)
 
         # Group results by analyst
         by_analyst: dict[str, list[tuple[str, str]]] = {}
