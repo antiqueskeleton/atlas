@@ -38,6 +38,64 @@ from PySide6.QtWidgets import (
 
 from backend.price_comparison.price_comparison_service import PriceComparisonService
 
+_CELL_NA = "—"
+
+# Spec names whose content the dedicated key-attribute rows already show —
+# suppressed from the "remaining specs" section so Wattage/Fuel Type/Start
+# Type don't appear twice. Starting/Peak Watts intentionally NOT suppressed:
+# they carry different information than the running-watts Wattage row.
+_KEY_ROW_COVERED = {"Running Watts", "Rated Watts", "Wattage", "Fuel Type",
+                    "Fuel", "Start Type"}
+
+
+def _ordered_spec_rows(entries: list[dict]) -> list[tuple[str, list[str]]]:
+    """
+    Amazon-compare-style row ordering, pure and Qt-free so it's unit-
+    testable: Best Price first, then Customer Rating, then the 4 key
+    comparison attributes, then every remaining confirmed spec in
+    first-seen order. One value per entry per row; "—" where unconfirmed.
+    """
+    def _best_price(entry):
+        prices = [p for p in entry.get("prices", [])
+                  if isinstance(p.get("price"), (int, float))]
+        if not prices:
+            return _CELL_NA
+        best = min(prices, key=lambda p: p["price"])
+        retailer = best.get("retailer", "")
+        return f"${best['price']:,.2f}" + (f" @ {retailer}" if retailer else "")
+
+    def _rating(entry):
+        rating = entry.get("rating")
+        if rating is None:
+            return _CELL_NA
+        count = entry.get("review_count")
+        return f"{rating} ★" + (f" ({count:,})" if count else "")
+
+    rows = [
+        ("Best Price", [_best_price(e) for e in entries]),
+        ("Customer Rating", [_rating(e) for e in entries]),
+    ]
+    for key, label in (("watts", "Wattage"), ("fuel_type", "Fuel Type"),
+                       ("start_type", "Start Type"),
+                       ("generator_type", "Generator Type")):
+        rows.append((label, [
+            (e.get("key_specs") or {}).get(key) or _CELL_NA for e in entries
+        ]))
+
+    remaining: list[str] = []
+    seen: set[str] = set(_KEY_ROW_COVERED)
+    for entry in entries:
+        for spec in entry.get("specs", {}):
+            if spec not in seen:
+                seen.add(spec)
+                remaining.append(spec)
+    for spec in remaining:
+        rows.append((spec, [
+            entry.get("specs", {}).get(spec, _CELL_NA) or _CELL_NA
+            for entry in entries
+        ]))
+    return rows
+
 
 # ── Worker ────────────────────────────────────────────────────────────────────
 
@@ -48,7 +106,8 @@ class _PriceComparisonWorker(QThread):
     def __init__(self, service: PriceComparisonService,
                  primary_brand: str, primary_model: str,
                  comp_brands: list[str], keywords: str,
-                 retailer_urls: list[str] | None = None):
+                 retailer_urls: list[str] | None = None,
+                 key_attrs: dict | None = None, provider=None):
         super().__init__()
         self.service        = service
         self.primary_brand  = primary_brand
@@ -56,6 +115,8 @@ class _PriceComparisonWorker(QThread):
         self.comp_brands    = comp_brands
         self.keywords       = keywords
         self.retailer_urls  = retailer_urls or []
+        self.key_attrs      = key_attrs or {}
+        self.provider       = provider
 
     def run(self):
         try:
@@ -66,6 +127,8 @@ class _PriceComparisonWorker(QThread):
                 keywords=self.keywords,
                 retailer_urls=self.retailer_urls,
                 progress_callback=lambda b, d, t: self.progress.emit(b, d, t),
+                key_attrs=self.key_attrs,
+                provider=self.provider,
             )
             self.finished.emit(result)
         except Exception as exc:
@@ -98,35 +161,15 @@ class PriceComparisonPage(QWidget):
         title = QLabel("Price Comparison")
         title.setStyleSheet("font-size: 28px; font-weight: 700; color: #111827;")
         subtitle = QLabel(
-            "Independent of the workflow above, run any time — compare "
-            "real-time pricing and confirmed product specs across tracked brands."
+            "Independent of the workflow above, run any time — give Atlas a "
+            "product model and it finds each competitor's closest comparable "
+            "(matched on wattage, fuel type, start type, and generator type) "
+            "with real prices and confirmed specs, Amazon-compare style."
         )
         subtitle.setStyleSheet("font-size: 13px; color: #6B7280;")
+        subtitle.setWordWrap(True)
         root.addWidget(title)
         root.addWidget(subtitle)
-
-        # Coming Soon banner
-        banner = QFrame()
-        banner.setStyleSheet(
-            "QFrame { background: #FEF3C7; border: 1px solid #F59E0B; border-radius: 8px; }"
-        )
-        banner_lay = QHBoxLayout()
-        banner_lay.setContentsMargins(14, 10, 14, 10)
-        banner_lay.setSpacing(12)
-        banner_icon = QLabel("🚧")
-        banner_icon.setStyleSheet("font-size: 20px;")
-        banner_icon.setFixedWidth(28)
-        banner_text = QLabel(
-            "<b>Coming Soon</b> — Price Comparison is being redesigned with "
-            "AI-assisted product discovery, spec lookup by wattage/fuel type/start type, "
-            "and retailer pricing. This page is view-only in the current build."
-        )
-        banner_text.setWordWrap(True)
-        banner_text.setStyleSheet("font-size: 12px; color: #92400E;")
-        banner_lay.addWidget(banner_icon)
-        banner_lay.addWidget(banner_text, 1)
-        banner.setLayout(banner_lay)
-        root.addWidget(banner)
 
         # Main splitter: controls left, results right
         splitter = QSplitter(Qt.Horizontal)
@@ -167,6 +210,47 @@ class PriceComparisonPage(QWidget):
         self._model_edit.setMinimumHeight(30)
         self._model_edit.setStyleSheet(self._input_style())
         lay.addWidget(self._model_edit)
+
+        # ── Key comparison attributes (v2) — the 4 dimensions comparable
+        # matching runs on. Auto-detected from the model's spec page when
+        # left blank; filling any of them overrides/steers the match.
+        lay.addWidget(self._section_label("KEY ATTRIBUTES (OPTIONAL)"))
+
+        attr_grid = QGridLayout()
+        attr_grid.setSpacing(6)
+
+        self._attr_watts_edit = QLineEdit()
+        self._attr_watts_edit.setPlaceholderText("Running watts, e.g. 7500")
+        self._attr_watts_edit.setMinimumHeight(28)
+        self._attr_watts_edit.setStyleSheet(self._input_style())
+
+        self._attr_fuel_cb = QComboBox()
+        self._attr_fuel_cb.addItems(["Fuel type — auto", "Gasoline",
+                                     "Dual Fuel (Gas/Propane)", "Tri Fuel",
+                                     "Propane", "Diesel"])
+        self._attr_start_cb = QComboBox()
+        self._attr_start_cb.addItems(["Start type — auto", "Recoil",
+                                      "Electric", "Remote + Electric"])
+        self._attr_type_cb = QComboBox()
+        self._attr_type_cb.addItems(["Type — auto", "Portable",
+                                     "Inverter", "Standby"])
+        for cb in (self._attr_fuel_cb, self._attr_start_cb, self._attr_type_cb):
+            cb.setMinimumHeight(28)
+            cb.setStyleSheet(self._combo_style())
+
+        attr_grid.addWidget(self._attr_watts_edit, 0, 0)
+        attr_grid.addWidget(self._attr_fuel_cb, 0, 1)
+        attr_grid.addWidget(self._attr_start_cb, 1, 0)
+        attr_grid.addWidget(self._attr_type_cb, 1, 1)
+        lay.addLayout(attr_grid)
+
+        attr_tip = QLabel(
+            "Auto-detected from the model's spec page when left on auto — "
+            "set any of these to steer which comparable models get matched."
+        )
+        attr_tip.setWordWrap(True)
+        attr_tip.setStyleSheet("font-size: 10px; color: #9CA3AF;")
+        lay.addWidget(attr_tip)
 
         lay.addWidget(QLabel("Search Keywords"))
         self._keywords_edit = QLineEdit()
@@ -265,7 +349,6 @@ class PriceComparisonPage(QWidget):
         lay.addWidget(self._status_lbl)
 
         frame.setLayout(lay)
-        frame.setEnabled(False)
         return frame
 
     # ── Right results panel ───────────────────────────────────────────────────
@@ -310,8 +393,9 @@ class PriceComparisonPage(QWidget):
             "Mfr. MSRP", "Best Price", "Best @ Retailer",
             "Prev Best", "Change", "Updated",
         ])
-        self._spec_table   = self._make_table(["Spec"])  # columns added dynamically
-        self._status_table = self._make_table(["Brand", "Model/Search", "Results", "Status"])
+        self._spec_table   = self._make_table(["Attribute"])  # columns added dynamically
+        self._status_table = self._make_table(
+            ["Brand", "Model/Search", "Model Source", "Results", "Status"])
 
         self._tabs.addTab(self._wrap_table(self._price_table), "Price Comparison")
         self._tabs.addTab(self._wrap_table(self._spec_table),  "Spec Comparison")
@@ -412,6 +496,25 @@ class PriceComparisonPage(QWidget):
                                 "Select at least one comparison brand.")
             return
 
+        # Key-attribute overrides — "auto" combo selections mean blank
+        # (let the primary's spec scrape decide).
+        def _combo_val(cb):
+            text = cb.currentText()
+            return "" if "auto" in text.lower() else text
+        key_attrs = {
+            "watts": self._attr_watts_edit.text().strip(),
+            "fuel_type": _combo_val(self._attr_fuel_cb),
+            "start_type": _combo_val(self._attr_start_cb),
+            "generator_type": _combo_val(self._attr_type_cb),
+        }
+
+        # Active AI provider does the comparable matching; without one the
+        # service falls back to top-search-result models and says so.
+        try:
+            provider = self.app.provider_manager.get_active_provider()
+        except Exception:
+            provider = None
+
         self._run_btn.setEnabled(False)
         self._run_btn.setText("Running…")
         self._progress_lbl.show()
@@ -420,6 +523,7 @@ class PriceComparisonPage(QWidget):
         self._worker = _PriceComparisonWorker(
             self.service, primary_brand, primary_model,
             comp_brands, keywords, retailer_urls=retailer_urls,
+            key_attrs=key_attrs, provider=provider,
         )
         self._worker.progress.connect(self._on_progress)
         self._worker.finished.connect(self._on_finished)
@@ -444,6 +548,9 @@ class PriceComparisonPage(QWidget):
         self._last_run_lbl.setText(
             f"Last run: {datetime.now().strftime('%b %d, %Y  %H:%M')}"
         )
+        # Why AI matching was skipped/failed (legacy search fallback ran).
+        note = result.get("match_note", "")
+        self._status_lbl.setText(note)
         self._populate_price_table(result["brands"])
         self._populate_spec_table(result["brands"])
         self._populate_status_table(result["brands"])
@@ -555,39 +662,52 @@ class PriceComparisonPage(QWidget):
         tbl.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
 
     def _populate_spec_table(self, brands: list[dict]):
+        """Amazon-compare layout: products as columns; Best Price and
+        Customer Rating rows first, then the 4 key attributes, then every
+        remaining confirmed spec (ordering logic in _ordered_spec_rows)."""
         tbl = self._spec_table
 
-        # Collect all confirmed spec names across all brands
-        all_specs: list[str] = []
-        seen: set[str] = set()
-        for entry in brands:
-            for spec in entry.get("specs", {}):
-                if spec not in seen:
-                    seen.add(spec)
-                    all_specs.append(spec)
-
-        if not all_specs:
+        if not brands:
             tbl.setColumnCount(1)
-            tbl.setHorizontalHeaderLabels(["Spec"])
+            tbl.setHorizontalHeaderLabels(["Attribute"])
             tbl.setRowCount(1)
             tbl.setItem(0, 0, QTableWidgetItem(
-                "No spec data found. Enter model numbers and re-run."
+                "No comparison run yet."
             ))
             return
 
-        # Build columns: Spec | Brand1 | Brand2 | ...
-        col_headers = ["Spec"] + [
-            f"{e['brand']}\n{e['model']}" if e["model"] else e["brand"]
-            for e in brands
-        ]
+        # Columns: Attribute | Brand1\nModel1 | Brand2\nModel2* | ...
+        col_headers = ["Attribute"]
+        for e in brands:
+            header = f"{e['brand']}\n{e['model']}" if e["model"] else e["brand"]
+            if e.get("model_source") == "ai_match":
+                header += " *"
+            col_headers.append(header)
+        rows = _ordered_spec_rows(brands)
+
         tbl.setColumnCount(len(col_headers))
         tbl.setHorizontalHeaderLabels(col_headers)
-        tbl.setRowCount(len(all_specs))
+        tbl.setRowCount(len(rows))
 
-        for row, spec in enumerate(all_specs):
-            tbl.setItem(row, 0, QTableWidgetItem(spec))
-            for col, entry in enumerate(brands, 1):
-                val = entry.get("specs", {}).get(spec, self._CELL_NA)
+        # "*" = AI-matched model — tooltip explains on the header itself.
+        for col, entry in enumerate(brands, 1):
+            hdr_item = tbl.horizontalHeaderItem(col)
+            if hdr_item and entry.get("model_source") == "ai_match":
+                hdr_item.setToolTip(
+                    "Model matched by AI as the closest comparable — all "
+                    "displayed specs/prices were independently confirmed "
+                    f"from: {entry.get('spec_src') or 'no spec source found'}")
+
+        bold_rows = {"Best Price", "Customer Rating", "Wattage", "Fuel Type",
+                     "Start Type", "Generator Type"}
+        for row, (label, values) in enumerate(rows):
+            label_item = QTableWidgetItem(label)
+            if label in bold_rows:
+                font = label_item.font()
+                font.setBold(True)
+                label_item.setFont(font)
+            tbl.setItem(row, 0, label_item)
+            for col, val in enumerate(values, 1):
                 item = QTableWidgetItem(val)
                 item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
                 if val == self._CELL_NA:
@@ -614,18 +734,25 @@ class PriceComparisonPage(QWidget):
                 else f"⚠ {status}"
             )
 
+            source_label = {
+                "user": "user-entered",
+                "ai_match": "matched by AI",
+                "search": "top search result — no AI match",
+            }.get(entry.get("model_source", ""), self._CELL_NA)
+
             tbl.setItem(row, 0, QTableWidgetItem(entry["brand"]))
             tbl.setItem(row, 1, QTableWidgetItem(
                 entry["model"] or entry["search_q"]
             ))
-            tbl.setItem(row, 2, QTableWidgetItem(
+            tbl.setItem(row, 2, QTableWidgetItem(source_label))
+            tbl.setItem(row, 3, QTableWidgetItem(
                 f"{n_prices} prices | {n_specs} specs"
             ))
             status_item = QTableWidgetItem(status_str)
             status_item.setForeground(
                 Qt.darkGreen if "✓" in status_str else Qt.darkYellow
             )
-            tbl.setItem(row, 3, status_item)
+            tbl.setItem(row, 4, status_item)
 
         tbl.resizeColumnsToContents()
 
