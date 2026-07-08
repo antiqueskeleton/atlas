@@ -58,7 +58,7 @@ def _make_splash() -> QSplashScreen:
     pix = QPixmap(str(_IMAGES_DIR / "atlas_splash.png"))
     if pix.isNull():
         # Fallback drawn splash if image missing
-        from desktop.theme.colors import NAVY, PRIMARY, ACCENT, SILVER
+        from desktop.theme.colors import NAVY, PRIMARY, ACCENT
         W, H = 560, 340
         pix = QPixmap(W, H)
         pix.fill(QColor(NAVY))

@@ -474,7 +474,7 @@ class IntelligencePage(QWidget):
                     QMessageBox.Ok,
                 )
                 if reply == QMessageBox.Open:
-                    import os, subprocess
+                    import os
                     if os.name == 'nt':
                         os.startfile(out_path)
 

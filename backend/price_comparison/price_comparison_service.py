@@ -289,9 +289,12 @@ class PriceComparisonService:
                         if prev and prev > 0 else None
                     )
                 entry["prices"] = prices
-                entry["model"]  = resolved_model
             else:
                 entry["status"] = "no_prices"
+            # The model label stays even when no prices came back — an
+            # AI-matched model with specs but no live listings should still
+            # show WHICH model was compared, not a blank.
+            entry["model"] = resolved_model
 
             # ── Tier 3: Specs for extracted model ─────────────────────────────
             if resolved_model:

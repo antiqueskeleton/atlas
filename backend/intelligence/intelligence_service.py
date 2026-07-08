@@ -746,7 +746,6 @@ class IntelligenceService:
              scraped, is_own_site, blocks_ai_crawlers, blocked_crawler_names) in rows:
             if not scraped:
                 continue  # skip unscraped manual entries — they have no on-page data
-            import json
             try:
                 h1s = json.loads(h1s_json or "[]")
             except Exception:

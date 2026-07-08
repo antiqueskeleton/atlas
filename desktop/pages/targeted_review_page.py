@@ -20,7 +20,6 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QScrollArea,
-    QSizePolicy,
     QSplitter,
     QTabWidget,
     QTableWidget,

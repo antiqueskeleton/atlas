@@ -28,7 +28,7 @@ from PySide6.QtWidgets import QPushButton
 
 from app.atlas_application import AtlasApplication
 from desktop.pages.home_page import HomePage
-from desktop.theme.colors import NAVY, SLATE, STEEL, SILVER, LIGHT, PRIMARY, TEXT_MUTED
+from desktop.theme.colors import NAVY, SLATE, STEEL, SILVER, LIGHT, PRIMARY
 from desktop.updater import UpdateChecker, APP_VERSION
 
 # Other pages are imported inside their lazy factories (_build_pages) — the

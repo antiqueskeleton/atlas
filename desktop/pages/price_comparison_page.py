@@ -26,7 +26,6 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QScrollArea,
-    QSizePolicy,
     QSplitter,
     QTableWidget,
     QTableWidgetItem,
@@ -777,18 +776,16 @@ class PriceComparisonPage(QWidget):
             return
         try:
             self._write_excel(path)
-            import subprocess
             os.startfile(path)
         except Exception as exc:
             QMessageBox.critical(self, "Export Failed", str(exc))
 
     def _write_excel(self, path: str):
         import openpyxl
-        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+        from openpyxl.styles import Font, PatternFill, Alignment
 
         NAVY  = "1E3A5F"
         WHITE = "FFFFFF"
-        ALT   = "F3F4F6"
 
         def hdr_style(cell):
             cell.font      = Font(bold=True, color=WHITE, name="Calibri", size=10)
