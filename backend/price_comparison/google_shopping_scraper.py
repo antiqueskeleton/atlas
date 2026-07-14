@@ -215,12 +215,43 @@ def scrape_url_for_price(url: str) -> dict | None:
     Returns None if no price could be confirmed.
     """
     resp = _get(url, delay=(0.8, 1.8))
-    if not resp:
+    price = _price_from_product_html(resp.content) if resp else None
+
+    if not price:
+        # Bot-walled retailers (Amazon especially) either reject plain
+        # requests outright OR serve a 200 CAPTCHA page with no price in
+        # it — both land here. Retry once through cloudscraper, the same
+        # fallback the Targeted Review retail scraper already uses (user
+        # test item 10.6: a real Amazon URL scraped nothing on the plain
+        # path).
+        try:
+            import cloudscraper
+            scraper_session = cloudscraper.create_scraper()
+            retry = scraper_session.get(url, timeout=25)
+            if retry.status_code == 200:
+                price = _price_from_product_html(retry.content)
+        except Exception:
+            pass
+
+    if not price:
         return None
 
-    retailer = _retailer_from_url(url)
-    soup     = BeautifulSoup(resp.content, "html.parser", from_encoding="utf-8")
-    price    = None
+    return {
+        "price":       price,
+        "retailer":    _retailer_from_url(url),
+        "url":         url,
+        "title":       "",
+        "availability": "",
+        "confirmed":   True,
+        "method":      "retailer_direct",
+    }
+
+
+def _price_from_product_html(content: bytes) -> float | None:
+    """The three price-extraction strategies (JSON-LD -> CSS selectors ->
+    conservative regex), shared by the plain and cloudscraper fetch paths."""
+    soup  = BeautifulSoup(content, "html.parser", from_encoding="utf-8")
+    price = None
 
     # ── Strategy 1: JSON-LD ───────────────────────────────────────────────────
     for script in soup.find_all("script", type="application/ld+json"):
@@ -266,18 +297,7 @@ def scrape_url_for_price(url: str) -> dict | None:
                 price = candidate
                 break
 
-    if not price:
-        return None
-
-    return {
-        "price":       price,
-        "retailer":    retailer,
-        "url":         url,
-        "title":       "",
-        "availability": "",
-        "confirmed":   True,
-        "method":      "retailer_direct",
-    }
+    return price
 
 
 # ── Tier 1: Shopify JSON direct fetch ─────────────────────────────────────────
@@ -491,15 +511,68 @@ def _scrape_specs_via_google(brand: str, model: str) -> tuple[dict[str, str], st
 
 # ── Tier 3: Model discovery for comp brands ───────────────────────────────────
 
+_SERPAPI_URL = "https://serpapi.com/search.json"
+# Shopping searches render a full results page server-side — measured ~35s
+# live, so the timeout must be far beyond the module's default 15s.
+_SERPAPI_TIMEOUT = 90
+
+
+def serpapi_shopping_search(brand: str, query: str, api_key: str,
+                            max_results: int = 10) -> list[dict]:
+    """
+    Google Shopping via SerpApi — the replacement for HTML scraping after
+    Google killed the parseable shopping page (confirmed live 2026-07-13:
+    tbm=shop now redirects to the JS-only udm=28 interface, so the CSS
+    parser below can never match again; the user's real v1.0 test run
+    returned zero retail prices because of exactly this). Reuses the same
+    SerpApi key as AI Overviews; one search per brand per run. Returns the
+    module's standard price-dict shape; [] on any failure (in-band, callers
+    treat it like an empty search).
+    """
+    if not api_key:
+        return []
+    try:
+        resp = requests.get(_SERPAPI_URL, params={
+            "engine": "google_shopping", "q": query,
+            "hl": "en", "gl": "us", "api_key": api_key,
+        }, timeout=_SERPAPI_TIMEOUT)
+        if resp.status_code != 200:
+            log.debug("SerpApi shopping HTTP %s", resp.status_code)
+            return []
+        items = resp.json().get("shopping_results", [])
+    except (requests.RequestException, ValueError) as exc:
+        log.debug("SerpApi shopping failed: %s", exc)
+        return []
+
+    results = []
+    for item in items:
+        price = item.get("extracted_price")
+        title = (item.get("title") or "").strip()
+        if not title or not isinstance(price, (int, float)) or price < _MIN_PRICE:
+            continue
+        results.append({
+            "title":           title,
+            "price":           float(price),
+            "retailer":        _normalise_retailer(str(item.get("source") or "")),
+            "url":             item.get("product_link") or item.get("link") or "",
+            "availability":    "",
+            "confirmed":       True,
+            "model_extracted": extract_model_from_title(title, brand),
+            "method":          "google_shopping",
+        })
+    return results[:max_results]
+
+
 def search_for_models(brand: str, keywords: str = "generator",
-                      max_results: int = 5) -> list[dict]:
+                      max_results: int = 5, serpapi_key: str = "") -> list[dict]:
     """
     Discover products / model numbers for a brand.
 
     Strategy order:
       1. Shopify collections API (verified brands only) — most reliable
-      2. Google Shopping HTML — fallback for non-Shopify brands (may return
-         nothing if JS rendering is required, which is common)
+      2. SerpApi Google Shopping (when a SerpApi key is configured)
+      3. Legacy Google Shopping HTML — kept as a last resort, but Google's
+         shopping page is JS-only now, so this effectively returns []
 
     Returns list of {title, price, retailer, url, model_extracted, method}.
     """
@@ -509,21 +582,24 @@ def search_for_models(brand: str, keywords: str = "generator",
     if shopify_results:
         return shopify_results[:max_results]
 
-    # ── Fall back to Google Shopping ──────────────────────────────────────────
     query = f"{brand} {keywords}"
-    resp  = _get(
-        f"https://www.google.com/search?q={quote_plus(query)}&tbm=shop&hl=en&gl=us&num=20",
-        delay=(1.2, 2.8),
-    )
-    if not resp:
-        return []
 
-    raw = _parse_shopping_html_strict(resp.text)
+    # ── SerpApi shopping (real data path) ─────────────────────────────────────
+    if serpapi_key:
+        raw = serpapi_shopping_search(brand, query, serpapi_key,
+                                      max_results=20)
+    else:
+        # ── Legacy HTML fallback ──────────────────────────────────────────────
+        resp = _get(
+            f"https://www.google.com/search?q={quote_plus(query)}&tbm=shop&hl=en&gl=us&num=20",
+            delay=(1.2, 2.8),
+        )
+        raw = _parse_shopping_html_strict(resp.text) if resp else []
+
     out = []
     seen_models: set[str] = set()
-
     for r in raw:
-        model = extract_model_from_title(r["title"], brand)
+        model = r.get("model_extracted") or extract_model_from_title(r["title"], brand)
         if model and model not in seen_models:
             seen_models.add(model)
             r["model_extracted"] = model
@@ -538,21 +614,24 @@ def search_for_models(brand: str, keywords: str = "generator",
 
 def search_product(brand: str, model: str,
                    keywords: str = "generator",
-                   max_results: int = 8) -> list[dict]:
+                   max_results: int = 8, serpapi_key: str = "") -> list[dict]:
     """
     Search Google Shopping for a specific brand + model.
     Returns confirmed price results only (price > $50, retailer identified).
     """
     parts = [p for p in [brand, model, keywords] if p.strip()]
     query = " ".join(parts)
-    resp  = _get(
-        f"https://www.google.com/search?q={quote_plus(query)}&tbm=shop&hl=en&gl=us&num=20",
-        delay=(1.2, 2.8),
-    )
-    if not resp:
-        return []
 
-    results = _parse_shopping_html_strict(resp.text)
+    if serpapi_key:
+        results = serpapi_shopping_search(brand, query, serpapi_key,
+                                          max_results=20)
+    else:
+        resp = _get(
+            f"https://www.google.com/search?q={quote_plus(query)}&tbm=shop&hl=en&gl=us&num=20",
+            delay=(1.2, 2.8),
+        )
+        results = _parse_shopping_html_strict(resp.text) if resp else []
+
     seen: set[tuple] = set()
     deduped = []
     for r in results:

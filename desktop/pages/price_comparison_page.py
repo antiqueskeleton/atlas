@@ -404,8 +404,11 @@ class PriceComparisonPage(QWidget):
 
         # Data quality note
         note = QLabel(
-            "Sources: Manufacturer Direct (Shopify JSON) → Manufacturer Page (specs) → Google Shopping (retailer prices / model discovery).  "
-            "— = data not found on any source.  No values are inferred or estimated."
+            "Sources: Manufacturer Direct (Shopify JSON) → Manufacturer Page (specs) → "
+            "Google Shopping via SerpApi (retailer prices; uses your SerpApi key, one "
+            "search per brand per run) → listing titles (key attributes when no spec "
+            "page exists).  — = data not found on any source.  No values are inferred "
+            "or estimated."
         )
         note.setStyleSheet("font-size: 10px; color: #9CA3AF;")
         note.setWordWrap(True)

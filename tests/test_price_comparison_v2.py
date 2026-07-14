@@ -229,6 +229,75 @@ def test_run_comparison_key_attr_overrides_win():
     assert "9000" in prompt and "Tri Fuel" in prompt
 
 
+# ── SerpApi shopping + title-derived key attributes ───────────────────────────
+
+def test_serpapi_shopping_search_maps_results_to_price_dicts():
+    from backend.price_comparison.google_shopping_scraper import serpapi_shopping_search
+    payload = {"shopping_results": [
+        {"title": "Firman 7500W Tri Fuel Portable Generator T07571",
+         "extracted_price": 949.0, "source": "Lowe's",
+         "product_link": "https://google.com/shopping/p/1"},
+        {"title": "Firman cover accessory", "extracted_price": 29.99,
+         "source": "Amazon", "link": "https://amazon.com/x"},   # < $50 filtered
+        {"title": "No price item", "source": "Walmart"},         # no price filtered
+    ]}
+    with patch("backend.price_comparison.google_shopping_scraper.requests.get") as g:
+        g.return_value = MagicMock(status_code=200, json=lambda: payload)
+        results = serpapi_shopping_search("Firman", "Firman T07571 generator", "key123")
+    assert len(results) == 1
+    r = results[0]
+    assert r["retailer"] == "Lowe's" and r["price"] == 949.0
+    assert r["model_extracted"] == "T07571"
+    assert r["method"] == "google_shopping" and r["confirmed"] is True
+
+
+def test_serpapi_shopping_search_failures_are_in_band_empty():
+    from backend.price_comparison.google_shopping_scraper import serpapi_shopping_search
+    assert serpapi_shopping_search("Firman", "q", "") == []          # no key
+    from requests import RequestException
+    with patch("backend.price_comparison.google_shopping_scraper.requests.get",
+               side_effect=RequestException("timeout")):
+        assert serpapi_shopping_search("Firman", "q", "key") == []
+
+
+def test_search_product_uses_serpapi_when_key_present():
+    from backend.price_comparison import google_shopping_scraper as gss
+    with patch.object(gss, "serpapi_shopping_search",
+                      return_value=[{"title": "T", "price": 500.0,
+                                     "retailer": "Walmart", "url": "u",
+                                     "model_extracted": "", "method": "google_shopping",
+                                     "availability": "", "confirmed": True}]) as s, \
+         patch.object(gss, "_get") as legacy_get:
+        results = gss.search_product("Firman", "T07571", "generator",
+                                     serpapi_key="key123")
+    s.assert_called_once()
+    legacy_get.assert_not_called()      # no legacy HTML attempt when keyed
+    assert results[0]["retailer"] == "Walmart"
+
+
+def test_extract_key_attrs_from_titles():
+    """Real v1.0 test finding: manufacturer pages often have NO spec markup
+    (Firman's included) — retail listing titles are the confirmed fallback."""
+    from backend.price_comparison.comparable_finder import (
+        extract_key_attrs_from_titles, merge_key_attrs)
+    titles = [
+        "FIRMAN Tri Fuel 7,500-Watt Portable Generator Electric Start",
+        "Firman T07571 Generator with remote start",
+    ]
+    attrs = extract_key_attrs_from_titles(titles)
+    assert attrs["watts"] == "7500"
+    assert attrs["fuel_type"] == "Tri Fuel"
+    assert attrs["start_type"] == "Electric"          # first title wins
+    assert attrs["generator_type"] == "Portable"
+
+    # merge: scraped (non-blank) wins, titles fill blanks, never guessed
+    merged = merge_key_attrs({"watts": "9500", "fuel_type": "", "start_type": "",
+                              "generator_type": ""}, attrs)
+    assert merged["watts"] == "9500"
+    assert merged["fuel_type"] == "Tri Fuel"
+    assert extract_key_attrs_from_titles([])["watts"] == ""
+
+
 # ── Amazon-style spec-row ordering ────────────────────────────────────────────
 
 def test_ordered_spec_rows_price_rating_key_attrs_then_rest():

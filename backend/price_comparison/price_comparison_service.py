@@ -20,7 +20,9 @@ from __future__ import annotations
 
 from backend.price_comparison.comparable_finder import (
     extract_key_attrs,
+    extract_key_attrs_from_titles,
     find_comparable_models,
+    merge_key_attrs,
 )
 from backend.price_comparison.price_comparison_repository import PriceComparisonRepository
 from backend.price_comparison import google_shopping_scraper as scraper
@@ -89,17 +91,29 @@ class PriceComparisonService:
         if progress_callback:
             progress_callback(primary_brand, 1, total)
 
+        # Google Shopping runs through SerpApi now (Google killed the
+        # scrapeable HTML shopping page) — same key AI Overviews uses,
+        # one shopping search per brand per run.
+        serpapi_key = self._serpapi_key()
+
         primary_entry = self._fetch_primary(
             primary_brand, primary_model, keywords,
             retailer_urls=retailer_urls or [],
+            serpapi_key=serpapi_key,
         )
         primary_entry["model_source"] = "user"
 
-        # Key attributes: what the spec scrape confirmed, with any non-blank
-        # user overrides winning — these drive the comparable matching.
+        # Key attributes, best source first: manufacturer spec scrape ->
+        # retail listing titles (confirmed data too — often the ONLY source,
+        # since many manufacturer pages have no spec markup) -> any
+        # non-blank user overrides win over both.
         primary_title = (primary_entry["prices"][0].get("title", "")
                          if primary_entry["prices"] else "")
-        attrs = extract_key_attrs(primary_entry["specs"], title=primary_title)
+        attrs = merge_key_attrs(
+            extract_key_attrs(primary_entry["specs"], title=primary_title),
+            extract_key_attrs_from_titles(
+                [p.get("title", "") for p in primary_entry["prices"]]),
+        )
         for key, value in (key_attrs or {}).items():
             if str(value).strip():
                 attrs[key] = str(value).strip()
@@ -128,10 +142,21 @@ class PriceComparisonService:
                 progress_callback(brand, idx + 2, total)
 
             entry = self._fetch_comp(brand, keywords,
-                                     resolved_model=matches.get(brand, ""))
+                                     resolved_model=matches.get(brand, ""),
+                                     serpapi_key=serpapi_key)
             output.append(entry)
 
         return {"brands": output, "match_note": match_note}
+
+    @staticmethod
+    def _serpapi_key() -> str:
+        """SerpApi key from Settings (shared with AI Overviews); "" if not
+        configured — searches then fall back to the legacy HTML path."""
+        try:
+            from backend.services.config_service import ConfigService
+            return ConfigService().get_platform_credential("aioverview", "api_key")
+        except Exception:
+            return ""
 
     def get_price_history(self, brand: str, model: str,
                           retailer: str) -> list[dict]:
@@ -144,7 +169,8 @@ class PriceComparisonService:
     # ── Primary brand (explicit model entered by user) ─────────────────────────
 
     def _fetch_primary(self, brand: str, model: str, keywords: str,
-                       retailer_urls: list[str] | None = None) -> dict:
+                       retailer_urls: list[str] | None = None,
+                       serpapi_key: str = "") -> dict:
         entry: dict = {
             "brand":          brand,
             "model":          model,
@@ -174,7 +200,8 @@ class PriceComparisonService:
                     })
 
             # ── Tier 2: Google Shopping — retailer prices ──────────────────────
-            gshop_prices = scraper.search_product(brand, model, keywords)
+            gshop_prices = scraper.search_product(brand, model, keywords,
+                                                  serpapi_key=serpapi_key)
             prices.extend(gshop_prices)
 
             # ── Tier 3: User-supplied retailer product page URLs ───────────────
@@ -225,7 +252,7 @@ class PriceComparisonService:
     # ── Comparison brand (model matched by AI, or discovered by search) ───────
 
     def _fetch_comp(self, brand: str, keywords: str,
-                    resolved_model: str = "") -> dict:
+                    resolved_model: str = "", serpapi_key: str = "") -> dict:
         """
         resolved_model — a spec-matched model name from comparable_finder
         (v2). When present, discovery is skipped and prices/specs are
@@ -250,11 +277,13 @@ class PriceComparisonService:
 
             if resolved_model:
                 # ── v2: targeted Google Shopping search for the matched model ──
-                prices.extend(scraper.search_product(brand, resolved_model, keywords))
+                prices.extend(scraper.search_product(brand, resolved_model, keywords,
+                                                     serpapi_key=serpapi_key))
                 entry["model_resolved"] = resolved_model
             else:
                 # ── Legacy: find top result, extract model from its title ──────
-                gshop_results = scraper.search_for_models(brand, keywords, max_results=5)
+                gshop_results = scraper.search_for_models(brand, keywords, max_results=5,
+                                                          serpapi_key=serpapi_key)
                 if gshop_results:
                     for r in gshop_results:
                         if r.get("model_extracted"):
@@ -313,7 +342,11 @@ class PriceComparisonService:
             entry["status"] = f"error: {exc}"
 
         title = entry["prices"][0].get("title", "") if entry["prices"] else ""
-        entry["key_specs"] = extract_key_attrs(entry["specs"], title=title)
+        entry["key_specs"] = merge_key_attrs(
+            extract_key_attrs(entry["specs"], title=title),
+            extract_key_attrs_from_titles(
+                [p.get("title", "") for p in entry["prices"]]),
+        )
         self._attach_rating(entry)
         return entry
 

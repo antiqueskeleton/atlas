@@ -116,6 +116,60 @@ def extract_key_attrs(specs: dict, title: str = "") -> dict:
     }
 
 
+def extract_key_attrs_from_titles(titles: list[str]) -> dict:
+    """
+    The 4 key attributes derived from real retail LISTING TITLES
+    ("Firman 7500W Tri Fuel Portable Generator Electric Start…") — the
+    fallback when the manufacturer page yields no spec table, which real
+    v1.0 testing showed is the COMMON case (Firman's own product page has
+    no spec markup at all, just styled marketing blurbs). Titles come from
+    confirmed shopping results, so this stays within the confirmed-data
+    rule. First title that answers each attribute wins; unanswered
+    attributes stay "" — never guessed.
+    """
+    attrs = {"watts": "", "fuel_type": "", "start_type": "", "generator_type": ""}
+    for title in titles:
+        t = " " + (title or "").lower() + " "
+        if not attrs["watts"]:
+            m = re.search(r"(\d{1,2}[,.]?\d{3})\s*(?:-?\s*watt|w\b)", t)
+            if m:
+                attrs["watts"] = m.group(1).replace(",", "").replace(".", "")
+        if not attrs["fuel_type"]:
+            if "tri fuel" in t or "tri-fuel" in t or "trifuel" in t:
+                attrs["fuel_type"] = "Tri Fuel"
+            elif "dual fuel" in t or "dual-fuel" in t:
+                attrs["fuel_type"] = "Dual Fuel"
+            elif "diesel" in t:
+                attrs["fuel_type"] = "Diesel"
+            elif "propane" in t:
+                attrs["fuel_type"] = "Propane"
+            elif "gasoline" in t or "gas powered" in t or "gas-powered" in t:
+                attrs["fuel_type"] = "Gasoline"
+        if not attrs["start_type"]:
+            if "remote start" in t:
+                attrs["start_type"] = "Remote + Electric"
+            elif "electric start" in t or "electric-start" in t:
+                attrs["start_type"] = "Electric"
+            elif "recoil" in t:
+                attrs["start_type"] = "Recoil"
+        if not attrs["generator_type"]:
+            if "inverter" in t:
+                attrs["generator_type"] = "Inverter"
+            elif "standby" in t:
+                attrs["generator_type"] = "Standby"
+            elif "generator" in t:
+                attrs["generator_type"] = "Portable"
+    return attrs
+
+
+def merge_key_attrs(primary: dict, fallback: dict) -> dict:
+    """Non-blank values from `primary` win; `fallback` fills the blanks."""
+    return {
+        key: (primary.get(key) or fallback.get(key) or "")
+        for key in ("watts", "fuel_type", "start_type", "generator_type")
+    }
+
+
 def find_comparable_models(provider, primary: dict,
                            brands: list[str]) -> tuple[dict[str, str], str]:
     """
