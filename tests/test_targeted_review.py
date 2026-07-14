@@ -457,8 +457,42 @@ def test_channel_lookup_params_forms():
     assert _channel_lookup_params("https://www.youtube.com/channel/UCabc-1") == {"id": "UCabc-1"}
     assert _channel_lookup_params("https://youtube.com/@Firman") == {"forHandle": "Firman"}
     assert _channel_lookup_params("https://www.youtube.com/user/gen") == {"forUsername": "gen"}
-    assert _channel_lookup_params("https://www.youtube.com/c/Custom") is None
     assert _channel_lookup_params("") is None
+
+
+def test_channel_lookup_resolves_legacy_c_urls_via_page_fetch():
+    """Pinned to the user's v1.0 test failure (6.3): Firman's own channel
+    uses the legacy /c/ form, which has no direct API lookup — it must
+    resolve to the canonical UC id by fetching the page once."""
+    from backend.targeted_review.youtube_provider import _channel_lookup_params
+    with patch("backend.targeted_review.social_discovery.requests.get") as mock_get:
+        mock_get.return_value = MagicMock(
+            status_code=200,
+            text='..."externalId":"UCieH6sWpJCJMiwBQ3KtVSLA"...')
+        params = _channel_lookup_params("https://www.youtube.com/c/FirmanPowerEquipment")
+    assert params == {"id": "UCieH6sWpJCJMiwBQ3KtVSLA"}
+
+    # Failure degrades to None (skipped), never raises
+    from requests import RequestException
+    with patch("backend.targeted_review.social_discovery.requests.get",
+               side_effect=RequestException("net down")):
+        assert _channel_lookup_params("https://www.youtube.com/c/Dead") is None
+
+
+def test_normalize_creator_handle_accepts_what_users_type():
+    """Pinned to the user's v1.0 test failure (6.7): '@MikesWeatherPage'
+    typed as a bare handle must resolve, not error."""
+    from backend.targeted_review.targeted_review_service import TargetedReviewService
+    n = TargetedReviewService.normalize_creator_handle
+    assert n("youtube", "@MikesWeatherPage") == "https://www.youtube.com/@MikesWeatherPage"
+    assert n("youtube", "MikesWeatherPage") == "https://www.youtube.com/@MikesWeatherPage"
+    assert n("youtube", "https://www.youtube.com/@generac") == "https://www.youtube.com/@generac"
+    assert n("youtube", "UCK-btPahNUDoBbkOdW0XRPw") == \
+        "https://www.youtube.com/channel/UCK-btPahNUDoBbkOdW0XRPw"
+    assert n("reddit", "u/spez") == "spez"
+    assert n("reddit", "@spez") == "spez"
+    assert n("reddit", "https://www.reddit.com/user/spez/") == "spez"
+    assert n("reddit", "spez") == "spez"
 
 
 def test_channel_metrics_parsed_from_api_payloads():
@@ -703,8 +737,17 @@ def test_youtube_creator_performance_no_uploads_in_window():
 
 
 def test_youtube_creator_performance_unresolvable_url_is_in_band():
+    # /c/ URLs are now RESOLVABLE (via a page fetch — mocked to fail here,
+    # since tests must never touch live HTTP); a URL matching no channel
+    # form at all stays the truly-unresolvable case.
+    from requests import RequestException
     provider = YouTubePlatformProvider()
-    result = provider.fetch_creator_performance("key", "https://youtube.com/c/CustomName")
+    with patch("backend.targeted_review.social_discovery.requests.get",
+               side_effect=RequestException("offline")):
+        result = provider.fetch_creator_performance("key", "https://youtube.com/c/CustomName")
+    assert "resolve" in result["error"].lower()
+
+    result = provider.fetch_creator_performance("key", "https://youtube.com/watch?v=abc")
     assert "resolve" in result["error"].lower()
 
 

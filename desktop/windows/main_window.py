@@ -199,7 +199,11 @@ class AtlasMainWindow(QMainWindow):
         self._nav_toggle_btn.setStyleSheet(
             f"QPushButton {{ background: {SLATE}; color: {SILVER}; "
             f"border: none; border-top: 1px solid {STEEL}; "
-            "font-size: 12px; font-weight: 600; padding: 4px 16px; text-align: left; }}"
+            # This middle segment is a PLAIN string — a single "}" here, not
+            # the f-string-escaped "}}" (that doubled brace made the whole
+            # sheet unparseable, so this button silently fell back to the
+            # global style — caught by the user's v1.0 test pass, item 1.1).
+            "font-size: 12px; font-weight: 600; padding: 4px 16px; text-align: left; }"
             f"QPushButton:hover {{ color: white; background: #2D3F55; }}"
         )
         self._nav_toggle_btn.clicked.connect(self._toggle_nav)

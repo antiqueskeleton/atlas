@@ -396,8 +396,11 @@ def _filter_relevant(items: list[dict], brand: str) -> list[dict]:
 
 
 def _channel_lookup_params(channel_url: str) -> dict | None:
-    """Map a channel URL form to channels.list lookup params. /c/NAME custom
-    URLs have no direct API lookup and return None (skipped, not errored)."""
+    """Map a channel URL form to channels.list lookup params. Legacy /c/NAME
+    custom URLs have no direct API lookup — resolved to their canonical
+    /channel/UC… form by fetching the page once (the target brand's own
+    channel uses the /c/ form, so this path is load-bearing, not an edge
+    case). Returns None only when nothing resolvable remains."""
     if not channel_url:
         return None
     match = re.search(r"youtube\.com/channel/(UC[\w-]+)", channel_url, re.IGNORECASE)
@@ -409,6 +412,13 @@ def _channel_lookup_params(channel_url: str) -> dict | None:
     match = re.search(r"youtube\.com/user/([\w.\-]+)", channel_url, re.IGNORECASE)
     if match:
         return {"forUsername": match.group(1)}
+    if re.search(r"youtube\.com/c/[\w.\-]+", channel_url, re.IGNORECASE):
+        from backend.targeted_review.social_discovery import resolve_youtube_channel_url
+        canonical = resolve_youtube_channel_url(channel_url)
+        match = re.search(r"youtube\.com/channel/(UC[\w-]+)", canonical or "",
+                          re.IGNORECASE)
+        if match:
+            return {"id": match.group(1)}
     return None
 
 

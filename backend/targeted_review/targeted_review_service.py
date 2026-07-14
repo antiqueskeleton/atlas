@@ -12,6 +12,8 @@ follows the platform-specific guidance already scoped in the project plan
 (Amazon Vine / Request-a-Review; YouTube creator seeding + comparison
 content; Reddit organic participation).
 """
+import re
+
 from backend.targeted_review.ai_overview_provider import AIOverviewProvider
 from backend.targeted_review.bestbuy_provider import BestBuyProvider
 from backend.targeted_review.editorial_search_provider import (
@@ -141,8 +143,37 @@ class TargetedReviewService:
         """[(id, platform, handle, display_name, notes, added_at)]."""
         return self.repository.list_creators()
 
+    @staticmethod
+    def normalize_creator_handle(platform: str, handle: str) -> str:
+        """
+        Accept what people actually type, store what the fetchers need.
+        Real v1.0 test failure (item 6.7): the user entered
+        "@MikesWeatherPage" — a bare handle, not a URL — and YouTube
+        resolution failed. YouTube: bare @handle, plain name, UC… channel
+        id, or full URL all normalize to a youtube.com URL form.
+        Reddit: strip "u/" / "@" / a pasted profile URL down to the bare
+        username the /user/{name} endpoints take.
+        """
+        handle = (handle or "").strip()
+        if not handle:
+            return handle
+        if platform == "youtube":
+            if "youtube.com" in handle.lower():
+                return handle
+            if handle.startswith("UC") and len(handle) >= 12 and " " not in handle:
+                return f"https://www.youtube.com/channel/{handle}"
+            return f"https://www.youtube.com/@{handle.lstrip('@')}"
+        if platform == "reddit":
+            match = re.search(r"reddit\.com/(?:user|u)/([\w\-]+)", handle,
+                              re.IGNORECASE)
+            if match:
+                return match.group(1)
+            return handle.lstrip("@").removeprefix("u/").removeprefix("U/")
+        return handle
+
     def add_creator(self, platform: str, handle: str, display_name: str,
                     notes: str = "") -> bool:
+        handle = self.normalize_creator_handle(platform, handle)
         return self.repository.add_creator(platform, handle, display_name, notes)
 
     def remove_creator(self, creator_id: int):
@@ -171,6 +202,10 @@ class TargetedReviewService:
         for i, (_id, platform, handle, display_name, _notes, _added) in enumerate(creators):
             if progress_cb:
                 progress_cb(i, total, display_name)
+            # Normalized at add time too, but re-normalized here so creators
+            # saved before the normalizer existed (bare "@handle" rows)
+            # still resolve without the user re-adding them.
+            handle = self.normalize_creator_handle(platform, handle)
             if platform == "youtube":
                 api_key = yt_provider.credentials.get("api_key", "")
                 result = yt_provider.fetch_creator_performance(api_key, handle)

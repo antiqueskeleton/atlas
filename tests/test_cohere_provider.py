@@ -63,7 +63,10 @@ def test_uses_configured_api_key_and_model():
 
     fake_client = mock_cohere_cls.return_value
     _, call_kwargs = fake_client.chat.call_args
-    assert call_kwargs["model"] == "command-r"
+    # Retired undated aliases map to their dated successors (Cohere 404s
+    # the bare names — confirmed live 2026-07-13, user test item 3.1), so
+    # a saved Settings override self-heals instead of failing forever.
+    assert call_kwargs["model"] == "command-r-08-2024"
     assert call_kwargs["messages"] == [{"role": "user", "content": "best portable generator"}]
 
 
@@ -79,6 +82,17 @@ def test_network_exception_is_reported_in_band_not_raised():
     assert result.provider == "Cohere"
 
 
-def test_default_model_is_command_r_plus():
+def test_default_model_is_current_flagship():
     provider = CohereProvider()
-    assert provider.model == "command-r-plus"
+    assert provider.model == "command-a-03-2025"
+
+
+def test_retired_alias_in_saved_settings_self_heals():
+    """The user's real Settings had 'command-r-plus' stored from before
+    Cohere retired the alias — set_model must map it, or the saved override
+    keeps re-breaking the provider after every default change."""
+    provider = CohereProvider()
+    provider.set_model("command-r-plus")
+    assert provider.model == "command-r-plus-08-2024"
+    provider.set_model("command-a-03-2025")   # non-retired passes through
+    assert provider.model == "command-a-03-2025"

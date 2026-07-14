@@ -5,10 +5,16 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QFont, QFontDatabase, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import QApplication, QSplashScreen
 
-from desktop.windows.main_window import AtlasMainWindow
 from desktop.theme.styles import STYLE
 from desktop.theme.colors import STEEL
 from desktop.updater import APP_VERSION
+
+# AtlasMainWindow is deliberately NOT imported here — its import cascade
+# (backend services, the openai SDK, page modules) is the single biggest
+# chunk of cold-start time, and importing it at module level meant the
+# user stared at NOTHING for the whole wait (~20s cold, per real v1.0
+# testing). It's imported inside main(), after the splash is on screen,
+# so the wait happens behind the splash instead of before it.
 
 
 def _images_dir() -> Path:
@@ -109,6 +115,11 @@ def main():
     app.processEvents()
 
     app.setStyleSheet(STYLE)
+
+    # Heavy import happens HERE, behind the visible splash (see the module-
+    # level comment) — processEvents first so the splash actually paints.
+    app.processEvents()
+    from desktop.windows.main_window import AtlasMainWindow
 
     window = AtlasMainWindow()
     window.setWindowIcon(icon)
