@@ -159,23 +159,29 @@ class InvestigationPage(QWidget):
         ev_nav_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         # ── Tab: Summary ──────────────────────────────────────────────────────
-        # Executive Summary fills most of the space; AI Reasoning, Recommendation,
-        # and Consensus share the bottom strip.
+        # Executive Summary + Recommendations share the top row (the summary
+        # is usually only a couple of lines, so a full-width pane wasted the
+        # space — user layout suggestion, v1.0 test item 9.1); AI Reasoning
+        # and Executive Consensus split the bottom row with the extra room.
         summary_tab = QWidget()
         sum_lay = QVBoxLayout(summary_tab)
         sum_lay.setContentsMargins(0, 6, 0, 0)
         sum_lay.setSpacing(0)
 
+        top_pair = QSplitter(Qt.Horizontal)
+        top_pair.addWidget(self.summary)
+        top_pair.addWidget(self.recommendations)
+        top_pair.setSizes([560, 340])
+
         bottom_row = QSplitter(Qt.Horizontal)
         bottom_row.addWidget(self.ai_reasoning)
-        bottom_row.addWidget(self.recommendations)
         bottom_row.addWidget(self.executive_consensus)
-        bottom_row.setSizes([340, 260, 300])
+        bottom_row.setSizes([450, 450])
 
         sum_splitter = QSplitter(Qt.Vertical)
-        sum_splitter.addWidget(self.summary)
+        sum_splitter.addWidget(top_pair)
         sum_splitter.addWidget(bottom_row)
-        sum_splitter.setSizes([440, 220])
+        sum_splitter.setSizes([330, 330])
         sum_lay.addWidget(sum_splitter, 1)
 
         # ── Tab: Agents ───────────────────────────────────────────────────────
@@ -197,10 +203,12 @@ class InvestigationPage(QWidget):
         ev_vw_lay.addWidget(self.evidence_viewer, 1)
         ev_vw_lay.addWidget(ev_nav_widget)
 
-        ev_splitter = QSplitter(Qt.Vertical)
+        # Side by side, not stacked — both panes get full height (user
+        # layout suggestion, v1.0 test item 9.1).
+        ev_splitter = QSplitter(Qt.Horizontal)
         ev_splitter.addWidget(ev_viewer_wrap)
         ev_splitter.addWidget(self.evidence)
-        ev_splitter.setSizes([420, 200])
+        ev_splitter.setSizes([560, 380])
         ev_lay.addWidget(ev_splitter, 1)
 
         # ── Tab: Plan & Details ───────────────────────────────────────────────

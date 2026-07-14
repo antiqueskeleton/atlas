@@ -185,8 +185,12 @@ class PriceComparisonPage(QWidget):
     # ── Left control panel ────────────────────────────────────────────────────
 
     def _build_controls(self) -> QWidget:
+        # The whole control column lives in a scroll area: its content
+        # (primary product + key attributes + URLs + brand checklist + Run)
+        # is taller than the window at default size, and without scrolling
+        # Qt let the Run button paint OVER the brand pane (user test items
+        # 1.5/13.3 — "Price Comparison is the worst").
         frame = QFrame()
-        frame.setFixedWidth(310)
         frame.setStyleSheet(
             "QFrame { background: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 8px; }"
         )
@@ -316,7 +320,7 @@ class PriceComparisonPage(QWidget):
         self._brand_scroll.setWidgetResizable(True)
         self._brand_scroll.setFrameShape(QFrame.NoFrame)
         self._brand_scroll.setStyleSheet("background: transparent;")
-        self._brand_scroll.setMinimumHeight(220)
+        self._brand_scroll.setMinimumHeight(180)
 
         self._brand_grid_widget = QWidget()
         self._brand_grid_widget.setStyleSheet("background: transparent;")
@@ -348,7 +352,15 @@ class PriceComparisonPage(QWidget):
         lay.addWidget(self._status_lbl)
 
         frame.setLayout(lay)
-        return frame
+
+        scroll = QScrollArea()
+        scroll.setWidget(frame)
+        scroll.setWidgetResizable(True)
+        scroll.setFixedWidth(330)   # 310 content + scrollbar gutter
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setStyleSheet("background: transparent;")
+        return scroll
 
     # ── Right results panel ───────────────────────────────────────────────────
 

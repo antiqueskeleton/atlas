@@ -349,7 +349,16 @@ class VisibilityPage(QWidget):
         ps_scroll = QScrollArea()
         ps_scroll.setWidget(self._ps_inner)
         ps_scroll.setWidgetResizable(True)
-        ps_scroll.setFixedHeight(170)
+        # Height derived from the REAL row height so the initial view shows
+        # whole rows — a hardcoded 170 left the 7th row sliced mid-text at
+        # the pane border under Inter's metrics (user test item 5.2).
+        # Clamped near the original 170 to protect the page-height budget
+        # measured in #36 (851px min at 170 vs the 860 default window).
+        row_h = 24
+        if self._set_checks:
+            any_cb = next(iter(self._set_checks.values()))
+            row_h = any_cb.sizeHint().height() + 4   # + grid spacing
+        ps_scroll.setFixedHeight(max(150, min(6 * row_h + 28, 176)))
         ps_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         ps_scroll.setStyleSheet(
             "QScrollArea { border: 1px solid #D1D5DB; border-radius: 4px; background: white; }"
@@ -487,8 +496,11 @@ class VisibilityPage(QWidget):
             "Query every selected AI provider with every selected prompt and store the responses"
         )
 
+        # Wide enough for its LONGER alternate label "Resume" in Inter —
+        # at 70px the label was truncated once a run was paused (user test
+        # item 5.4).
         self._pause_btn = QPushButton("Pause")
-        self._pause_btn.setFixedWidth(70)
+        self._pause_btn.setFixedWidth(88)
         self._pause_btn.setEnabled(False)
         self._pause_btn.clicked.connect(self._toggle_pause)
         self._pause_btn.setToolTip("Pause the running collection — resume with the same button")
@@ -998,7 +1010,9 @@ class VisibilityPage(QWidget):
         toolbar_row.addWidget(self._run_btn)
         toolbar_row.addWidget(self._pause_btn)
         toolbar_row.addWidget(self._stop_btn)
+        toolbar_row.addSpacing(10)
         toolbar_row.addWidget(self._progress)
+        toolbar_row.addSpacing(10)
         toolbar_row.addWidget(self._status_lbl)
         toolbar_row.addWidget(self._prov_count_lbl)
         toolbar_row.addWidget(self._count_lbl)

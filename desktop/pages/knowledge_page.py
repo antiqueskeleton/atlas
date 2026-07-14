@@ -881,8 +881,19 @@ class KnowledgePage(QWidget):
         self._family_list = QListWidget()
         self._family_list.currentItemChanged.connect(self._on_family_selected)
 
+        fam_btn_row = QHBoxLayout()
+        fam_btn_row.setContentsMargins(0, 0, 0, 0)
+        fam_btn_row.setSpacing(4)
         btn_new_fam = QPushButton("+ New Family")
         btn_new_fam.clicked.connect(self._add_family)
+        btn_del_fam = QPushButton("Delete Family")
+        btn_del_fam.clicked.connect(self._delete_family)
+        btn_del_fam.setToolTip(
+            "Delete the selected family and every prompt in it. Historical "
+            "collected responses are never touched."
+        )
+        fam_btn_row.addWidget(btn_new_fam)
+        fam_btn_row.addWidget(btn_del_fam)
 
         # Category — a purely additive tier above families, for grouping
         # related families so the Visibility page can select a whole cluster
@@ -893,9 +904,11 @@ class KnowledgePage(QWidget):
         cat_lbl.setStyleSheet("font-size: 12px; color: #6B7280;")
         self._category_combo = QComboBox()
         self._category_combo.currentIndexChanged.connect(self._on_category_combo_changed)
-        btn_new_cat = QPushButton("+")
-        btn_new_cat.setFixedWidth(28)
-        btn_new_cat.setToolTip("Create a new category")
+        # A readable label, not the bare "+" the user couldn't parse
+        # (v1.0 test item 4.5).
+        btn_new_cat = QPushButton("New…")
+        btn_new_cat.setFixedWidth(52)
+        btn_new_cat.setToolTip("Create a new category and assign the selected family to it")
         btn_new_cat.clicked.connect(self._add_category)
         cat_row.addWidget(cat_lbl)
         cat_row.addWidget(self._category_combo, 1)
@@ -903,7 +916,7 @@ class KnowledgePage(QWidget):
 
         left_lay.addWidget(lbl)
         left_lay.addWidget(self._family_list)
-        left_lay.addWidget(btn_new_fam)
+        left_lay.addLayout(fam_btn_row)
         left_lay.addLayout(cat_row)
         left.setLayout(left_lay)
         left.setFixedWidth(240)
@@ -1042,8 +1055,43 @@ class KnowledgePage(QWidget):
             QMessageBox.warning(self, "Name Required", "Family name cannot be empty.")
             return
         self.repo.add_prompt_family(v["family_name"])
+
+        # Offer a category right at creation (user request, v1.0 test 4.5)
+        # instead of requiring a separate second step afterwards.
+        categories = self.repo.list_prompt_categories()
+        if categories:
+            options = ["(Uncategorized)"] + [name for _, name, _ in categories]
+            choice, ok = QInputDialog.getItem(
+                self, "Assign Category",
+                f"Category for '{v['family_name']}' (optional):",
+                options, 0, editable=False)
+            if ok and choice != "(Uncategorized)":
+                cat_id = next(cid for cid, name, _ in categories if name == choice)
+                self.repo.set_family_category(v["family_name"], cat_id)
+
         self._refresh_families()
         self._select_family_by_name(v["family_name"])
+
+    def _delete_family(self):
+        fname = self._current_family_name()
+        if not fname:
+            QMessageBox.information(self, "No Family", "Select a family to delete.")
+            return
+        count = self.repo.get_prompt_counts().get(fname, 0)
+        reply = QMessageBox.question(
+            self, "Delete Family",
+            f"Delete '{fname}' and its {count} prompt(s)?\n\n"
+            "Historical collected responses are kept — only the family and "
+            "its prompts are removed from the library.",
+            QMessageBox.Yes | QMessageBox.No)
+        if reply != QMessageBox.Yes:
+            return
+        self.repo.delete_family(fname)
+        self._refresh_families()
+        self._prompts_table.setRowCount(0)
+        self._family_header.setText("Select a family to view its prompts")
+        self._prompts_count.setText("")
+        self._refresh_category_combo("")
 
     def _add_prompt(self):
         fname = self._current_family_name()

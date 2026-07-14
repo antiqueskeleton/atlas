@@ -223,8 +223,15 @@ class IntelligencePage(QWidget):
         # Export Tab (Full) button — plain neutral style (matches Run
         # Analysis, no blue/white), placed in the tabs' corner widget further
         # down so it sits in line with the Product/Personas/Journey/
-        # Opportunities tab row it actually exports.
+        # Opportunities tab row it actually exports. The corner-widget slot
+        # crops widgets to the tab bar's height, so the label was taller
+        # than the visible button (user test item 8.5) — explicit compact
+        # sizing keeps the whole label inside the slot.
         self._export_tab_btn = QPushButton("Export Tab (Full)")
+        self._export_tab_btn.setFixedHeight(26)
+        self._export_tab_btn.setMinimumWidth(130)
+        self._export_tab_btn.setStyleSheet(
+            "QPushButton { font-size: 11px; padding: 2px 10px; }")
         self._export_tab_btn.setToolTip(
             "Export the currently selected tab's complete results, with no "
             "10-item cap — unlike Export PDF/Word, which condense to keep "

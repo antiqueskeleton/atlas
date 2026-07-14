@@ -762,18 +762,26 @@ class AtlasMainWindow(QMainWindow):
             w.setLayout(lay)
             return w
 
+        # Rendered as an HTML list — a numbered sequence buried inside one
+        # paragraph was unreadable (user v1.0 test, item 11.1).
         b_lay.addWidget(_section(
             "Recommended Workflow",
-            "1. Settings — set your Target Brand and add AI provider API keys.  "
-            "2. Knowledge — confirm the brands, features, and prompt sets Atlas tracks.  "
-            "3. Visibility — run a collection to gather AI responses (the raw data every "
-            "other page builds on); save a panel and re-run the SAME panel on a regular "
-            "cadence.  4. Targeted Review — optional but recommended: collect real "
-            "platform numbers (YouTube, Reddit, editorial, retail, AI Overviews) that "
-            "feed the Intelligence briefing as ground truth.  5. Trends — review how "
-            "visibility changes across runs (a view, nothing to run).  6. Intelligence — "
-            "run last: it synthesizes everything collected above.  Investigate and "
-            "Price Comparison are independent — use them any time."
+            "<ol style='margin:0 0 0 18px; padding:0;'>"
+            "<li><b>Settings</b> — set your Target Brand and add AI provider API keys.</li>"
+            "<li><b>Knowledge</b> — confirm the brands, features, and prompt sets Atlas tracks.</li>"
+            "<li><b>Visibility</b> — run a collection to gather AI responses (the raw data "
+            "every other page builds on). Save a panel and re-run the same panel on a "
+            "regular cadence.</li>"
+            "<li><b>Targeted Review</b> — optional but recommended: collect real platform "
+            "numbers (YouTube, Reddit, editorial, retail, AI Overviews) that feed the "
+            "Intelligence briefing as ground truth.</li>"
+            "<li><b>Trends</b> — review how visibility changes across runs (a view — "
+            "nothing to run).</li>"
+            "<li><b>Intelligence</b> — run last: it synthesizes everything collected "
+            "above.</li>"
+            "</ol>"
+            "<p style='margin:6px 0 0 0;'><b>Investigate</b> and <b>Price Comparison</b> "
+            "are independent — use them any time.</p>"
         ))
 
         # Same order as the left navigation.

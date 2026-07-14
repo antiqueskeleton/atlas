@@ -692,8 +692,8 @@ class SettingsPage(QWidget):
             checks.append((
                 "amber", "Prompt Library",
                 f"{len(families)} families in CSV (canonical). "
-                f"{db_fam} stale rows remain in legacy prompt_families table — informational only.",
-                None, None,
+                f"{db_fam} stale rows remain in legacy prompt_families table.",
+                "Clean Up", "clear_legacy_families",
             ))
         else:
             checks.append(("green", "Prompt Library", f"{len(families)} families in CSV.", None, None))
@@ -704,7 +704,9 @@ class SettingsPage(QWidget):
                 "SELECT COUNT(*) FROM intelligence_runs WHERE status = 'failed'"
             ).fetchone()[0]
         if failed_count > 0:
-            checks.append(("amber", "Failed Runs", f"{failed_count} intelligence run(s) ended in failure — informational.", None, None))
+            checks.append(("amber", "Failed Runs",
+                           f"{failed_count} intelligence run(s) ended in failure.",
+                           "Clear", "clear_failed_runs"))
         else:
             checks.append(("green", "Failed Runs", "No failed intelligence runs.", None, None))
 
@@ -797,6 +799,23 @@ class SettingsPage(QWidget):
             stuck = self._health_check_data.get("stuck", [])
             for run_id, *_ in stuck:
                 ir.mark_run_failed(run_id)
+            self._run_health_checks()
+
+        elif key == "clear_legacy_families":
+            # The CSV is canonical for prompt families; the DB table is a
+            # leftover from an earlier design. User asked for a way to clear
+            # these informational rows (v1.0 test, item 3.4).
+            import sqlite3
+            from backend.services.paths import get_db_path
+            with sqlite3.connect(get_db_path()) as conn:
+                conn.execute("DELETE FROM prompt_families")
+            self._run_health_checks()
+
+        elif key == "clear_failed_runs":
+            import sqlite3
+            from backend.services.paths import get_db_path
+            with sqlite3.connect(get_db_path()) as conn:
+                conn.execute("DELETE FROM intelligence_runs WHERE status = 'failed'")
             self._run_health_checks()
 
         elif key == "reparse_opps":

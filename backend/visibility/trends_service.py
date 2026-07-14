@@ -198,22 +198,50 @@ class TrendsService:
             for p, scores in totals.items()
         }
 
-    def prompt_set_averages(self, summaries: list[dict]) -> dict:
-        """Returns {prompt_set: avg_target_score}."""
+    # Run labels that aren't one real prompt family: legacy labels from
+    # older builds ("Custom", "default") and comma-joined multi-family
+    # runs. A mixed run's score can't be attributed to any one family, so
+    # surfacing "Custom" as the top prompt set told the user nothing
+    # (their v1.0 test pass, item 7.1).
+    _AGGREGATE_LABELS = {"custom", "default"}
+
+    @classmethod
+    def _is_single_family_label(cls, label: str) -> bool:
+        label = (label or "").strip()
+        return bool(label) and "," not in label \
+            and label.lower() not in cls._AGGREGATE_LABELS
+
+    def prompt_set_averages(self, summaries: list[dict],
+                            single_families_only: bool = True) -> dict:
+        """Returns {prompt_set: avg_target_score}. By default only runs
+        labeled with a single real family count — see _AGGREGATE_LABELS."""
         totals: dict[str, list] = defaultdict(list)
         for s in summaries:
-            totals[s["prompt_set"]].append(s["target_score"])
+            label = s["prompt_set"]
+            if single_families_only and not self._is_single_family_label(label):
+                continue
+            totals[label].append(s["target_score"])
+        if not totals and single_families_only and summaries:
+            # Every run was an aggregate — an honestly-labeled mixed view
+            # beats an empty chart.
+            return self.prompt_set_averages(summaries, single_families_only=False)
         return {
             ps: round(sum(scores) / len(scores), 1)
             for ps, scores in totals.items()
         }
 
     def best_prompt_set_for_target(self, summaries: list[dict]) -> str:
-        """Returns the prompt set name with the highest avg target brand score."""
-        ps_avgs = self.prompt_set_averages(summaries)
-        if not ps_avgs:
+        """Returns the single-family prompt set with the highest avg target
+        brand score — never a legacy/mixed-run label like "Custom"."""
+        totals: dict[str, list] = defaultdict(list)
+        for s in summaries:
+            label = s["prompt_set"]
+            if self._is_single_family_label(label):
+                totals[label].append(s["target_score"])
+        if not totals:
             return "—"
-        return max(ps_avgs, key=ps_avgs.get)
+        avgs = {ps: sum(scores) / len(scores) for ps, scores in totals.items()}
+        return max(avgs, key=avgs.get)
 
     def brand_snapshot(self, summaries: list[dict], top_n: int = 8) -> dict[str, float]:
         """Returns {brand: avg_mention_rate} across all runs, top_n + target brand."""

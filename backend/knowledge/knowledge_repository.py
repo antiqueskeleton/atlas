@@ -987,3 +987,31 @@ class KnowledgeRepository:
             writer = csv.DictWriter(f, fieldnames=fieldnames)
             writer.writeheader()
             writer.writerows(keep)
+
+    def delete_family(self, family_name) -> int:
+        """
+        Delete a prompt family: every CSV row belonging to it, plus its
+        category assignment (the category itself survives). Returns how
+        many prompt rows were removed. A family created and then abandoned
+        was previously impossible to remove from the UI at all (user
+        v1.0 test, item 4.5).
+        """
+        csv_path = self._data / "market_questions.csv"
+        removed = 0
+        if csv_path.exists():
+            with open(csv_path, newline="", encoding="utf-8") as f:
+                reader = csv.DictReader(f)
+                fieldnames = reader.fieldnames or ["family_name", "prompt_style",
+                                                   "prompt_text", "prompt_influence_score"]
+                rows = list(reader)
+            keep = [r for r in rows if r.get("family_name") != family_name]
+            removed = len(rows) - len(keep)
+            with open(csv_path, "w", newline="", encoding="utf-8") as f:
+                writer = csv.DictWriter(f, fieldnames=fieldnames)
+                writer.writeheader()
+                writer.writerows(keep)
+        try:
+            self.set_family_category(family_name, None)
+        except Exception:
+            pass
+        return removed
