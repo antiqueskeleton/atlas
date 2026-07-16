@@ -27,7 +27,7 @@ import urllib.request
 import urllib.error
 from PySide6.QtCore import QThread, Signal
 
-APP_VERSION = "0.9.5"
+APP_VERSION = "1.0.0"
 
 ATLAS_UPDATE_URL = "https://raw.githubusercontent.com/antiqueskeleton/atlas/main/update_manifest.json"
 
