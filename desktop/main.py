@@ -43,7 +43,7 @@ def _fonts_dir() -> Path:
     return Path(__file__).resolve().parent / "assets" / "fonts"
 
 
-def _register_inter_font():
+def _register_inter_font() -> bool:
     """Bundled Inter (SIL OFL) replaces the Segoe UI system default — built
     for small-size UI text (taller x-height, tighter apertures) rather than
     Segoe's general-purpose print/body-text design, which is the better fit
@@ -53,11 +53,35 @@ def _register_inter_font():
     Qt/FreeType versions than variable-font axis selection. Registration
     failure (missing file, bad font data) degrades silently to the
     Segoe UI/Arial fallback already in styles.py's font-family list —
-    never a startup error over a cosmetic font swap."""
+    never a startup error over a cosmetic font swap.
+
+    Returns True if at least one weight registered, so the caller can set
+    Inter as the app-wide default font (see _apply_inter_default)."""
     fonts_dir = _fonts_dir()
+    loaded = False
     for name in ("Inter-Regular.ttf", "Inter-Medium.ttf",
                  "Inter-SemiBold.ttf", "Inter-Bold.ttf"):
-        QFontDatabase.addApplicationFont(str(fonts_dir / name))
+        if QFontDatabase.addApplicationFont(str(fonts_dir / name)) != -1:
+            loaded = True
+    return loaded
+
+
+def _apply_inter_default(app):
+    """Make Inter the application's ACTUAL default font, not just a
+    stylesheet font-family. The `QWidget { font-family: Inter }` rule in
+    styles.py cascades to plain widgets, but on Windows it does NOT
+    reliably reach item-view text (QTableWidget cells), combo-box popups,
+    and native-styled controls — those keep QApplication.font(), which was
+    still Segoe UI, so the app looked like two different fonts (user
+    report: title Inter, tables/checkboxes not). Setting the app default
+    closes that gap for every widget and delegate, regardless of QSS quirks.
+    The current default point size is preserved — only the family changes —
+    so nothing resizes."""
+    if not _register_inter_font():
+        return
+    font = app.font()
+    font.setFamily("Inter")
+    app.setFont(font)
 
 
 def _make_splash() -> QSplashScreen:
@@ -99,7 +123,7 @@ def _make_splash() -> QSplashScreen:
 
 def main():
     app = QApplication(sys.argv)
-    _register_inter_font()
+    _apply_inter_default(app)   # registers Inter AND sets it as the default font
 
     icon = QIcon(str(_IMAGES_DIR / "atlas_icon.png"))
     app.setWindowIcon(icon)

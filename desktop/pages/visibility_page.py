@@ -176,7 +176,10 @@ def _section(title):
     body = QTextEdit()
     body.setReadOnly(True)
     body.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-    body.setStyleSheet("font-size: 12px; font-family: Consolas, monospace;")
+    # Inter, not the old Consolas monospace: this viewer shows AI-response
+    # PROSE, not code/data, so the app font reads better and keeps the app
+    # to one typeface (user request: font consistency everywhere).
+    body.setStyleSheet("font-size: 13px;")
 
     lay.addWidget(t)
     lay.addWidget(body)
