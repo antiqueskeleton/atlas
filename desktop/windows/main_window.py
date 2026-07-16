@@ -544,8 +544,8 @@ class AtlasMainWindow(QMainWindow):
     def _show_easter_egg(self):
         """Hidden behind the © in About Atlas — not linked from anywhere
         else, not mentioned anywhere in the UI. Find it or don't."""
-        from desktop.widgets.easter_egg import KeepTheLightsOnDialog
-        KeepTheLightsOnDialog(self, self.app.config_service).exec()
+        from desktop.widgets.blackout_brigade import BlackoutBrigadeDialog
+        BlackoutBrigadeDialog(self, self.app.config_service).exec()
 
     def _show_methodology(self):
         """#102: one place stating exactly how every number in Atlas is
