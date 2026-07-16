@@ -30,18 +30,22 @@ from PySide6.QtWidgets import (
     QVBoxLayout, QWidget,
 )
 
-# ── Palette (self-contained dark "stormy" theme) ──────────────────────────────
-_BG        = "#0F172A"   # slate-900
-_PANEL     = "#1E293B"   # slate-800
-_PANEL_HI  = "#334155"   # slate-700
-_TEXT      = "#E2E8F0"
-_MUTED     = "#94A3B8"
-_AMBER     = "#F59E0B"
-_RED       = "#DC2626"
-_YELLOW    = "#FBBF24"
-_GREEN     = "#16A34A"
-_BLUE      = "#0B84FF"
-_GOLD      = "#EAB308"
+# ── Palette (self-contained "stormy" theme) ──────────────────────────────────
+# Panels are lightened and text/muted brightened vs the first cut, which
+# was flagged as too low-contrast (dark text on dark panels). The map stays
+# deep-dark for storm drama, but every PANEL that carries text is now a
+# lighter slate with bright text on top.
+_BG        = "#0B1220"   # deep storm blue (map backdrop only)
+_PANEL     = "#26364D"   # readable panel — noticeably lighter than the map
+_PANEL_HI  = "#3B4E6A"   # inputs / raised chips
+_TEXT      = "#F4F7FB"   # near-white body text
+_MUTED     = "#C6D2E1"   # bright enough to read on _PANEL, still secondary
+_AMBER     = "#FBBF24"
+_RED       = "#F26D6D"   # brightened for on-dark warning text
+_YELLOW    = "#FCD34D"
+_GREEN     = "#34D399"   # brightened for on-dark success text
+_BLUE      = "#3B9EFF"
+_GOLD      = "#FACC15"
 
 _BEST_KEY  = "blackout_brigade_best"
 _PLAYS_KEY = "blackout_brigade_plays"
@@ -332,16 +336,23 @@ class _MapWidget(QWidget):
                 self.location_clicked.emit(idx)
                 return
 
-    def _tile_color(self, loc: Location) -> QColor:
+    _INK = "#0B1220"   # near-black ink for bright-fill tiles
+
+    def _tile_style(self, loc: Location) -> tuple[QColor, QColor]:
+        """(fill, text) paired so text is always readable ON that fill —
+        the first cut used light text on bright amber/red tiles, which was
+        the worst of the contrast problems."""
+        if getattr(loc, "_appear", 0) > self._now and not loc.powered:
+            return QColor("#2C3E59"), QColor(_MUTED)          # incoming (dark)
         if loc.restored:
-            return QColor(_GREEN)
+            return QColor(_GREEN), QColor(self._INK)
         if loc.expired:
-            return QColor("#450A0A")
+            return QColor("#3A1414"), QColor("#FCA5A5")
         if loc.powered:
-            return QColor(_YELLOW)
-        if getattr(loc, "_appear", 0) > self._now:
-            return QColor("#1E293B")          # not requesting yet
-        return QColor(_RED if loc.priority >= 5 else _AMBER)
+            return QColor(_YELLOW), QColor(self._INK)
+        if loc.priority >= 5:
+            return QColor("#EF4444"), QColor("#FFFFFF")       # critical, white ink
+        return QColor(_AMBER), QColor(self._INK)              # requesting, dark ink
 
     def paintEvent(self, _):
         p = QPainter(self)
@@ -367,21 +378,20 @@ class _MapWidget(QWidget):
             rect = QRect(x, y, cw, ch)
             self._tiles.append((rect, idx))
 
-            not_live = getattr(loc, "_appear", 0) > self._now
-            color = self._tile_color(loc)
-            p.setBrush(color)
-            pen = QPen(QColor(_BLUE if idx == self._selected else "#0F172A"),
+            not_live = getattr(loc, "_appear", 0) > self._now and not loc.powered
+            fill, ink = self._tile_style(loc)
+            p.setBrush(fill)
+            pen = QPen(QColor(_BLUE if idx == self._selected else "#0B1220"),
                        3 if idx == self._selected else 1)
             p.setPen(pen)
             p.drawRoundedRect(rect, 8, 8)
 
-            dark = loc.powered or loc.restored
-            p.setPen(QColor("#0F172A") if dark else QColor(_TEXT if not not_live else _MUTED))
-            p.setFont(QFont("Inter", 9, QFont.Bold))
+            p.setPen(ink)
+            p.setFont(QFont("Inter", 10, QFont.Bold))
             p.drawText(rect.adjusted(8, 8, -8, -8), Qt.AlignTop | Qt.TextWordWrap,
                        loc.name if not not_live else "· · ·")
 
-            p.setFont(QFont("Inter", 8))
+            p.setFont(QFont("Inter", 8, QFont.Bold))
             if not_live:
                 tag = "incoming"
             elif loc.restored:
@@ -488,9 +498,18 @@ class BlackoutBrigadeDialog(QDialog):
         dl.addWidget(self._loc_sub)
 
         self._gen_combo = QComboBox()
+        # The dropdown POPUP needs explicit styling too, or it inherits the
+        # app's light theme and rendered as low-contrast "dark menus" over
+        # the game (user report). Popup: bright text on a solid panel, blue
+        # highlight on the hovered row.
         self._gen_combo.setStyleSheet(
-            f"QComboBox {{ background: {_PANEL_HI}; color: {_TEXT}; border: none; "
-            "border-radius: 5px; padding: 5px 8px; font-size: 12px; }}")
+            f"QComboBox {{ background: {_PANEL_HI}; color: {_TEXT}; "
+            f"border: 1px solid #52658A; border-radius: 5px; padding: 6px 9px; "
+            f"font-size: 12px; font-weight: 600; }}"
+            f"QComboBox::drop-down {{ border: none; width: 22px; }}"
+            f"QComboBox QAbstractItemView {{ background: {_PANEL_HI}; "
+            f"color: {_TEXT}; selection-background-color: {_BLUE}; "
+            f"selection-color: white; outline: none; padding: 4px; }}")
         self._gen_combo.currentIndexChanged.connect(self._on_gen_changed)
         dl.addWidget(self._gen_combo)
 
@@ -545,11 +564,28 @@ class BlackoutBrigadeDialog(QDialog):
 
     @staticmethod
     def _btn_css(bg: str) -> str:
+        # One f-string only — every "{"/"}" is doubled. The earlier mixed
+        # plain+f version left a literal "}}" that made Qt reject the sheet.
         return (
             f"QPushButton {{ background: {bg}; color: white; border: none; "
-            "border-radius: 6px; padding: 8px 14px; font-size: 12px; font-weight: 600; }}"
-            "QPushButton:hover { background: #475569; }"
-            "QPushButton:disabled { background: #475569; color: #94A3B8; }")
+            f"border-radius: 6px; padding: 8px 14px; font-size: 12px; "
+            f"font-weight: 600; }}"
+            f"QPushButton:hover {{ background: #55688A; }}"
+            f"QPushButton:disabled {{ background: #33455F; color: {_MUTED}; }}")
+
+    @staticmethod
+    def _checkbox_css(text_color: str) -> str:
+        # A default dark-on-dark checkbox indicator is invisible; draw a
+        # visible box and a bright blue checked state. Single f-string
+        # throughout — mixing plain and f-strings here is how a stray "}}"
+        # sneaks in and breaks the whole sheet.
+        return (
+            f"QCheckBox {{ color: {text_color}; font-size: 12px; spacing: 8px; }}"
+            f"QCheckBox::indicator {{ width: 15px; height: 15px; "
+            f"border-radius: 3px; border: 1.5px solid #6B7E9E; "
+            f"background: {_PANEL}; }}"
+            f"QCheckBox::indicator:checked {{ background: {_BLUE}; "
+            f"border-color: {_BLUE}; }}")
 
     def _show_intro(self):
         QTimer.singleShot(1100, self._start_game)
@@ -632,8 +668,8 @@ class BlackoutBrigadeDialog(QDialog):
             pr = {1: "low", 2: "med", 3: "high", 4: "high", 5: "CRIT"}[a.priority]
             cb = QCheckBox(f"{a.name}  ·  {a.run:,}/{a.start:,} W  ·  {pr}")
             cb.setChecked(a.active)
-            cb.setStyleSheet(
-                f"QCheckBox {{ color: {_RED if a.priority>=5 else _TEXT}; font-size: 11px; }}")
+            cb.setStyleSheet(self._checkbox_css(
+                "#FCA5A5" if a.priority >= 5 else _TEXT))
             cb.stateChanged.connect(lambda _s, ap=a: self._toggle_appl(ap))
             self._appl_box.addWidget(cb)
             self._appl_checks.append(cb)
