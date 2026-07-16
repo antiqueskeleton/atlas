@@ -221,17 +221,11 @@ class IntelligencePage(QWidget):
         self._export_brief_btn.clicked.connect(self._export_briefing_only)
 
         # Export Tab (Full) button — plain neutral style (matches Run
-        # Analysis, no blue/white), placed in the tabs' corner widget further
-        # down so it sits in line with the Product/Personas/Journey/
-        # Opportunities tab row it actually exports. The corner-widget slot
-        # crops widgets to the tab bar's height, so the label was taller
-        # than the visible button (user test item 8.5) — explicit compact
-        # sizing keeps the whole label inside the slot.
+        # Analysis, no blue/white). Lives on a right-aligned strip above
+        # the tab row (see tabs_wrap); it was previously the tab widget's
+        # corner widget, which overlapped the tab bar and bled under the
+        # briefing pane (user v1.0 re-test, item 8.5).
         self._export_tab_btn = QPushButton("Export Tab (Full)")
-        self._export_tab_btn.setFixedHeight(26)
-        self._export_tab_btn.setMinimumWidth(130)
-        self._export_tab_btn.setStyleSheet(
-            "QPushButton { font-size: 11px; padding: 2px 10px; }")
         self._export_tab_btn.setToolTip(
             "Export the currently selected tab's complete results, with no "
             "10-item cap — unlike Export PDF/Word, which condense to keep "
@@ -325,9 +319,20 @@ class IntelligencePage(QWidget):
         self.tabs.addTab(self._persona_frame, "Personas")
         self.tabs.addTab(self._journey_frame, "Journey")
         self.tabs.addTab(self._opp_tab, "Opportunities")
-        # In line with the tab row itself (Qt's corner-widget slot), not a
-        # separate toolbar row — this is what it exports.
-        self.tabs.setCornerWidget(self._export_tab_btn, Qt.TopRightCorner)
+
+        # Export Tab (Full) on its own right-aligned strip ABOVE the tabs —
+        # the corner-widget slot bled under the adjacent briefing pane and
+        # overlapped the tab bar (user v1.0 re-test, item 8.5).
+        tabs_wrap = QWidget()
+        tabs_wrap_lay = QVBoxLayout(tabs_wrap)
+        tabs_wrap_lay.setContentsMargins(0, 0, 0, 0)
+        tabs_wrap_lay.setSpacing(4)
+        tab_toolbar = QHBoxLayout()
+        tab_toolbar.setContentsMargins(0, 0, 0, 0)
+        tab_toolbar.addStretch()
+        tab_toolbar.addWidget(self._export_tab_btn)
+        tabs_wrap_lay.addLayout(tab_toolbar)
+        tabs_wrap_lay.addWidget(self.tabs, 1)
 
         self._brief_frame, self._brief_body = _section_card(
             "Executive Briefing", header_extra=self._export_brief_btn)
@@ -341,7 +346,7 @@ class IntelligencePage(QWidget):
         self._brief_frame.layout().insertWidget(1, self._verify_badge)
 
         h_splitter = QSplitter(Qt.Horizontal)
-        h_splitter.addWidget(self.tabs)
+        h_splitter.addWidget(tabs_wrap)
         h_splitter.addWidget(self._brief_frame)
         h_splitter.setSizes([560, 440])
         h_splitter.setHandleWidth(6)

@@ -181,7 +181,10 @@ class InvestigationPage(QWidget):
         sum_splitter = QSplitter(Qt.Vertical)
         sum_splitter.addWidget(top_pair)
         sum_splitter.addWidget(bottom_row)
-        sum_splitter.setSizes([330, 330])
+        # Summary + Recommendations are short (a few lines); the reading
+        # happens in AI Reasoning + Consensus below — give the bottom row
+        # roughly 2/3 of the height (user v1.0 re-test, item 9.1).
+        sum_splitter.setSizes([215, 445])
         sum_lay.addWidget(sum_splitter, 1)
 
         # ── Tab: Agents ───────────────────────────────────────────────────────

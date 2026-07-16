@@ -170,16 +170,17 @@ class PriceComparisonPage(QWidget):
         root.addWidget(title)
         root.addWidget(subtitle)
 
-        # Main splitter: controls left, results right
-        splitter = QSplitter(Qt.Horizontal)
-        splitter.setChildrenCollapsible(False)
-        splitter.addWidget(self._build_controls())
-        splitter.addWidget(self._build_results())
-        splitter.setSizes([310, 900])
-        splitter.setStretchFactor(0, 0)
-        splitter.setStretchFactor(1, 1)
-
-        root.addWidget(splitter, 1)
+        # Fixed-width control column + stretch results — NOT a splitter.
+        # The control column is a fixed-width scroll area; a splitter tried
+        # to allocate it a different width, so the fixed content overflowed
+        # UNDER the results pane, and the handle was dead against a
+        # fixed-width child anyway (user v1.0 re-test, item 1.5).
+        body = QHBoxLayout()
+        body.setContentsMargins(0, 0, 0, 0)
+        body.setSpacing(12)
+        body.addWidget(self._build_controls())      # fixed 330px
+        body.addWidget(self._build_results(), 1)     # takes the rest
+        root.addLayout(body, 1)
         self.setLayout(root)
 
     # ── Left control panel ────────────────────────────────────────────────────
