@@ -2,9 +2,20 @@
 __pycache__/
 *.pyc
 
-# Database
+# Database — never commit these. atlas.db and a backup were tracked here
+# for 18 commits before being purged from history; `database/*.db` alone
+# does NOT match database/backups/*.db (a glob star won't cross a /), which
+# is how the backup slipped in. Match .db anywhere under database/ instead.
 database/*.db
+database/**/*.db
+database/backups/
 database/logs/
+
+# Exported reports — these contain real brand intelligence; keep them out
+# of the (public) repo.
+Atlas_Intelligence_*.pdf
+Atlas_Visibility_*.pdf
+*.xlsx.tmp
 
 # Reports
 reports/*.json
