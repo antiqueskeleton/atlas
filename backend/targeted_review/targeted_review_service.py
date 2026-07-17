@@ -276,6 +276,25 @@ class TargetedReviewService:
             return None
 
         leader_brand, leader_value = max(competitors, key=lambda bv: bv[1])
+
+        # Full standings across every brand with a value on this metric, so a
+        # card shows the real competitive landscape — the target's rank and
+        # who's ahead — not just the #1 leader (R3). Higher is better for
+        # every current metric (views, subscribers, videos, rating), so sort
+        # descending; competition ranking (1,2,2,4) handles ties.
+        fmt = metric["fmt"]
+        ranked = sorted(
+            ((b, value_of(m)) for b, m in usable.items() if value_of(m) is not None),
+            key=lambda bv: bv[1], reverse=True,
+        )
+        leaderboard, prev_val, rank = [], None, 0
+        for i, (b, v) in enumerate(ranked):
+            if v != prev_val:
+                rank, prev_val = i + 1, v
+            leaderboard.append({"rank": rank, "brand": b,
+                                "display": fmt(v), "is_target": b == target})
+        target_rank = next(e["rank"] for e in leaderboard if e["is_target"])
+
         base = {
             "platform": platform_name,
             "metric_label": metric["label"],
@@ -283,6 +302,9 @@ class TargetedReviewService:
             "target_display": metric["fmt"](target_value),
             "leader_brand": leader_brand,
             "leader_display": metric["fmt"](leader_value),
+            "target_rank": target_rank,
+            "field_size": len(leaderboard),
+            "leaderboard": leaderboard,
         }
 
         if metric.get("is_rating"):
@@ -339,10 +361,12 @@ def build_presence_block(repository, target_brand: str) -> str:
         gap_service = TargetedReviewService(None, target_brand, repository=repository)
         for g in gap_service.gap_analysis(key):
             if g["type"] == "gap":
+                rank = (f" ({g['target_brand']} ranks #{g['target_rank']} of "
+                        f"{g['field_size']})" if g.get("target_rank") else "")
                 lines.append(
                     f"  MEASURED GAP — {g['metric_label']}: "
                     f"{g['target_brand']} {g['target_display']} vs "
-                    f"{g['leader_brand']} {g['leader_display']}"
+                    f"{g['leader_brand']} {g['leader_display']}{rank}"
                 )
         sections.append("\n".join(lines))
 

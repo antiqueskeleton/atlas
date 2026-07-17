@@ -196,6 +196,21 @@ _DETAIL_SPECS = {
 }
 
 
+def _standings_rows(board: list[dict], top: int = 3) -> list:
+    """Compact standings for a finding card: the top `top` brands plus the
+    target's own row (with an ellipsis separator) when it sits below the cut,
+    so the card shows both the leaders and where the target actually stands
+    without listing a dozen brands. `None` in the returned list marks the
+    ellipsis gap. Deduped — a target inside the top `top` isn't repeated."""
+    rows = list(board[:top])
+    target_idx = next((i for i, e in enumerate(board) if e.get("is_target")), None)
+    if target_idx is not None and target_idx >= top:
+        if target_idx > top:          # a run of brands sits between the cut and target
+            rows.append(None)         # ellipsis marker
+        rows.append(board[target_idx])
+    return rows
+
+
 class _CollectWorker(QThread):
     progress = Signal(int, int, str)
     done = Signal(list)
@@ -1199,12 +1214,40 @@ class TargetedReviewPage(QWidget):
         top.addWidget(title, 1)
         lay.addLayout(top)
 
-        versus = QLabel(
-            f"{f['target_brand']}: {f['target_display']}   vs   "
-            f"{f['leader_brand']}: {f['leader_display']}"
-        )
-        versus.setStyleSheet("font-size: 12px; color: #111827; font-weight: 600;")
-        lay.addWidget(versus)
+        # Competitive standings (R3): the target's rank in the field, then a
+        # compact leaderboard (top 3 + the target's own row) — replaces the
+        # old one-vs-#1 line so a card shows everyone the target trails, not
+        # just the leader.
+        rank, field = f.get("target_rank"), f.get("field_size")
+        board = f.get("leaderboard") or []
+        if rank and field:
+            rank_lbl = QLabel(
+                f"{f['target_brand']} ranks #{rank} of {field} tracked brands")
+            rank_lbl.setStyleSheet(
+                "font-size: 12px; color: #111827; font-weight: 700;")
+            lay.addWidget(rank_lbl)
+        if board:
+            for entry in _standings_rows(board):
+                if entry is None:
+                    dots = QLabel("        · · ·")   # middle dots render in Inter; ⋯/▸ do not
+                    dots.setStyleSheet("font-size: 11px; color: #9CA3AF;")
+                    lay.addWidget(dots)
+                    continue
+                row = QLabel(
+                    f"#{entry['rank']}   {entry['brand']} — {entry['display']}")
+                if entry["is_target"]:
+                    row.setStyleSheet(
+                        "font-size: 12px; color: #1D4ED8; font-weight: 700; "
+                        "background: #EFF6FF; border-radius: 4px; padding: 2px 6px;")
+                else:
+                    row.setStyleSheet("font-size: 12px; color: #4B5563; padding: 2px 6px;")
+                lay.addWidget(row)
+        elif f.get("leader_brand"):   # pre-R3 snapshots without a leaderboard
+            versus = QLabel(
+                f"{f['target_brand']}: {f['target_display']}   vs   "
+                f"{f['leader_brand']}: {f['leader_display']}")
+            versus.setStyleSheet("font-size: 12px; color: #111827; font-weight: 600;")
+            lay.addWidget(versus)
 
         why = QLabel(f["why"])
         why.setWordWrap(True)

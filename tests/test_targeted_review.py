@@ -412,6 +412,64 @@ def test_gap_analysis_flags_recent_view_lead(tmp_path):
     assert "current" in recent_gap["why"].lower()
 
 
+def test_gap_finding_carries_full_ranking(tmp_path):
+    """Each finding now includes the target's rank in the field and a full
+    leaderboard across every tracked brand, not just the #1 leader (R3)."""
+    repo = TargetedReviewRepository(db_path=tmp_path / "t.db")
+    repo.save_findings("YouTube", [
+        {"brand": "Firman", "platform": "YouTube", "relevant_results_top100": 10, "error": ""},
+        {"brand": "Honda", "platform": "YouTube", "relevant_results_top100": 90, "error": ""},
+        {"brand": "Champion", "platform": "YouTube", "relevant_results_top100": 50, "error": ""},
+        {"brand": "WEN", "platform": "YouTube", "relevant_results_top100": 30, "error": ""},
+    ])
+    service = TargetedReviewService(FakeConfig(), "Firman", repository=repo)
+    gap = next(f for f in service.gap_analysis("youtube")
+               if "top-100 search results" in f["metric_label"])
+    assert gap["target_rank"] == 4 and gap["field_size"] == 4
+    board = gap["leaderboard"]
+    assert [e["brand"] for e in board] == ["Honda", "Champion", "WEN", "Firman"]
+    assert [e["rank"] for e in board] == [1, 2, 3, 4]
+    assert board[-1]["is_target"] is True and board[0]["is_target"] is False
+
+
+def test_gap_leaderboard_uses_competition_ranking_for_ties(tmp_path):
+    repo = TargetedReviewRepository(db_path=tmp_path / "t.db")
+    repo.save_findings("YouTube", [
+        {"brand": "Firman", "platform": "YouTube", "relevant_results_top100": 10, "error": ""},
+        {"brand": "Honda", "platform": "YouTube", "relevant_results_top100": 50, "error": ""},
+        {"brand": "Champion", "platform": "YouTube", "relevant_results_top100": 50, "error": ""},
+    ])
+    service = TargetedReviewService(FakeConfig(), "Firman", repository=repo)
+    gap = next(f for f in service.gap_analysis("youtube")
+               if "top-100 search results" in f["metric_label"])
+    ranks = {e["brand"]: e["rank"] for e in gap["leaderboard"]}
+    assert ranks["Honda"] == 1 and ranks["Champion"] == 1   # tie -> both #1
+    assert ranks["Firman"] == 3                              # competition ranking skips #2
+    assert gap["target_rank"] == 3
+
+
+def test_standings_rows_shows_top_and_target_with_ellipsis():
+    from desktop.pages.targeted_review_page import _standings_rows
+    board = [{"rank": i + 1, "brand": f"B{i}", "is_target": i == 5} for i in range(6)]
+    rows = _standings_rows(board, top=3)
+    assert [r["brand"] if r else "…" for r in rows] == ["B0", "B1", "B2", "…", "B5"]
+
+
+def test_standings_rows_contiguous_when_target_just_below_cut():
+    from desktop.pages.targeted_review_page import _standings_rows
+    board = [{"rank": i + 1, "brand": f"B{i}", "is_target": i == 3} for i in range(6)]
+    rows = _standings_rows(board, top=3)
+    assert None not in rows                              # #4 is contiguous, no gap
+    assert [r["brand"] for r in rows] == ["B0", "B1", "B2", "B3"]
+
+
+def test_standings_rows_no_ellipsis_when_target_in_top():
+    from desktop.pages.targeted_review_page import _standings_rows
+    board = [{"rank": i + 1, "brand": f"B{i}", "is_target": i == 1} for i in range(6)]
+    rows = _standings_rows(board, top=3)
+    assert None not in rows and len(rows) == 3           # target already visible
+
+
 def test_gap_analysis_reports_strength_when_target_leads(tmp_path):
     repo = TargetedReviewRepository(db_path=tmp_path / "t.db")
     _seed_youtube(repo, firman_videos=90, honda_videos=10)
