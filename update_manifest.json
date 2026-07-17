@@ -1,5 +1,5 @@
 {
-  "version": "0.9.5",
-  "download_url": "https://github.com/antiqueskeleton/atlas/releases/download/v0.9.5/AtlasAI-v0.9.5-Setup.exe",
-  "release_notes": "v0.9.5 — CRITICAL FIX: v0.9.4 broke Visibility Collection for every AI provider (no responses were being saved). This is fixed. Also fixed the Visibility page's target-brand score tile going stale after changing the Target Brand in Settings. If you installed v0.9.4, please update immediately."
+  "version": "1.0.0",
+  "download_url": "https://github.com/antiqueskeleton/atlas/releases/download/v1.0.0/AtlasAI-v1.0.0-Setup.exe",
+  "release_notes": "v1.0.0 — Atlas AI's first full release. NEW: Targeted Review measures your brand's real presence on YouTube, Reddit, editorial coverage, and retail listings, then feeds that measured data into the Intelligence Engine as ground truth. Price Comparison is unlocked — give it a model and it finds spec-matched competitor products in an Amazon-style table. Adds Google AI Overviews, Best Buy, and Cohere as data sources. Major accuracy pass: word-boundary brand matching removes substring false positives, every KPI tile now shows its sample size and as-of date, and executive briefings carry a fact-check badge. Also: a reworked Home dashboard with per-source data health and a Getting Started checklist, consistent typography throughout, near-instant startup, and automatic database backups with integrity checks."
 }
