@@ -106,31 +106,22 @@ class YouTubePlatformProvider(PlatformProvider):
             relevant = _filter_relevant(all_items, brand)
             recent_relevant = _filter_relevant(recent_items, brand)
 
-            stats_by_id: dict[str, dict] = {}
-            video_ids = [v["video_id"] for v in relevant][:50]
-            if video_ids:
-                stats = requests.get(_VIDEOS_URL, params={
-                    "part": "statistics", "id": ",".join(video_ids), "key": api_key,
-                }, timeout=_TIMEOUT)
-                if stats.status_code == 200:
-                    stats_by_id = {
-                        item["id"]: item.get("statistics", {})
-                        for item in stats.json().get("items", [])
-                    }
+            # One stats pull covering BOTH the all-time and last-12-month
+            # relevant sets (deduped union), so each list can be ranked by
+            # real view counts. Recent uploads rarely overlap the all-time
+            # top, so both id sets are needed; _video_stats batches by the
+            # 50-id videos.list cap. ~1-2 extra quota units — negligible next
+            # to the ~400 the search sampling already cost.
+            stats_by_id = self._video_stats(
+                api_key,
+                [v["video_id"] for v in relevant][:50]
+                + [v["video_id"] for v in recent_relevant][:50],
+            )
         except requests.RequestException as exc:
             return {**base, "error": f"YouTube request failed: {exc}"}
 
-        for video in relevant:
-            video_stats = stats_by_id.get(video["video_id"], {})
-            try:
-                video["views"] = int(video_stats.get("viewCount", 0))
-            except (TypeError, ValueError):
-                video["views"] = 0
-            try:
-                video["comments"] = int(video_stats.get("commentCount", 0))
-            except (TypeError, ValueError):
-                video["comments"] = 0
-        relevant.sort(key=lambda v: -v["views"])
+        _rank_by_views(relevant, stats_by_id)
+        _rank_by_views(recent_relevant, stats_by_id)
 
         channel = self._channel_metrics(api_key, self.channel_urls.get(brand, ""))
         comments = self._top_video_comments(api_key, relevant[:_COMMENT_VIDEOS])
@@ -143,11 +134,37 @@ class YouTubePlatformProvider(PlatformProvider):
             "recent_relevant_365d": len(recent_relevant),
             "top_videos": relevant[:10],
             "top_videos_total_views": sum(v["views"] for v in relevant[:10]),
+            # Same top-10-by-views ranking, scoped to videos PUBLISHED in the
+            # trailing 12 months. All-time totals are dominated by 3-6-year-old
+            # uploads, so a newer brand always loses there by pure volume; this
+            # shows who is winning attention NOW, where a newer brand can
+            # genuinely lead (user request 2026-07-17).
+            "top_videos_recent": recent_relevant[:10],
+            "top_videos_recent_total_views": sum(v["views"] for v in recent_relevant[:10]),
             **channel,
             "top_comments": comments,
             "owner_voice": owner_voice,
             "error": "",
         }
+
+    def _video_stats(self, api_key: str, video_ids: list[str]) -> dict:
+        """viewCount/commentCount keyed by video id, deduped and fetched in
+        50-id batches (videos.list's per-call cap). A non-200 batch is
+        skipped rather than fatal — a missing stat just leaves that video at
+        0 views, exactly as the previous single-call version behaved. Widened
+        from one 50-id call to N batches so the all-time AND last-12-month
+        relevant sets can both be ranked from a single stats pass."""
+        unique = list(dict.fromkeys(vid for vid in video_ids if vid))
+        stats_by_id: dict[str, dict] = {}
+        for start in range(0, len(unique), 50):
+            chunk = unique[start:start + 50]
+            resp = requests.get(_VIDEOS_URL, params={
+                "part": "statistics", "id": ",".join(chunk), "key": api_key,
+            }, timeout=_TIMEOUT)
+            if resp.status_code == 200:
+                for item in resp.json().get("items", []):
+                    stats_by_id[item["id"]] = item.get("statistics", {})
+        return stats_by_id
 
     def _top_video_comments(self, api_key: str, videos: list[dict]) -> list[dict]:
         """Top comments (relevance-ranked) on the brand's top relevant
@@ -377,6 +394,26 @@ class YouTubePlatformProvider(PlatformProvider):
             if not page_token:
                 break
         return items, ""
+
+
+def _rank_by_views(videos: list[dict], stats_by_id: dict) -> list[dict]:
+    """Attach real view/comment counts (from a videos.list statistics map) to
+    each relevance-filtered video and sort by views descending — the step
+    that turns a relevance list into a 'top videos' ranking. Pure and
+    separately testable; mutates and returns the same list. Missing or
+    non-numeric stats degrade to 0, never a crash."""
+    for video in videos:
+        vs = stats_by_id.get(video["video_id"], {})
+        try:
+            video["views"] = int(vs.get("viewCount", 0))
+        except (TypeError, ValueError):
+            video["views"] = 0
+        try:
+            video["comments"] = int(vs.get("commentCount", 0))
+        except (TypeError, ValueError):
+            video["comments"] = 0
+    videos.sort(key=lambda v: -v["views"])
+    return videos
 
 
 def _filter_relevant(items: list[dict], brand: str) -> list[dict]:

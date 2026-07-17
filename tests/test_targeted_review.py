@@ -19,7 +19,7 @@ from backend.targeted_review.targeted_review_service import (
     TargetedReviewService, build_presence_block,
 )
 from backend.targeted_review.youtube_provider import (
-    YouTubePlatformProvider, _filter_relevant,
+    YouTubePlatformProvider, _filter_relevant, _rank_by_views,
 )
 
 
@@ -105,12 +105,77 @@ def test_youtube_counted_metrics_and_error_path():
     assert result["relevant_results_top100"] == 1   # vlog filtered out
     assert result["top_videos"][0]["views"] == 150000
     assert result["top_videos_total_views"] == 150000
+    # The last-12-month list is ranked and exposed the same way; the mock
+    # returns the same page for the publishedAfter search, so it mirrors the
+    # all-time set here (divergence is exercised in the dedicated test below).
+    assert result["recent_relevant_365d"] == 1
+    assert result["top_videos_recent"][0]["views"] == 150000
+    assert result["top_videos_recent_total_views"] == 150000
 
     bad = MagicMock(status_code=403)
     bad.json.return_value = {"error": {"message": "quotaExceeded"}}
     with patch("backend.targeted_review.youtube_provider.requests.get", return_value=bad):
         result = provider.fetch_brand_presence("Firman")
     assert "quotaExceeded" in result["error"]
+
+
+def test_rank_by_views_sorts_desc_and_defaults_missing_stats_to_zero():
+    videos = [
+        {"video_id": "a", "title": "A"},
+        {"video_id": "b", "title": "B"},
+        {"video_id": "c", "title": "C"},   # no stats -> 0 views, sorts last
+    ]
+    stats = {
+        "a": {"viewCount": "500", "commentCount": "10"},
+        "b": {"viewCount": "9000", "commentCount": "3"},
+    }
+    ranked = _rank_by_views(videos, stats)
+    assert [v["video_id"] for v in ranked] == ["b", "a", "c"]
+    assert ranked[0]["views"] == 9000 and ranked[0]["comments"] == 3
+    assert ranked[-1]["views"] == 0 and ranked[-1]["comments"] == 0
+
+
+def test_youtube_recent_window_ranks_separately_from_all_time():
+    """The last-12-month list comes from its own publishedAfter search and is
+    ranked independently: an old high-view video tops all-time while a newer,
+    lower-view video tops the recent window — the whole point of the recency
+    view (user request 2026-07-17)."""
+    provider = YouTubePlatformProvider()
+    provider.set_credentials({"api_key": "k"})
+
+    old = {"id": {"videoId": "old"}, "snippet": {
+        "title": "Firman W03083 generator review", "channelTitle": "Legacy",
+        "publishedAt": "2021-01-01T00:00:00Z"}}
+    fresh = {"id": {"videoId": "fresh"}, "snippet": {
+        "title": "Firman new generator review 2026", "channelTitle": "Fresh",
+        "publishedAt": "2026-06-01T00:00:00Z"}}
+    all_page = {"items": [old, fresh]}
+    recent_page = {"items": [fresh]}          # publishedAfter search -> only the fresh one
+    stats_page = {"items": [
+        {"id": "old", "statistics": {"viewCount": "1000000"}},
+        {"id": "fresh", "statistics": {"viewCount": "5000"}},
+    ]}
+
+    def fake_get(url, params=None, timeout=None):
+        resp = MagicMock(status_code=200)
+        if "videos" in url:
+            resp.json.return_value = stats_page
+        elif params and params.get("publishedAfter"):
+            resp.json.return_value = recent_page
+        else:
+            resp.json.return_value = all_page
+        return resp
+
+    with patch("backend.targeted_review.youtube_provider.requests.get", side_effect=fake_get):
+        result = provider.fetch_brand_presence("Firman")
+
+    # All-time leader is the years-old million-view video...
+    assert result["top_videos"][0]["video_id"] == "old"
+    assert result["top_videos_total_views"] == 1_005_000
+    # ...but the last-12-month leader is the fresh, lower-view video.
+    assert [v["video_id"] for v in result["top_videos_recent"]] == ["fresh"]
+    assert result["top_videos_recent_total_views"] == 5000
+    assert result["recent_relevant_365d"] == 1
 
 
 # ── Reddit provider ───────────────────────────────────────────────────────────
@@ -323,6 +388,28 @@ def test_gap_analysis_flags_meaningful_lead_with_why_and_tactics(tmp_path):
     assert video_gap["ratio"] == 9.0
     assert "AI" in video_gap["why"]
     assert any("50K-500K" in t for t in video_gap["tactics"])
+
+
+def test_gap_analysis_flags_recent_view_lead(tmp_path):
+    """The last-12-month view dimension produces its own gap, independent of
+    all-time volume — where the target is losing (or winning) CURRENT
+    attention (R1, 2026-07-17). Both brands are tied on every other metric so
+    only the recency gap can fire."""
+    repo = TargetedReviewRepository(db_path=tmp_path / "t.db")
+    repo.save_findings("YouTube", [
+        {"brand": "Firman", "platform": "YouTube", "relevant_results_top100": 10,
+         "recent_relevant_365d": 10, "top_videos_total_views": 1000,
+         "top_videos_recent_total_views": 20_000, "error": ""},
+        {"brand": "Honda", "platform": "YouTube", "relevant_results_top100": 10,
+         "recent_relevant_365d": 10, "top_videos_total_views": 1000,
+         "top_videos_recent_total_views": 200_000, "error": ""},
+    ])
+    service = TargetedReviewService(FakeConfig(), "Firman", repository=repo)
+    gaps = [f for f in service.gap_analysis("youtube") if f["type"] == "gap"]
+    recent_gap = next(f for f in gaps if "last 12 months" in f["metric_label"])
+    assert recent_gap["leader_brand"] == "Honda"
+    assert recent_gap["ratio"] == 10.0
+    assert "current" in recent_gap["why"].lower()
 
 
 def test_gap_analysis_reports_strength_when_target_leads(tmp_path):

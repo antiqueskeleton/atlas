@@ -356,8 +356,11 @@ def _summarize_brand_metrics(platform_key: str, m: dict) -> str:
     if platform_key == "youtube":
         text = (f"{m.get('relevant_results_top100') or 0:,} relevant videos in the "
                 f"top-100 search results, {m.get('recent_relevant_365d') or 0:,} "
-                f"fresh in last 12 months, {m.get('top_videos_total_views') or 0:,} "
-                f"views across top-10 relevant videos")
+                f"fresh in last 12 months; {m.get('top_videos_total_views') or 0:,} "
+                f"views across the top-10 relevant videos all-time vs "
+                f"{m.get('top_videos_recent_total_views') or 0:,} across the top-10 "
+                f"published in the last 12 months (current-period attention, where "
+                f"a newer brand can lead despite a smaller back-catalog)")
         if m.get("channel_subscribers") is not None:
             text += (f", official channel: {m['channel_subscribers']:,} subscribers, "
                      f"{m.get('channel_uploads_365d') or 0} uploads in last year")
@@ -503,6 +506,27 @@ _PLATFORM_METRICS: dict[str, list[dict]] = {
                 "Prioritize the 2-3 highest-subscriber generator channels for seeding",
                 f"Sponsor a head-to-head test against {l}'s best-selling model",
                 "Add chapter markers/transcripts to owned videos so AI can parse them",
+            ],
+        },
+        {
+            "label": "Views on videos published in the last 12 months (top-100 sample)",
+            "value": lambda m: m.get("top_videos_recent_total_views"),
+            "fmt": lambda v: f"{v:,} recent views",
+            "why": lambda t, l: (
+                f"Recent view volume is the one YouTube dimension a newer brand "
+                f"can win outright: all-time totals are dominated by years-old "
+                f"uploads, but attention on this year's videos reflects the CURRENT "
+                f"market. {l} leading here means AI answers are being shaped by "
+                f"fresh consumer watch behavior, not just legacy content — and it "
+                f"is where {t} can outperform on momentum even while trailing on "
+                f"back-catalog volume."
+            ),
+            "tactics": lambda t, l, u: [
+                "Concentrate seeding on a few high-subscriber creators for "
+                "launch-window view spikes rather than spreading budget thin",
+                f"Commission a current-year head-to-head review against {l}'s newest model",
+                "Time new-model content to storm-season demand (June + December) "
+                "when generator searches and watch time peak",
             ],
         },
     ],

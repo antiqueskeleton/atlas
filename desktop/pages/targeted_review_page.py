@@ -61,8 +61,14 @@ _TABLE_COLUMNS = {
          "Relevant videos published in the trailing year, same top-100 counted "
          "sample — content freshness."),
         ("Top-10 Views", "top_videos_total_views",
-         "Combined view count of the brand's top-10 RELEVANT videos (filtered, "
-         "so an ambiguous brand name's off-topic viral videos don't count)."),
+         "Combined view count of the brand's top-10 RELEVANT videos, ALL-TIME "
+         "(filtered, so an ambiguous brand name's off-topic viral videos don't "
+         "count). Old brands dominate here on years-old uploads — compare with "
+         "Recent Views for who is winning attention now."),
+        ("Recent Views (12mo)", "top_videos_recent_total_views",
+         "Combined views of the brand's top-10 relevant videos PUBLISHED in the "
+         "last 12 months. This is where a newer brand can lead despite a smaller "
+         "back-catalog: it reflects current-period attention, not legacy volume."),
         ("Ch. Subs", lambda m: (f"{m['channel_subscribers']:,}"
                                 if m.get("channel_subscribers") is not None else None),
          "Official channel subscribers — needs the brand's channel URL, "
@@ -131,16 +137,24 @@ _TABLE_COLUMNS = {
 # that the summary table can't show — double-clicking a brand row opens it.
 # platform -> list of (metrics_key, section title, columns) sections shown
 # in the double-click drill-down dialog, in order.
+# The video-table columns are identical for the all-time and last-12-month
+# top-video drill-down sections — defined once so the two never drift apart.
+_YT_VIDEO_COLS = [
+    ("Title", lambda v: v.get("title", "")),
+    ("Channel", lambda v: v.get("channel", "")),
+    ("Views", lambda v: f"{v.get('views', 0):,}"),
+    ("Comments", lambda v: f"{v.get('comments', 0):,}"),
+    ("Published", lambda v: v.get("published", "")),
+    ("Link", lambda v: (f"https://youtube.com/watch?v={v['video_id']}"
+                        if v.get("video_id") else ""), "link"),
+]
+
 _DETAIL_SPECS = {
-    "youtube": [("top_videos", "Top relevant videos", [
-        ("Title", lambda v: v.get("title", "")),
-        ("Channel", lambda v: v.get("channel", "")),
-        ("Views", lambda v: f"{v.get('views', 0):,}"),
-        ("Comments", lambda v: f"{v.get('comments', 0):,}"),
-        ("Published", lambda v: v.get("published", "")),
-        ("Link", lambda v: (f"https://youtube.com/watch?v={v['video_id']}"
-                            if v.get("video_id") else ""), "link"),
-    ]), ("top_comments", "Owner voice — top comments on those videos", [
+    "youtube": [
+        ("top_videos", "Top relevant videos — all-time", _YT_VIDEO_COLS),
+        ("top_videos_recent",
+         "Top relevant videos — published in the last 12 months", _YT_VIDEO_COLS),
+        ("top_comments", "Owner voice — top comments on those videos", [
         ("Comment", lambda v: v.get("text", "")),
         ("Video", lambda v: v.get("video", "")),
         ("Likes", lambda v: f"{v.get('likes', 0):,}"),
