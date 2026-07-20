@@ -5,6 +5,8 @@ IntelligenceDocxReport (see tests/test_intelligence_docx_report.py) — this
 file mirrors that one's fixtures and edge cases, just verifying via
 pypdf-extracted text instead of python-docx paragraphs.
 """
+import re
+
 from pypdf import PdfReader
 
 from backend.reports.intelligence_pdf_report import IntelligencePDFReport, _pdf_safe
@@ -23,8 +25,17 @@ _OPPORTUNITIES = [
 
 
 def _extract_text(path) -> str:
+    """Extracted page text with every whitespace run collapsed to one space.
+
+    ReportLab line-wraps paragraphs, so a multi-word assertion such as
+    "Showing 5 of 8" can straddle a wrap and fail purely because the
+    surrounding copy changed length — not because the behaviour broke (this
+    happened when the section intros were reworded for R7). Normalising keeps
+    these assertions about CONTENT rather than incidental layout.
+    """
     reader = PdfReader(str(path))
-    return "\n".join(page.extract_text() for page in reader.pages)
+    raw = "\n".join(page.extract_text() or "" for page in reader.pages)
+    return re.sub(r"\s+", " ", raw)
 
 
 def test_generate_produces_valid_pdf_with_all_sections(tmp_path):
