@@ -169,7 +169,7 @@ Generator for 3000 Sq Ft Home,search,generator for 3000 square foot house,85
 Generator for 3000 Sq Ft Home,natural,What size generator can power a 3000 square foot house?,83
 Running vs Starting Watts,search,running watts vs starting watts generator,88
 Running vs Starting Watts,natural,What is the difference between running watts and starting watts on a generator?,86
-Running vs Starting Watts,conversational,"I keep seeing running watts and starting watts listed on generators. Can you explain the difference and why it matters when choosing the right size?",89
+Running vs Starting Watts,conversational,I keep seeing running watts and starting watts listed on generators. Can you explain the difference and why it matters when choosing the right size?,89
 Generator Watt Calculator,search,generator watt calculator,84
 Generator Watt Calculator,natural,How do I calculate what wattage generator I need?,82
 Generator Watt Calculator,conversational,I want to add up all the appliances I need to run and figure out what size generator to buy. How do I do that calculation?,85
@@ -242,7 +242,7 @@ Generator Parallel Operation,natural,What does parallel capable mean on a genera
 Generator Parallel Operation,conversational,I have seen generators advertised as parallel capable. What does that mean and would I ever need to run two generators together for a home?,77
 Best Generator Brand,search,best generator brand,96
 Best Generator Brand,natural,What is the best portable generator brand?,94
-Best Generator Brand,conversational,"I keep seeing several generator brands at the hardware store. Which brands are considered the most reliable and what makes them stand out?",97
+Best Generator Brand,conversational,I keep seeing several generator brands at the hardware store. Which brands are considered the most reliable and what makes them stand out?,97
 Most Reliable Generator Brand,search,most reliable generator brand,95
 Most Reliable Generator Brand,natural,Which portable generator brand is the most reliable?,93
 Most Reliable Generator Brand,conversational,Long-term reliability is my top priority. Which generator brands have the best track record for lasting years without major problems?,96
@@ -390,7 +390,7 @@ Tri Fuel Generator Benefits,natural,What are the advantages of a tri fuel genera
 Tri Fuel Generator Benefits,conversational,"A tri fuel generator sounds appealing but I am not sure if the added complexity is worth it. What are the real benefits of having gas, propane, and natural gas options?",83
 Generator for Sensitive Equipment,search,generator for sensitive equipment clean power,79
 Generator for Sensitive Equipment,natural,What type of generator produces the cleanest power for sensitive equipment?,77
-Generator for Sensitive Equipment,conversational,"I have expensive audio equipment and professional computers. I need a generator that produces very stable clean power. What type should I look for?",80
+Generator for Sensitive Equipment,conversational,I have expensive audio equipment and professional computers. I need a generator that produces very stable clean power. What type should I look for?,80
 Generator Starting Watts Explained,search,what are starting watts on a generator,81
 Generator Starting Watts Explained,natural,Why do appliances need more watts to start than to run?,79
 Generator Starting Watts Explained,conversational,My refrigerator says it needs 500 running watts but 1500 starting watts. Can you explain why starting watts are higher and how this affects which generator I need?,82
