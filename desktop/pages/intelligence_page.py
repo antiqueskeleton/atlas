@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
 from backend.intelligence.intelligence_service import IntelligenceService
 from backend.intelligence.opportunity_ranking import rank_opportunities
 from backend.reports.briefing_sections import split_briefing_sections
+from backend.reports.provenance import UNVERIFIED_BADGE, UNVERIFIED_NOTE
 from backend.visibility.brand_matcher import resolve_target_brand, text_contains_term
 from desktop.widgets.export_buttons import icon_export_button
 from desktop.widgets.info_icon import info_icon
@@ -789,7 +790,13 @@ class IntelligencePage(QWidget):
             # "---" between pairs gives a clear divider between Q&A blocks.
             if not pairs:
                 return "No data."
-            return "\n\n---\n\n".join(f"# Q: {p}\n\n{r}" for p, r in pairs)
+            # R7: the same provenance banner the PDF/DOCX exports carry, from
+            # the one shared source, so on-screen and printed output can never
+            # disagree about what is verified. It leads the pane, ahead of any
+            # verbatim model text.
+            banner = f"**{UNVERIFIED_BADGE}** — {UNVERIFIED_NOTE}"
+            body = "\n\n---\n\n".join(f"# Q: {p}\n\n{r}" for p, r in pairs)
+            return f"{banner}\n\n---\n\n{body}"
 
         self._product_body.setMarkdown(
             render(by_analyst.get("Product Intelligence", []))

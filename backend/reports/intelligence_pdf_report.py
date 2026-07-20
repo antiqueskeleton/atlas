@@ -23,6 +23,9 @@ from reportlab.platypus import (
 from backend.intelligence.opportunity_ranking import rank_opportunities
 from backend.reports.briefing_sections import split_briefing_sections
 from backend.reports.markdown_pdf_render import build_markdown_styles, render_markdown_to_flowables
+from backend.reports.provenance import (
+    SECTION_INTROS, UNVERIFIED_BADGE, UNVERIFIED_NOTE,
+)
 
 # ── Palette (shared with visibility PDF) ──────────────────────────────────────
 C_BLUE    = HexColor('#0B84FF')
@@ -219,16 +222,13 @@ class IntelligencePDFReport:
     _MAX_QA_PAIRS_SHOWN = 5
 
     def _analyst_sections(self) -> list:
+        # Intros come from provenance.py so the PDF, DOCX and on-screen tabs
+        # describe these blocks identically — as CAPTURED EVIDENCE, not Atlas
+        # analysis. The previous synthesis-flavoured wording is exactly what
+        # let unlabelled model output read as an Atlas recommendation.
         _SECTIONS = [
-            ("Product Intelligence",
-             "Synthesis of how AI systems describe and position products in this "
-             "category — features, comparisons, and purchase-driving attributes."),
-            ("Consumer Personas",
-             "AI-identified consumer segments most likely to research and purchase "
-             "generators — their needs, priorities, and decision factors."),
-            ("Buying Journey",
-             "How AI models describe the stages a buyer goes through, from initial "
-             "awareness through purchase and post-purchase support."),
+            (name, SECTION_INTROS[name])
+            for name in ("Product Intelligence", "Consumer Personas", "Buying Journey")
         ]
 
         by_analyst: dict[str, list[tuple[str, str]]] = {}
@@ -261,6 +261,14 @@ class IntelligencePDFReport:
                     "the app for the complete set."
                 )
             story.append(Paragraph(intro_text, self._styles['Body']))
+            story.append(Spacer(1, 0.07 * inch))
+            # R7: the provenance banner sits between the section intro and the
+            # first verbatim answer, so no reader reaches model output without
+            # passing it.
+            story.append(Paragraph(
+                f"<b>{UNVERIFIED_BADGE}</b> &mdash; {_pdf_safe(UNVERIFIED_NOTE)}",
+                self._styles['Unverified'],
+            ))
             story.append(Spacer(1, 0.14 * inch))
 
             for prompt, response in pairs:
@@ -428,6 +436,15 @@ class IntelligencePDFReport:
             'Body': ParagraphStyle(
                 'Body', fontName='Helvetica', fontSize=8.5,
                 textColor=C_MED, leading=12.5,
+            ),
+            # R7: amber callout box marking verbatim, unverified model output.
+            # Boxed + tinted so it cannot be skimmed past as ordinary body copy.
+            'Unverified': ParagraphStyle(
+                'Unverified', fontName='Helvetica', fontSize=7.8,
+                textColor=HexColor('#7C4A03'), leading=11,
+                backColor=HexColor('#FEF3C7'),
+                borderColor=C_AMBER, borderWidth=0.75, borderPadding=5,
+                spaceBefore=2, spaceAfter=2,
             ),
             'QPrompt': ParagraphStyle(
                 'QPrompt', fontName='Helvetica-Bold', fontSize=8.5,

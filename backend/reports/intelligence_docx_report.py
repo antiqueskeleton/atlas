@@ -20,6 +20,9 @@ from docx.oxml import OxmlElement
 from docx.shared import Inches, Pt, RGBColor
 
 from backend.intelligence.opportunity_ranking import rank_opportunities
+from backend.reports.provenance import (
+    SECTION_INTROS, UNVERIFIED_BADGE, UNVERIFIED_NOTE,
+)
 from backend.reports.briefing_sections import split_briefing_sections
 from backend.reports.markdown_docx_render import render_markdown_to_docx
 
@@ -251,16 +254,11 @@ class IntelligenceDocxReport:
     _MAX_QA_PAIRS_SHOWN = 5
 
     def _write_analyst_sections(self, doc: Document):
+        # Shared with the PDF via provenance.py so both describe these blocks
+        # as CAPTURED EVIDENCE rather than Atlas analysis (R7).
         _SECTIONS = [
-            ("Product Intelligence",
-             "Synthesis of how AI systems describe and position products in this "
-             "category — features, comparisons, and purchase-driving attributes."),
-            ("Consumer Personas",
-             "AI-identified consumer segments most likely to research and purchase "
-             "generators — their needs, priorities, and decision factors."),
-            ("Buying Journey",
-             "How AI models describe the stages a buyer goes through, from initial "
-             "awareness through purchase and post-purchase support."),
+            (name, SECTION_INTROS[name])
+            for name in ("Product Intelligence", "Consumer Personas", "Buying Journey")
         ]
 
         by_analyst: dict[str, list[tuple[str, str]]] = {}
@@ -287,7 +285,20 @@ class IntelligenceDocxReport:
                     "the app for the complete set."
                 )
             p = doc.add_paragraph(intro_text)
-            p.paragraph_format.space_after = Pt(10)
+            p.paragraph_format.space_after = Pt(4)
+
+            # R7: provenance banner between the intro and the first verbatim
+            # answer — bold amber so it cannot be mistaken for body copy or
+            # skimmed past on the way into unverified model output.
+            warn = doc.add_paragraph()
+            badge = warn.add_run(f"{UNVERIFIED_BADGE} — ")
+            badge.bold = True
+            badge.font.color.rgb = RGBColor(0x92, 0x40, 0x0E)
+            note = warn.add_run(UNVERIFIED_NOTE)
+            note.font.color.rgb = RGBColor(0x7C, 0x4A, 0x03)
+            for run in (badge, note):
+                run.font.size = Pt(8.5)
+            warn.paragraph_format.space_after = Pt(10)
 
             for prompt, response in pairs:
                 # Prompt line
