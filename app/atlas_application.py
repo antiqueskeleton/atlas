@@ -22,6 +22,12 @@ class AtlasApplication:
         from backend.services.backup_service import create_backup
         create_backup()
 
+        # R9: turn API usage metering on for real runs. Opt-in by design —
+        # unit tests never call this, so constructing a provider in a test
+        # records nothing and the real database stays clean.
+        from backend.usage.usage_tracker import enable_recording
+        enable_recording()
+
         self.config_service = ConfigService()
         self.dataset_manager = DatasetManager()
         self.provider_manager = ProviderManager()

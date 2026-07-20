@@ -1,6 +1,7 @@
 from backend.ai.base_provider import AIProvider
 from backend.ai.ai_reasoning_parser import AIReasoningParser
 from backend.models.ai_reasoning import AIReasoning
+from backend.usage.usage_tracker import record_usage
 
 
 class PerplexityProvider(AIProvider):
@@ -33,6 +34,7 @@ class PerplexityProvider(AIProvider):
                 temperature=0.2,
             )
             text = response.choices[0].message.content or ""
+            record_usage(self.provider_name, self.model, response)
             reasoning = self.parser.parse(text=text, provider=self.provider_name)
             # #96: Perplexity returns the source URLs it grounded the answer
             # on with every response — previously discarded. The openai SDK

@@ -1,6 +1,7 @@
 from backend.ai.base_provider import AIProvider
 from backend.ai.ai_reasoning_parser import AIReasoningParser
 from backend.models.ai_reasoning import AIReasoning
+from backend.usage.usage_tracker import record_usage
 
 
 class CohereProvider(AIProvider):
@@ -47,6 +48,7 @@ class CohereProvider(AIProvider):
             text = "".join(
                 block.text for block in response.message.content if block.type == "text"
             ) if response.message.content else ""
+            record_usage(self.provider_name, self.model, response)
             return self.parser.parse(text=text, provider=self.provider_name)
 
         except ImportError:

@@ -159,6 +159,7 @@ class SettingsPage(QWidget):
         root.addWidget(self._brand_card())
         root.addWidget(self._provider_card())
         root.addWidget(self._keys_card())
+        root.addWidget(self._usage_card())
         root.addWidget(self._coming_soon_card())
         root.addWidget(self._volume_providers_card())
         root.addWidget(self._platform_research_card())
@@ -544,6 +545,106 @@ class SettingsPage(QWidget):
             "Saved with the Save All button below, alongside AI provider keys."
         ))
         return card
+
+    # ── API usage card (R9) ───────────────────────────────────────────────────
+
+    def _usage_card(self) -> QFrame:
+        """Month-to-date API usage in one place, so the user stops checking
+        each provider's dashboard separately. Deliberately honest about what
+        it is: Atlas-metered calls only, with an ESTIMATED cost."""
+        card, lay = self._card("API Usage — This Month")
+        lay.addWidget(self._note(
+            "What Atlas has metered on this machine since the 1st. Cost is an "
+            "ESTIMATE from published per-model rates — not your provider "
+            "invoice — and any usage outside Atlas is not counted. A model "
+            "with no known rate shows — rather than a guess."
+        ))
+        lay.addSpacing(6)
+
+        refresh_btn = QPushButton("Refresh Usage")
+        refresh_btn.setFixedWidth(160)
+        refresh_btn.clicked.connect(self._refresh_usage)
+        refresh_btn.setToolTip("Re-read the local usage log — no API calls are made")
+        btn_row = QHBoxLayout()
+        btn_row.addWidget(refresh_btn)
+        btn_row.addStretch()
+        lay.addLayout(btn_row)
+        lay.addSpacing(4)
+
+        self._usage_rows_widget = QWidget()
+        self._usage_rows_layout = QVBoxLayout()
+        self._usage_rows_layout.setSpacing(3)
+        self._usage_rows_layout.setContentsMargins(0, 0, 0, 0)
+        self._usage_rows_widget.setLayout(self._usage_rows_layout)
+        lay.addWidget(self._usage_rows_widget)
+
+        self._refresh_usage()
+        return card
+
+    @staticmethod
+    def _usage_row(cells: list[str], bold: bool = False) -> QWidget:
+        """One usage line: provider | calls | tokens in/out | est. cost."""
+        row = QWidget()
+        h = QHBoxLayout(row)
+        h.setContentsMargins(0, 0, 0, 0)
+        h.setSpacing(10)
+        widths = [170, 70, 160, 100]
+        aligns = [Qt.AlignLeft, Qt.AlignRight, Qt.AlignRight, Qt.AlignRight]
+        for text, width, align in zip(cells, widths, aligns):
+            lbl = QLabel(text)
+            lbl.setFixedWidth(width)
+            lbl.setAlignment(align | Qt.AlignVCenter)
+            lbl.setStyleSheet(
+                f"font-size: 12px; color: #111827; "
+                f"font-weight: {'700' if bold else '400'};")
+            h.addWidget(lbl)
+        h.addStretch()
+        return row
+
+    def _refresh_usage(self):
+        while self._usage_rows_layout.count():
+            item = self._usage_rows_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+        from backend.usage.usage_tracker import month_to_date
+        rows = month_to_date()
+
+        if not rows:
+            empty = QLabel("No API calls metered yet this month — usage appears "
+                           "here after Atlas makes its next provider call.")
+            empty.setWordWrap(True)
+            empty.setStyleSheet("font-size: 12px; color: #6B7280;")
+            self._usage_rows_layout.addWidget(empty)
+            return
+
+        self._usage_rows_layout.addWidget(self._usage_row(
+            ["Provider", "Calls", "Tokens (in / out)", "Est. cost"], bold=True))
+
+        total, any_cost, partial = 0.0, False, False
+        for r in rows:
+            tokens = (f"{r['input_tokens']:,} / {r['output_tokens']:,}"
+                      if (r["input_tokens"] or r["output_tokens"]) else "—")
+            if r["est_cost"] is None:
+                cost = "—"
+            else:
+                cost = f"${r['est_cost']:,.2f}" + ("*" if r["cost_partial"] else "")
+                total += r["est_cost"]
+                any_cost = True
+                partial = partial or r["cost_partial"]
+            self._usage_rows_layout.addWidget(self._usage_row(
+                [r["provider"], f"{r['calls']:,}", tokens, cost]))
+
+        self._usage_rows_layout.addWidget(self._usage_row(
+            ["Estimated total", "", "", f"${total:,.2f}" if any_cost else "—"],
+            bold=True))
+
+        if partial:
+            note = QLabel("* some calls used a model with no known rate and are "
+                          "excluded from the estimate.")
+            note.setWordWrap(True)
+            note.setStyleSheet("font-size: 11px; color: #6B7280;")
+            self._usage_rows_layout.addWidget(note)
 
     # ── Health card ───────────────────────────────────────────────────────────
 
