@@ -119,3 +119,24 @@ def test_sync_handles_out_of_order_rows_and_no_runs():
     know = _FakeKnowRepo()
     assert sync_model_change_events(vis, know) == 1
     assert sync_model_change_events(_FakeVisRepo([]), _FakeKnowRepo()) == 0
+
+
+# ── Aggregate-label filtering (v1.0 item 7.1 + 2026-07-21 user report) ────────
+
+def test_single_family_label_rejects_all_aggregate_variants():
+    """The original fix only excluded exact "Custom"/"default"; the real runs
+    table also carries "All Prompts" and "Custom (N sets)" summary labels,
+    which leaked into the Trends Prompt Sets chart AND the Matrix tab as if
+    they were prompt families (they aggregate many questions, so a mention
+    can't be honestly attributed — user screenshots, 2026-07-21)."""
+    from backend.visibility.trends_service import TrendsService
+    is_single = TrendsService._is_single_family_label
+    # aggregates — every variant confirmed present in the production DB
+    for label in ("Custom", "custom", "default", "All Prompts", "all prompts",
+                  "Custom (3 sets)", "Custom (37 sets)", "custom (5 SETS)",
+                  "Custom (1 set)", "Fam A, Fam B"):
+        assert not is_single(label), label
+    # real families keep passing — including awkward but legit names
+    for label in ("Best Storm Generator", "home backup", "rv",
+                  "Generator CO Shutoff", "Firman Brand Perception"):
+        assert is_single(label), label

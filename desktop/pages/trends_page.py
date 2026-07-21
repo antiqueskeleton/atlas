@@ -6,6 +6,38 @@ from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 import matplotlib.ticker as mticker
 
+
+def _register_inter_with_matplotlib():
+    """Charts are matplotlib, which has its OWN font stack — the app-wide
+    Qt Inter default (the v1.1.0 font fix) never reaches them, so chart
+    text still rendered in DejaVu Sans while the rest of the screen was
+    Inter (user report 2026-07-21: "Inter only applies in some areas").
+    Registers the bundled TTFs with matplotlib's font manager; any failure
+    degrades to matplotlib's default rather than breaking the page.
+    Frozen-aware, same path logic as desktop/main._fonts_dir."""
+    import sys
+    from pathlib import Path
+    from matplotlib import font_manager
+    if getattr(sys, "frozen", False):
+        fonts_dir = Path(sys._MEIPASS) / "fonts"
+    else:
+        fonts_dir = Path(__file__).resolve().parents[1] / "assets" / "fonts"
+    registered = False
+    for name in ("Inter-Regular.ttf", "Inter-Medium.ttf",
+                 "Inter-SemiBold.ttf", "Inter-Bold.ttf"):
+        path = fonts_dir / name
+        if path.exists():
+            try:
+                font_manager.fontManager.addfont(str(path))
+                registered = True
+            except Exception:
+                pass
+    if registered:
+        matplotlib.rcParams["font.family"] = "Inter"
+
+
+_register_inter_with_matplotlib()
+
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,

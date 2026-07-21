@@ -1763,7 +1763,10 @@ class VisibilityPage(QWidget):
         _set_tbl(self._channel_tbl, ch_rows)
 
         # ── Channel Gaps ──────────────────────────────────────────────────────
-        gap_data = summary.get("firman_channel_gap", [])
+        # The analytics keys were renamed firman_* -> target_* in the #28
+        # brand-agnostic pass, but this pane kept reading the OLD names — so
+        # it silently rendered empty forever (user report 2026-07-21).
+        gap_data = summary.get("target_channel_gap", [])
         self._gap_title.setText(
             f"{brand_label} Channel Gaps  —  channels where competitors have stronger reach"
         )
@@ -1771,7 +1774,7 @@ class VisibilityPage(QWidget):
             ["Channel", brand_label, "Top Competitor", "Their Count"]
         )
         _set_tbl(self._gap_tbl, [
-            [g["channel"], g["firman_count"] or 0, g["top_competitor"], g["top_competitor_count"]]
+            [g["channel"], g["target_count"] or 0, g["top_competitor"], g["top_competitor_count"]]
             for g in gap_data[:20]
         ])
 

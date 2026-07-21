@@ -1,3 +1,4 @@
+import re
 from collections import defaultdict
 
 from backend.visibility.brand_matcher import resolve_target_brand
@@ -199,17 +200,22 @@ class TrendsService:
         }
 
     # Run labels that aren't one real prompt family: legacy labels from
-    # older builds ("Custom", "default") and comma-joined multi-family
-    # runs. A mixed run's score can't be attributed to any one family, so
-    # surfacing "Custom" as the top prompt set told the user nothing
-    # (their v1.0 test pass, item 7.1).
-    _AGGREGATE_LABELS = {"custom", "default"}
+    # older builds ("Custom", "default", "All Prompts") and multi-family
+    # runs (comma-joined names, or the "Custom (N sets)" summary label).
+    # A mixed run's score can't be attributed to any one family, so
+    # surfacing these as prompt sets told the user nothing (v1.0 test item
+    # 7.1; the "(N sets)"/"All Prompts" variants were still leaking into
+    # the Trends chart and the Matrix tab — user report 2026-07-21, with
+    # both label forms confirmed present in the real runs table).
+    _AGGREGATE_LABELS = {"custom", "default", "all prompts"}
+    _MULTI_SET_RE = re.compile(r"\(\d+\s*sets?\)\s*$", re.IGNORECASE)
 
     @classmethod
     def _is_single_family_label(cls, label: str) -> bool:
         label = (label or "").strip()
         return bool(label) and "," not in label \
-            and label.lower() not in cls._AGGREGATE_LABELS
+            and label.lower() not in cls._AGGREGATE_LABELS \
+            and not cls._MULTI_SET_RE.search(label)
 
     def prompt_set_averages(self, summaries: list[dict],
                             single_families_only: bool = True) -> dict:
