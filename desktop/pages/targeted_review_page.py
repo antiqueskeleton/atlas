@@ -321,6 +321,11 @@ class TargetedReviewPage(QWidget):
         for key in PLATFORMS:
             self._refresh_platform(key)
 
+        # App-wide table ergonomics (2026-07-21): resizable + click-to-sort
+        # with numeric-aware ordering, on every platform/creator table.
+        from desktop.widgets.table_tools import make_page_tables_sortable
+        make_page_tables_sortable(self)
+
     # ── Build ─────────────────────────────────────────────────────────────────
 
     def _build_ui(self):

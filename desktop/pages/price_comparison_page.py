@@ -148,6 +148,10 @@ class PriceComparisonPage(QWidget):
         self._results: dict = {}
         self._brand_checks: dict[str, QCheckBox] = {}
         self._build_ui()
+        # App-wide table ergonomics (2026-07-21): resizable + click-to-sort
+        # with numeric-aware ordering (prices sort by value, not lexically).
+        from desktop.widgets.table_tools import make_page_tables_sortable
+        make_page_tables_sortable(self)
 
     # ── UI construction ───────────────────────────────────────────────────────
 

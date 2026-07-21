@@ -1069,6 +1069,12 @@ class VisibilityPage(QWidget):
         self._on_providers_changed()
         self.refresh()
 
+        # App-wide table ergonomics (2026-07-21): resizable columns +
+        # click-to-sort headers with numeric-aware ordering, on every
+        # table this page owns (Brands/Matrix/Features/Channels/Raw Data).
+        from desktop.widgets.table_tools import make_page_tables_sortable
+        make_page_tables_sortable(self)
+
     # ── Provider helpers ─────────────────────────────────────────────────────
 
     def _on_providers_changed(self):

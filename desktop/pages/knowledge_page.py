@@ -303,6 +303,10 @@ def _make_table(columns: list, widths: list) -> QTableWidget:
             t.horizontalHeader().setSectionResizeMode(i, QHeaderView.Stretch)
         else:
             t.setColumnWidth(i, w)
+    # App-wide table ergonomics (2026-07-21): resizable columns +
+    # click-to-sort headers with numeric-aware ordering.
+    from desktop.widgets.table_tools import make_sortable
+    make_sortable(t)
     return t
 
 
@@ -373,8 +377,8 @@ class KnowledgePage(QWidget):
         lay.setContentsMargins(0, 8, 0, 0)
 
         self._brands_table = _make_table(
-            ["Name", "Types", "Aliases", "Country", "Active"],
-            [160, 130, 220, 80, 55]
+            ["Name", "Website", "Types", "Aliases", "Country", "Active"],
+            [160, 190, 120, 190, 75, 50]
         )
         self._brands_table.doubleClicked.connect(lambda _: self._edit_brand())
 
@@ -416,10 +420,11 @@ class KnowledgePage(QWidget):
             r = t.rowCount()
             t.insertRow(r)
             t.setItem(r, 0, _cell(name, brand_id))
-            t.setItem(r, 1, _cell(product_types or ""))
-            t.setItem(r, 2, _cell(_trunc(aliases or "", 40)))
-            t.setItem(r, 3, _cell(country or ""))
-            t.setItem(r, 4, _cell("Yes" if active else "No"))
+            t.setItem(r, 1, _cell(website or ""))
+            t.setItem(r, 2, _cell(product_types or ""))
+            t.setItem(r, 3, _cell(_trunc(aliases or "", 40)))
+            t.setItem(r, 4, _cell(country or ""))
+            t.setItem(r, 5, _cell("Yes" if active else "No"))
         self._brands_count.setText(f"{len(rows)} brands")
 
     def _add_brand(self):
@@ -1578,18 +1583,24 @@ class KnowledgePage(QWidget):
         self._web_scrape_lbl.setStyleSheet("color:#6B7280; font-size:11px;")
 
         btn_add       = QPushButton("+ Add Entry")
+        btn_brands    = QPushButton("Add Brands")
         btn_edit      = QPushButton("Edit")
         btn_del       = QPushButton("Delete")
         self._btn_scrape     = QPushButton("Scrape Selected")
         self._btn_scrape_all = QPushButton("Scrape All")
         btn_add.clicked.connect(self._add_web)
+        btn_brands.setToolTip(
+            "Import every Brand with a website from the Brands tab as a Web "
+            "Intelligence entry — brands whose domain is already listed are "
+            "skipped, and the target brand is flagged as your own site.")
+        btn_brands.clicked.connect(self._add_brands_to_web)
         btn_edit.clicked.connect(self._edit_web)
         btn_del.clicked.connect(self._delete_web)
         self._btn_scrape.clicked.connect(self._scrape_selected)
         self._btn_scrape_all.clicked.connect(self._scrape_all)
 
         bar = _action_bar(
-            btn_add, btn_edit, btn_del,
+            btn_add, btn_brands, btn_edit, btn_del,
             self._btn_scrape, self._btn_scrape_all,
             "stretch", self._web_scrape_lbl, self._web_count,
         )
@@ -1601,6 +1612,48 @@ class KnowledgePage(QWidget):
         self._web_worker = None
         self._refresh_web()
         return w
+
+    @staticmethod
+    def _normalize_domain(url: str) -> str:
+        """Comparison key for dedupe: strip scheme/www/path, lowercase —
+        'https://www.FirmanPower.com/pages/x' == 'firmanpower.com'."""
+        d = (url or "").strip().lower()
+        d = d.split("//", 1)[-1].split("/", 1)[0]
+        return d[4:] if d.startswith("www.") else d
+
+    def _add_brands_to_web(self):
+        """User request 2026-07-21: seeding this tab meant re-typing every
+        website from the Brands tab by hand. One click now imports every
+        brand that has a website, skipping domains already listed."""
+        existing = {self._normalize_domain(row[2])
+                    for row in self.repo.list_web_intelligence()}
+        existing.discard("")
+        target = (self.app.get_target_brand() if self.app else "") or ""
+
+        added, no_site, dupes = 0, 0, 0
+        for row in self.repo.list_brands():
+            brand_id, name, website = row[0], row[1], row[2]
+            key = self._normalize_domain(website)
+            if not key:
+                no_site += 1
+                continue
+            if key in existing:
+                dupes += 1
+                continue
+            domain = (website or "").strip()
+            domain = domain.split("//", 1)[-1].rstrip("/")
+            self.repo.add_web_entry(
+                brand_id, domain, source="brands-import",
+                is_own_site=(name.strip().lower() == target.strip().lower()))
+            existing.add(key)
+            added += 1
+
+        self._refresh_web()
+        QMessageBox.information(
+            self, "Add Brands",
+            f"Added {added} brand website(s).\n"
+            f"Skipped {dupes} already listed and {no_site} brand(s) with no "
+            f"website in the Brands tab.")
 
     def _refresh_web(self):
         rows = self.repo.list_web_intelligence()
