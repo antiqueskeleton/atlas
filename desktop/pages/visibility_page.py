@@ -934,8 +934,36 @@ class VisibilityPage(QWidget):
         self._raw_page_rows: list = []  # current page (≤ RAW_PAGE_SIZE rows) for row-click detail
         self._RAW_PAGE_SIZE = 2000
 
+        # ── Matrix tab (#69): every tracked brand x prompt family ────────────
+        matrix_tab = QWidget()
+        mx_lay = QVBoxLayout(matrix_tab)
+        mx_lay.setContentsMargins(8, 8, 8, 8)
+        mx_lay.setSpacing(6)
+        mx_note = QLabel(
+            "Mention rate per brand per prompt family — who owns which buying "
+            "question. Cells show mentions/responses for that family; darker "
+            "blue = higher rate. Built on demand from stored responses "
+            "(single-family runs only — mixed-family runs can't honestly "
+            "attribute a mention to one family).")
+        mx_note.setStyleSheet("color: #6B7280; font-size: 12px;")
+        mx_note.setWordWrap(True)
+        self._matrix_build_btn = QPushButton("Build Matrix")
+        self._matrix_build_btn.setToolTip(
+            "Scan stored responses locally (no API calls). Top 15 brands x "
+            "top 12 families by volume.")
+        self._matrix_build_btn.clicked.connect(self._build_brand_matrix)
+        mx_bar = QHBoxLayout()
+        mx_bar.addWidget(self._matrix_build_btn)
+        mx_bar.addStretch()
+        self._matrix_table = QTableWidget(0, 0)
+        self._matrix_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        mx_lay.addWidget(mx_note)
+        mx_lay.addLayout(mx_bar)
+        mx_lay.addWidget(self._matrix_table, 1)
+
         tabs.addTab(overview,      "Overview")
         tabs.addTab(brands_tab,    "Brands")
+        tabs.addTab(matrix_tab,    "Matrix")
         tabs.addTab(features_tab,  "Features")
         tabs.addTab(channels_tab,  "Channels")
         tabs.addTab(raw_tab,       "Raw Data")
@@ -1455,6 +1483,48 @@ class VisibilityPage(QWidget):
             self._run_logger.error(msg)
 
     # ── Refresh ───────────────────────────────────────────────────────────────
+
+    def _build_brand_matrix(self):
+        """#69: brand x family heatmap, built on demand (not in refresh() —
+        a full-history scan on every refresh would be a #53-class perf
+        regression). Cell text keeps raw counts visible (n= honesty)."""
+        from PySide6.QtGui import QColor
+        from PySide6.QtWidgets import QTableWidgetItem
+        from backend.visibility.brand_category_matrix import build_matrix
+        from backend.visibility.trends_service import TrendsService
+
+        self.service.analytics.reload_terms()
+        rows = self.service.repository.list_responses()
+        m = build_matrix(rows, self.service.analytics.detect_mentioned_brands,
+                         TrendsService._is_single_family_label)
+        families = m["families"][:12]
+        brands = m["brands"][:15]
+        t = self._matrix_table
+        t.setRowCount(len(brands))
+        t.setColumnCount(len(families))
+        t.setHorizontalHeaderLabels(
+            [f"{f}\n(n={m['totals'][f]})" for f in families])
+        t.setVerticalHeaderLabels(brands)
+        target = self.service.target_brand
+        for r, brand in enumerate(brands):
+            for c, family in enumerate(families):
+                n = m["totals"][family]
+                k = m["counts"].get((brand, family), 0)
+                rate = k / n if n else 0.0
+                item = QTableWidgetItem(f"{k}/{n}" if k else "—")
+                item.setToolTip(f"{brand} mentioned in {k} of {n} "
+                                f"'{family}' responses ({rate:.0%})")
+                if k:
+                    # 0% -> white, 100% -> Atlas blue; text flips at 50%.
+                    alpha = int(40 + 215 * rate)
+                    item.setBackground(QColor(11, 132, 255, alpha))
+                    if rate > 0.5:
+                        item.setForeground(QColor("white"))
+                t.setItem(r, c, item)
+            if brand.lower() == (target or "").lower():
+                hdr = t.verticalHeaderItem(r)
+                font = hdr.font(); font.setBold(True); hdr.setFont(font)
+        t.resizeColumnsToContents()
 
     def refresh_provider_status(self):
         """
