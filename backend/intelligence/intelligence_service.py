@@ -9,6 +9,9 @@ from datetime import datetime
 from backend.intelligence.analysts import BuyingJourneyAnalyst, PersonaAnalyst, ProductAnalyst
 from backend.intelligence.briefing_fact_check import verify_briefing_numbers
 from backend.intelligence.intelligence_repository import IntelligenceRepository
+from backend.catalog.firman_catalog import (
+    ProductCatalogRepository, build_product_truth_block,
+)
 from backend.targeted_review.targeted_review_repository import TargetedReviewRepository
 from backend.targeted_review.targeted_review_service import build_presence_block
 from backend.visibility.brand_matcher import resolve_target_brand, text_contains_term
@@ -211,6 +214,12 @@ class IntelligenceService:
         # An attribute (like self.repository) so tests swap in a tmp-path
         # instance the same way they already do for the main repository.
         self.platform_repository = TargetedReviewRepository()
+        # R7 Part B: the first-party Firman product catalog (synced from
+        # firmanpowerequipment.com's structured product feed) — injected into
+        # the synthesis prompts as VERIFIED spec ground truth so the briefing
+        # never repeats a contradicted spec claim (e.g. the H08051 described
+        # as a "quiet inverter") as fact. Injectable for tests like the rest.
+        self.catalog_repository = ProductCatalogRepository()
         # Injectable for the same reason (#94) — the briefing's quantitative
         # numbers now come from the FULL stored response history, not just
         # the capped synthesis sample.
@@ -290,6 +299,9 @@ class IntelligenceService:
         # Measured platform numbers from Targeted Review (#25) — computed once,
         # fed to both passes as ground truth alongside the portfolio inference.
         platform_block = build_presence_block(self.platform_repository, self.target_brand)
+        # R7 Part B: verified first-party specs ride the same ground-truth
+        # channel into both synthesis passes — no prompt-template change.
+        platform_block += "\n\n" + build_product_truth_block(self.catalog_repository)
         # #94: the briefing's quantitative claims come from the FULL stored
         # history when one exists — the capped sample stats are only the
         # fallback for a brand-new install with no collections yet.
@@ -381,6 +393,9 @@ class IntelligenceService:
         # Measured platform numbers from Targeted Review (#25) — computed once,
         # fed to both passes as ground truth alongside the portfolio inference.
         platform_block = build_presence_block(self.platform_repository, self.target_brand)
+        # R7 Part B: verified first-party specs ride the same ground-truth
+        # channel into both synthesis passes — no prompt-template change.
+        platform_block += "\n\n" + build_product_truth_block(self.catalog_repository)
         # #94: the briefing's quantitative claims come from the FULL stored
         # history when one exists — the capped sample stats are only the
         # fallback for a brand-new install with no collections yet.

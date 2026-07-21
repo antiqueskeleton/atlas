@@ -80,6 +80,21 @@ class _ScrapeWorker(QThread):
         self.finished_all.emit()
 
 
+class _CatalogSyncWorker(QThread):
+    """Sync the first-party Firman product catalog (R7 Part B's verified
+    spec source) off the UI thread — it's one or two HTTP requests to
+    firmanpowerequipment.com's structured product feed."""
+    done = Signal(int, str)   # count, error ("" on success)
+
+    def run(self):
+        from backend.catalog.firman_catalog import sync_catalog
+        try:
+            count, error = sync_catalog()
+        except Exception as exc:            # never let a sync crash the app
+            count, error = 0, str(exc)
+        self.done.emit(count, error)
+
+
 class _BrandDiscoveryWorker(QThread):
     done  = Signal(list, list)   # all_brands, providers_queried
     error = Signal(str)
@@ -341,6 +356,7 @@ class KnowledgePage(QWidget):
         self._tabs.addTab(self._stages_tab(),   "Buying Stages")
         self._tabs.addTab(self._prompt_sets_tab(), "Prompt Sets")
         self._tabs.addTab(self._search_volume_tab(), "Search Volume")
+        self._tabs.addTab(self._product_catalog_tab(), "Product Catalog")
         self._tabs.addTab(self._web_tab(),      "Web Intelligence")
         self._tabs.addTab(self._providers_tab(),"Providers")
 
@@ -1225,6 +1241,85 @@ class KnowledgePage(QWidget):
         self._volume_status_lbl.setText(f"Error: {message}")
 
     # ─── Web Intelligence ─────────────────────────────────────────────────────
+
+    # ── Product Catalog tab (R7 Part B / #66 spec source) ─────────────────────
+
+    def _product_catalog_tab(self) -> QWidget:
+        w = QWidget()
+        lay = QVBoxLayout()
+        lay.setContentsMargins(0, 8, 0, 0)
+        lay.setSpacing(6)
+
+        note = QLabel(
+            "Firman's own product specs, synced from firmanpowerequipment.com's "
+            "structured product feed — first-party VERIFIED data. The Intelligence "
+            "Engine uses these as ground truth: when AI responses claim different "
+            "specs for these models (wrong wattage, wrong fuel type, calling a "
+            "non-inverter model an inverter), the briefing flags the contradiction "
+            "as a correction opportunity instead of repeating it as fact."
+        )
+        note.setStyleSheet("color: #6B7280; font-size: 12px;")
+        note.setWordWrap(True)
+
+        self._catalog_table = _make_table(
+            ["Model", "Type", "Running Watts", "Starting Watts",
+             "Fuel", "Start", "MSRP"],
+            [90, 100, 170, 170, 160, 120, 80],
+        )
+
+        self._catalog_sync_btn = QPushButton("Sync from firman.com")
+        self._catalog_sync_btn.setToolTip(
+            "Fetch the live product catalog (one or two requests to "
+            "firmanpowerequipment.com). Replaces the stored copy.")
+        self._catalog_sync_btn.clicked.connect(self._sync_catalog)
+        self._catalog_status_lbl = QLabel("")
+        self._catalog_status_lbl.setStyleSheet("color:#6B7280; font-size:11px;")
+
+        bar = _action_bar(self._catalog_sync_btn, "stretch", self._catalog_status_lbl)
+
+        lay.addWidget(note)
+        lay.addWidget(self._catalog_table)
+        lay.addLayout(bar)
+        w.setLayout(lay)
+        self._catalog_worker = None
+        self._load_catalog_table()
+        return w
+
+    def _load_catalog_table(self):
+        from backend.catalog.firman_catalog import ProductCatalogRepository
+        products = ProductCatalogRepository().all_products()
+        t = self._catalog_table
+        t.setRowCount(len(products))
+        for r, p in enumerate(products):
+            t.setItem(r, 0, _cell(p.get("model", "")))
+            t.setItem(r, 1, _cell(p.get("generator_type", "")))
+            t.setItem(r, 2, _cell(", ".join(sorted(p.get("running_watts") or []))))
+            t.setItem(r, 3, _cell(", ".join(sorted(p.get("starting_watts") or []))))
+            t.setItem(r, 4, _cell(", ".join(p.get("fuel_types") or [])))
+            t.setItem(r, 5, _cell(", ".join(p.get("start_types") or [])))
+            price = p.get("price")
+            t.setItem(r, 6, _cell(f"${price:,.2f}" if price else "—"))
+        if products:
+            synced = (products[0].get("synced_at") or "")[:16].replace("T", " ")
+            self._catalog_status_lbl.setText(
+                f"{len(products)} models · last synced {synced}")
+        else:
+            self._catalog_status_lbl.setText(
+                "Not synced yet — click Sync to fetch Firman's live catalog.")
+
+    def _sync_catalog(self):
+        self._catalog_sync_btn.setEnabled(False)
+        self._catalog_status_lbl.setText("Syncing from firmanpowerequipment.com…")
+        self._catalog_worker = _CatalogSyncWorker()
+        self._catalog_worker.done.connect(self._on_catalog_synced)
+        self._catalog_worker.start()
+
+    def _on_catalog_synced(self, count: int, error: str):
+        self._catalog_sync_btn.setEnabled(True)
+        if error:
+            self._catalog_status_lbl.setText(f"Sync failed: {error}")
+        else:
+            self._load_catalog_table()
 
     def _web_tab(self) -> QWidget:
         w = QWidget()
