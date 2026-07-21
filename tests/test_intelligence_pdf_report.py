@@ -50,6 +50,33 @@ def test_generate_produces_valid_pdf_with_all_sections(tmp_path):
     assert "Improve Amazon presence" in text
 
 
+def test_opportunity_tactics_render_as_a_split_labeled_list(tmp_path):
+    """R5 Part 2: an opportunity's action text + 'Tactics:' bullet list used to
+    be dumped into one raw-string table cell, which ReportLab won't wrap (text
+    ran off the page) and won't format (bullets showed as literal dashes). It
+    now splits into Evidence / Action / Tactics rows with the tactics rendered
+    as a real markdown list."""
+    opp = (1, "Gain AI Overview presence",
+           "Firman appears in 0 of 5 Google AI Overview buying queries.",
+           "Optimize web content for AI buying guides.\n\nTactics:\n"
+           "- Publish SEO comparison pages.\n- Submit structured product data.",
+           "new")
+    out = tmp_path / "opp.pdf"
+    IntelligencePDFReport(_RUN, _BRIEFING, [], [opp], "Firman",
+                          full_export=True).generate(str(out))
+    text = _extract_text(out)
+
+    # the three labels are now distinct rows
+    assert "Evidence:" in text and "Action:" in text and "Tactics:" in text
+    # the action text and the tactics list are both present
+    assert "Optimize web content for AI buying guides." in text
+    assert "Publish SEO comparison pages." in text
+    # the markdown bullet dash is NOT shown literally — it's a real bullet now
+    # (this is the before/after distinguisher: the old raw-string cell kept the
+    # leading "- ")
+    assert "- Publish SEO comparison pages." not in text
+
+
 def test_analyst_result_with_unrecognized_name_is_silently_dropped(tmp_path):
     """Same real, current limitation confirmed in the DOCX report —
     _analyst_sections only recognizes the 3 known bucket names."""

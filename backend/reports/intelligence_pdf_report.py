@@ -3,6 +3,7 @@ PDF report generator for Atlas AI Intelligence Engine reports.
 Shares the same palette and chrome as VisibilityPDFReport.
 """
 import io
+import re
 import textwrap
 from datetime import datetime
 
@@ -367,32 +368,47 @@ class IntelligencePDFReport:
                 ('RIGHTPADDING',  (1, 0), (1, 0), 10),
             ]))
 
+            # The LLM emits the action text followed by a "Tactics:" sub-header
+            # and a markdown bullet list, all in `description`. Split them so
+            # Tactics renders as a real bulleted list under its own label
+            # instead of a wall of dashes buried inside Action. Falls back to
+            # the whole string under "Action:" if the sub-header isn't present.
+            action_text, tactics_text = description or "", ""
+            parts = re.split(r"\n\s*tactics\s*:\s*\n?", description or "",
+                             maxsplit=1, flags=re.IGNORECASE)
+            if len(parts) == 2:
+                action_text, tactics_text = parts[0].strip(), parts[1].strip()
+
+            value_w = CONTENT_W - 1.0 * inch
             body_rows = []
             if evidence:
-                body_rows.append(["Evidence:", _pdf_safe(evidence)])
-            if description:
-                # "Action:" — matches the on-screen label (intelligence_page.py's
-                # opportunity cards) for this same field. It previously said
-                # "Description:" here, which didn't match the screen — the
-                # underlying text is the LLM's ACTION + TACTICS output, so
-                # "Action" is also the more accurate label of the two.
-                body_rows.append(["Action:", _pdf_safe(description)])
+                body_rows.append([
+                    Paragraph("Evidence:", s['OppLabel']),
+                    Paragraph(_pdf_safe(evidence.strip()), s['OppValue']),
+                ])
+            if action_text:
+                body_rows.append([
+                    Paragraph("Action:", s['OppLabel']),
+                    Paragraph(_pdf_safe(action_text), s['OppValue']),
+                ])
+            if tactics_text:
+                body_rows.append([
+                    Paragraph("Tactics:", s['OppLabel']),
+                    render_markdown_to_flowables(
+                        tactics_text, self._md_styles, _pdf_safe, value_w - 12),
+                ])
 
             if body_rows:
                 body_tbl = Table(body_rows,
-                                 colWidths=[1.0 * inch, CONTENT_W - 1.0 * inch])
+                                 colWidths=[1.0 * inch, value_w])
                 body_tbl.setStyle(TableStyle([
                     ('BACKGROUND',    (0, 0), (-1, -1), C_BG),
-                    ('FONTNAME',      (0, 0), (0, -1), 'Helvetica-Bold'),
-                    ('FONTSIZE',      (0, 0), (0, -1), 7.5),
-                    ('TEXTCOLOR',     (0, 0), (0, -1), C_GRAY),
-                    ('FONTNAME',      (1, 0), (1, -1), 'Helvetica'),
-                    ('FONTSIZE',      (1, 0), (1, -1), 8),
-                    ('TEXTCOLOR',     (1, 0), (1, -1), C_DARK),
-                    ('TOPPADDING',    (0, 0), (-1, -1), 6),
-                    ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+                    ('VALIGN',        (0, 0), (-1, -1), 'TOP'),
+                    ('TOPPADDING',    (0, 0), (-1, -1), 7),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 7),
                     ('LEFTPADDING',   (0, 0), (0, -1), 10),
                     ('LEFTPADDING',   (1, 0), (1, -1), 6),
+                    ('RIGHTPADDING',  (1, 0), (1, -1), 8),
                     ('LINEBELOW',     (0, 0), (-1, -2), 0.25, C_LIGHT),
                     ('BOX',           (0, 0), (-1, -1), 0.5, C_LIGHT),
                 ]))
@@ -461,6 +477,19 @@ class IntelligencePDFReport:
             'OppStatus': ParagraphStyle(
                 'OppStatus', fontName='Helvetica', fontSize=7.5,
                 textColor=C_LIGHT, leading=11, alignment=2,
+            ),
+            # Opportunity card body: the label column and the wrapped value
+            # column. Values used to be raw strings in table cells, which
+            # reportlab does NOT word-wrap — long evidence/action text ran off
+            # the page and was clipped. These render as real Paragraphs that
+            # wrap (and the Tactics list renders as markdown bullets).
+            'OppLabel': ParagraphStyle(
+                'OppLabel', fontName='Helvetica-Bold', fontSize=7.5,
+                textColor=C_GRAY, leading=11,
+            ),
+            'OppValue': ParagraphStyle(
+                'OppValue', fontName='Helvetica', fontSize=8,
+                textColor=C_DARK, leading=11.5,
             ),
             'CoverLabel': ParagraphStyle(
                 'CoverLabel', fontName='Helvetica-Bold', fontSize=11,
