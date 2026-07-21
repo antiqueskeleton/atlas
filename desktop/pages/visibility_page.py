@@ -245,6 +245,7 @@ class VisibilityPage(QWidget):
             target_brand=self.app.get_target_brand(),
         )
         self._worker: _RunWorker | None = None
+        self._mini = None   # #34 compact progress chip, created on first minimize
         self._run_logger: RunLogger | None = None
 
         root = QVBoxLayout()
@@ -1441,6 +1442,27 @@ class VisibilityPage(QWidget):
     def _on_progress(self, done: int, total: int):
         self._progress.setValue(done)
         self._status_lbl.setText(f"{done}/{total} prompts")
+        if self._mini is not None and self._mini.isVisible():
+            self._mini.update_progress(done, total)
+
+    # ── #34: compact progress chip while minimized ────────────────────────────
+
+    @property
+    def has_active_run(self) -> bool:
+        return self._worker is not None and self._worker.isRunning()
+
+    def show_mini_progress(self, on_restore=None):
+        """Called by the main window when it minimizes mid-run."""
+        from desktop.widgets.mini_progress import MiniProgressWindow
+        if self._mini is None:
+            self._mini = MiniProgressWindow()
+        self._mini.update_progress(self._progress.value(),
+                                   self._progress.maximum())
+        self._mini.show_for_run(on_restore)
+
+    def hide_mini_progress(self):
+        if self._mini is not None:
+            self._mini.hide()
 
     def _on_run_done(self, result: dict):
         run = result["run"]
@@ -1460,6 +1482,7 @@ class VisibilityPage(QWidget):
         # cancelled via _stop_run — so this is the one correct place to
         # release the sleep-prevention requested in _start_run().
         allow_sleep()
+        self.hide_mini_progress()   # #34: run over — the chip has nothing to show
         if self._run_logger:
             status = "cancelled" if (self._worker and self._worker.is_cancelled) else "completed"
             self._run_logger.close(status)

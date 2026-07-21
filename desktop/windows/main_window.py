@@ -1,7 +1,7 @@
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QSize
+from PySide6.QtCore import Qt, QEvent, QSize
 from PySide6.QtGui import QIcon, QPixmap
 from PySide6.QtWidgets import (
     QFrame,
@@ -281,6 +281,29 @@ class AtlasMainWindow(QMainWindow):
                 "font-size: 12px; font-weight: 600; padding: 4px 16px; text-align: left; }}"
                 f"QPushButton:hover {{ color: white; background: #2D3F55; }}"
             )
+
+    def changeEvent(self, event):
+        """#34: minimizing mid-collection shows a compact always-on-top
+        progress chip, so a long run stays observable while the user works
+        in other apps. Normal minimize behavior otherwise — the chip only
+        appears when the Visibility page has an actively running worker
+        (a never-built lazy page can't have one)."""
+        super().changeEvent(event)
+        if event.type() != QEvent.WindowStateChange:
+            return
+        vis = getattr(self, "_built_pages", {}).get("Visibility")
+        if vis is None:
+            return
+        if self.isMinimized():
+            if getattr(vis, "has_active_run", False):
+                vis.show_mini_progress(on_restore=self._restore_from_mini)
+        else:
+            vis.hide_mini_progress()
+
+    def _restore_from_mini(self):
+        self.showNormal()
+        self.raise_()
+        self.activateWindow()
 
     def _build_pages(self) -> QWidget:
         wrapper = QWidget()
