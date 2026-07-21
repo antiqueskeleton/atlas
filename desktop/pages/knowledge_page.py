@@ -1263,19 +1263,33 @@ class KnowledgePage(QWidget):
 
         self._catalog_table = _make_table(
             ["Model", "Type", "Running Watts", "Starting Watts",
-             "Fuel", "Start", "MSRP"],
-            [90, 100, 170, 170, 160, 120, 80],
+             "Fuel", "Start", "MSRP", "AI Mentions", "Contradictions"],
+            [90, 100, 150, 150, 140, 100, 80, 90, 110],
         )
+        self._catalog_table.horizontalHeaderItem(7).setToolTip(
+            "How many stored AI responses name this exact model — run Scan "
+            "AI Responses to compute (model-level visibility, #66).")
+        self._catalog_table.horizontalHeaderItem(8).setToolTip(
+            "Responses whose claims about this model contradict the verified "
+            "first-party specs (e.g. calling a non-inverter an inverter). "
+            "Hover a red cell for the offending sentences.")
 
         self._catalog_sync_btn = QPushButton("Sync from firman.com")
         self._catalog_sync_btn.setToolTip(
             "Fetch the live product catalog (one or two requests to "
             "firmanpowerequipment.com). Replaces the stored copy.")
         self._catalog_sync_btn.clicked.connect(self._sync_catalog)
+        self._catalog_scan_btn = QPushButton("Scan AI Responses")
+        self._catalog_scan_btn.setToolTip(
+            "Scan every stored Visibility response for mentions of these "
+            "models and for spec claims the catalog disproves. Local only — "
+            "no API calls.")
+        self._catalog_scan_btn.clicked.connect(self._scan_model_mentions)
         self._catalog_status_lbl = QLabel("")
         self._catalog_status_lbl.setStyleSheet("color:#6B7280; font-size:11px;")
 
-        bar = _action_bar(self._catalog_sync_btn, "stretch", self._catalog_status_lbl)
+        bar = _action_bar(self._catalog_sync_btn, self._catalog_scan_btn,
+                          "stretch", self._catalog_status_lbl)
 
         lay.addWidget(note)
         lay.addWidget(self._catalog_table)
@@ -1320,6 +1334,44 @@ class KnowledgePage(QWidget):
             self._catalog_status_lbl.setText(f"Sync failed: {error}")
         else:
             self._load_catalog_table()
+
+    def _scan_model_mentions(self):
+        """#66 + R4b: model-level mention counts and catalog-contradiction
+        findings over every stored response. Local text scan — fast enough
+        to run inline (substring pre-filter; the common case is no match)."""
+        from backend.catalog.firman_catalog import ProductCatalogRepository
+        from backend.catalog.model_mentions import scan_responses
+        from backend.visibility.visibility_repository import VisibilityRepository
+
+        products = ProductCatalogRepository().all_products()
+        if not products:
+            QMessageBox.information(
+                self, "No Catalog",
+                "Sync the product catalog from firman.com first.")
+            return
+        responses = VisibilityRepository().list_responses()
+        result = scan_responses(responses, products)
+
+        t = self._catalog_table
+        total_contra = 0
+        for r in range(t.rowCount()):
+            model = t.item(r, 0).text()
+            entry = result.get(model, {"mentions": 0, "contradictions": []})
+            t.setItem(r, 7, _cell(f"{entry['mentions']:,}"))
+            contra = entry["contradictions"]
+            total_contra += len(contra)
+            cell = _cell(f"{len(contra):,}" if contra else "—")
+            if contra:
+                cell.setForeground(QColor("#DC2626"))
+                cell.setToolTip("\n\n".join(
+                    f"[{c['provider']}] claims \"{c['claim']}\" — verified: "
+                    f"{c['truth']}\n“{c['excerpt']}”"
+                    for c in contra[:8]))
+            t.setItem(r, 8, cell)
+        self._catalog_status_lbl.setText(
+            f"Scanned {len(responses):,} responses — "
+            f"{total_contra} spec contradiction(s) found. "
+            "Hover a red cell for details.")
 
     def _web_tab(self) -> QWidget:
         w = QWidget()
