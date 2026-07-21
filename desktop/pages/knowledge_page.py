@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import (
-    QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFormLayout,
-    QHBoxLayout, QHeaderView, QInputDialog, QLabel, QLineEdit, QListWidget,
-    QListWidgetItem, QMessageBox, QPlainTextEdit, QPushButton,
+    QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFileDialog,
+    QFormLayout, QHBoxLayout, QHeaderView, QInputDialog, QLabel, QLineEdit,
+    QListWidget, QListWidgetItem, QMessageBox, QPlainTextEdit, QPushButton,
     QSpinBox, QTableWidget, QTableWidgetItem,
     QTabWidget, QVBoxLayout, QWidget,
 )
@@ -911,6 +911,30 @@ class KnowledgePage(QWidget):
         fam_btn_row.addWidget(btn_new_fam)
         fam_btn_row.addWidget(btn_del_fam)
 
+        # #31 merge + import/export (the SAFE bulk-edit path — the CSVs in
+        # the install directory are replaced by every update).
+        tools_row = QHBoxLayout()
+        tools_row.setContentsMargins(0, 0, 0, 0)
+        tools_row.setSpacing(4)
+        btn_merge = QPushButton("Merge…")
+        btn_merge.setToolTip(
+            "Combine two or more families into one — duplicate prompts are "
+            "kept once. Historical collected responses are never touched.")
+        btn_merge.clicked.connect(self._merge_families_dialog)
+        btn_export = QPushButton("Export…")
+        btn_export.setToolTip(
+            "Save the whole prompt library to a CSV or Excel file for bulk "
+            "editing — the safe alternative to touching install-folder files.")
+        btn_export.clicked.connect(self._export_prompts)
+        btn_import = QPushButton("Import…")
+        btn_import.setToolTip(
+            "Load prompts from a CSV/Excel file (validated: blank prompts "
+            "rejected, duplicates flagged) with a preview before applying.")
+        btn_import.clicked.connect(self._import_prompts)
+        tools_row.addWidget(btn_merge)
+        tools_row.addWidget(btn_export)
+        tools_row.addWidget(btn_import)
+
         # Category — a purely additive tier above families, for grouping
         # related families so the Visibility page can select a whole cluster
         # with one checkbox. Assigning here never changes market_questions.csv.
@@ -933,6 +957,7 @@ class KnowledgePage(QWidget):
         left_lay.addWidget(lbl)
         left_lay.addWidget(self._family_list)
         left_lay.addLayout(fam_btn_row)
+        left_lay.addLayout(tools_row)
         left_lay.addLayout(cat_row)
         left.setLayout(left_lay)
         left.setFixedWidth(240)
@@ -950,12 +975,18 @@ class KnowledgePage(QWidget):
 
         btn_add_prompt = QPushButton("+ Add Prompt")
         btn_rem_prompt = QPushButton("Remove")
+        btn_move_prompt = QPushButton("Move to…")
+        btn_move_prompt.setToolTip(
+            "Move the selected prompt to another family — it keeps its style "
+            "and influence score (#31).")
         btn_add_prompt.clicked.connect(self._add_prompt)
         btn_rem_prompt.clicked.connect(self._delete_prompt)
+        btn_move_prompt.clicked.connect(self._move_prompt_dialog)
 
         self._prompts_count = QLabel()
 
-        prompt_bar = _action_bar(btn_add_prompt, btn_rem_prompt, "stretch", self._prompts_count)
+        prompt_bar = _action_bar(btn_add_prompt, btn_rem_prompt,
+                                 btn_move_prompt, "stretch", self._prompts_count)
 
         right_lay.addWidget(self._family_header)
         right_lay.addWidget(self._prompts_table)
@@ -1140,6 +1171,140 @@ class KnowledgePage(QWidget):
         self.repo.delete_prompt(fname, prompt_text)
         self._refresh_families()
         self._select_family_by_name(fname)
+
+    # ─── #31 move/merge + import/export ───────────────────────────────────────
+
+    def _move_prompt_dialog(self):
+        row = self._prompts_table.currentRow()
+        fname = self._current_family_name()
+        if row < 0 or not fname:
+            QMessageBox.information(self, "No Prompt",
+                                    "Select a prompt to move first.")
+            return
+        item = self._prompts_table.item(row, 1)
+        if not item:
+            return
+        prompt_text = item.data(Qt.UserRole)
+        # list_prompt_families rows: (None, family_name, "", "", score)
+        others = sorted({f[1] for f in self.repo.list_prompt_families()
+                         if f[1] and f[1] != fname}, key=str.lower)
+        if not others:
+            QMessageBox.information(self, "No Target",
+                                    "There is no other family to move to.")
+            return
+        target, ok = QInputDialog.getItem(
+            self, "Move Prompt", f"Move this prompt from '{fname}' to:",
+            others, 0, False)
+        if not ok or not target:
+            return
+        if self.repo.move_prompt(prompt_text, fname, target):
+            self._refresh_families()
+            self._select_family_by_name(target)
+
+    def _merge_families_dialog(self):
+        # list_prompt_families rows: (None, family_name, "", "", score)
+        families = sorted({f[1] for f in self.repo.list_prompt_families()
+                           if f[1]}, key=str.lower)
+        if len(families) < 2:
+            QMessageBox.information(self, "Merge Families",
+                                    "Need at least two families to merge.")
+            return
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Merge Prompt Families")
+        lay = QVBoxLayout(dlg)
+        lay.addWidget(QLabel(
+            "Select two or more families to combine. Duplicate prompt texts "
+            "are kept once; historical collected responses are never touched."))
+        lst = QListWidget()
+        lst.setSelectionMode(QListWidget.MultiSelection)
+        for f in families:
+            lst.addItem(f)
+        lay.addWidget(lst)
+        name_row = QHBoxLayout()
+        name_row.addWidget(QLabel("Merged family name:"))
+        name_edit = QLineEdit()
+        name_row.addWidget(name_edit, 1)
+        lay.addLayout(name_row)
+        # prefill with the first selection so merging INTO a family is 1 click
+        lst.itemSelectionChanged.connect(lambda: name_edit.setText(
+            name_edit.text() or (lst.selectedItems()[0].text()
+                                 if lst.selectedItems() else "")))
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.accepted.connect(dlg.accept)
+        buttons.rejected.connect(dlg.reject)
+        lay.addWidget(buttons)
+        dlg.resize(420, 460)
+        if dlg.exec() != QDialog.Accepted:
+            return
+        sources = [i.text() for i in lst.selectedItems()]
+        target = name_edit.text().strip()
+        if len(sources) < 2 or not target:
+            QMessageBox.warning(self, "Merge Families",
+                                "Select at least two families and provide a "
+                                "name for the merged family.")
+            return
+        count = self.repo.merge_families(sources, target)
+        QMessageBox.information(
+            self, "Merged", f"Merged {len(sources)} families into "
+                            f"'{target}' — {count} prompts.")
+        self._refresh_families()
+        self._select_family_by_name(target)
+
+    def _export_prompts(self):
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Export Prompt Library", "Atlas_Prompt_Library.csv",
+            "CSV (*.csv);;Excel (*.xlsx)")
+        if not path:
+            return
+        try:
+            count = self.repo.export_prompt_library(path)
+        except Exception as exc:
+            QMessageBox.warning(self, "Export Failed", str(exc))
+            return
+        QMessageBox.information(self, "Exported",
+                                f"Wrote {count} prompts to:\n{path}")
+
+    def _import_prompts(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Import Prompt Library", "",
+            "Prompt files (*.csv *.xlsx)")
+        if not path:
+            return
+        try:
+            clean, problems = self.repo.validate_prompt_import(path)
+        except Exception as exc:
+            QMessageBox.warning(self, "Import Failed", f"Could not read the "
+                                                       f"file: {exc}")
+            return
+        if not clean:
+            QMessageBox.warning(self, "Nothing to Import",
+                                "\n".join(problems[:12]))
+            return
+        families = len({r["family_name"] for r in clean})
+        summary = (f"{len(clean)} valid prompts across {families} families.\n")
+        if problems:
+            summary += (f"\n{len(problems)} row(s) need attention:\n"
+                        + "\n".join(problems[:10])
+                        + ("\n…" if len(problems) > 10 else ""))
+        summary += ("\n\nMerge adds only prompts you don't already have. "
+                    "Replace swaps the ENTIRE library for this file.")
+        box = QMessageBox(self)
+        box.setWindowTitle("Import Preview")
+        box.setText(summary)
+        merge_btn = box.addButton("Merge", QMessageBox.AcceptRole)
+        replace_btn = box.addButton("Replace All", QMessageBox.DestructiveRole)
+        box.addButton(QMessageBox.Cancel)
+        box.exec()
+        clicked = box.clickedButton()
+        if clicked not in (merge_btn, replace_btn):
+            return
+        added, _ = self.repo.import_prompt_library(
+            clean, replace=(clicked is replace_btn))
+        QMessageBox.information(
+            self, "Imported",
+            f"{'Replaced library with' if clicked is replace_btn else 'Added'}"
+            f" {added} prompts.")
+        self._refresh_families()
 
     # ─── Search Volume ────────────────────────────────────────────────────────
     # #61: sanity-checks the hand-curated prompt library (168 families) against

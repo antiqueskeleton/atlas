@@ -1015,3 +1015,187 @@ class KnowledgeRepository:
         except Exception:
             pass
         return removed
+
+    # ── #31: move / merge ──────────────────────────────────────────────────────
+
+    def _read_questions(self):
+        csv_path = self._data / "market_questions.csv"
+        if not csv_path.exists():
+            return csv_path, ["family_name", "prompt_style", "prompt_text",
+                              "prompt_influence_score"], []
+        with open(csv_path, newline="", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            fieldnames = reader.fieldnames or ["family_name", "prompt_style",
+                                               "prompt_text", "prompt_influence_score"]
+            return csv_path, fieldnames, list(reader)
+
+    def _write_questions(self, csv_path, fieldnames, rows):
+        with open(csv_path, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(rows)
+
+    def move_prompt(self, prompt_text, from_family, to_family) -> bool:
+        """#31a: reassign ONE prompt row to another family in place — the row
+        keeps its style and influence score, unlike the old delete-then-re-add
+        workaround which lost both. Returns True when a row actually moved."""
+        csv_path, fieldnames, rows = self._read_questions()
+        moved = False
+        for r in rows:
+            if (not moved and r.get("family_name") == from_family
+                    and r.get("prompt_text") == prompt_text):
+                r["family_name"] = to_family
+                moved = True
+        if moved:
+            self._write_questions(csv_path, fieldnames, rows)
+        return moved
+
+    def merge_families(self, source_families: list[str], target_name: str) -> int:
+        """#31b: merge families into one under `target_name` (which may be one
+        of the sources, or a brand-new name). Every source row's family_name is
+        rewritten; duplicate prompt_texts across the merged set keep only their
+        first occurrence; blank placeholder rows (add_prompt_family's empty
+        stub) are dropped when the merged family has any real prompt — the
+        no-garbage rule. Source families' category assignments are cleared
+        (the merged family keeps target's own, if it had one). Returns how
+        many prompt rows ended up in the merged family."""
+        sources = {s for s in source_families if s}
+        if not sources or not (target_name or "").strip():
+            return 0
+        target_name = target_name.strip()
+        csv_path, fieldnames, rows = self._read_questions()
+
+        seen_texts: set[str] = set()
+        kept, merged_rows = [], []
+        for r in rows:
+            fam = r.get("family_name") or ""
+            if fam not in sources and fam != target_name:
+                kept.append(r)
+                continue
+            r["family_name"] = target_name
+            text = (r.get("prompt_text") or "").strip()
+            if text and text in seen_texts:
+                continue                       # cross-family duplicate
+            if text:
+                seen_texts.add(text)
+            merged_rows.append(r)
+        if seen_texts:                         # any real prompt -> drop blanks
+            merged_rows = [r for r in merged_rows
+                           if (r.get("prompt_text") or "").strip()]
+        self._write_questions(csv_path, fieldnames, kept + merged_rows)
+
+        for src in sources - {target_name}:
+            try:
+                self.set_family_category(src, None)
+            except Exception:
+                pass
+        return len(merged_rows)
+
+    # ── Prompt library import/export (user request 2026-07-20) ────────────────
+    # The SAFE way to bulk-edit prompts in Excel. Hand-editing the CSV in the
+    # install directory looked possible but those files are replaced by every
+    # update (the data-loss bug fixed in paths.py) — export/import works on
+    # the real, persistent library instead.
+
+    _QUESTION_FIELDS = ["family_name", "prompt_style", "prompt_text",
+                        "prompt_influence_score"]
+
+    def export_prompt_library(self, dest_path) -> int:
+        """Write the live prompt library to a user-chosen .csv (utf-8-sig so
+        Excel opens it with correct characters) or .xlsx. Returns row count."""
+        _, _, rows = self._read_questions()
+        dest = str(dest_path)
+        if dest.lower().endswith(".xlsx"):
+            from openpyxl import Workbook
+            wb = Workbook()
+            ws = wb.active
+            ws.title = "Prompt Library"
+            ws.append(self._QUESTION_FIELDS)
+            for r in rows:
+                ws.append([r.get(k, "") for k in self._QUESTION_FIELDS])
+            wb.save(dest)
+        else:
+            with open(dest, "w", newline="", encoding="utf-8-sig") as f:
+                writer = csv.DictWriter(f, fieldnames=self._QUESTION_FIELDS,
+                                        extrasaction="ignore")
+                writer.writeheader()
+                writer.writerows(rows)
+        return len(rows)
+
+    @classmethod
+    def validate_prompt_import(cls, src_path) -> tuple[list[dict], list[str]]:
+        """Parse + validate an import file (.csv or .xlsx). Returns
+        (clean_rows, problems) — problems are human-readable lines for the
+        preview dialog. Enforces the no-garbage rule on the way in: blank
+        prompt_text or family_name rows are rejected (never silently stored,
+        like the accidental 'Best Of ...',,,0 row scrubbed pre-v1.1.0), and
+        duplicate prompt texts keep only their first occurrence."""
+        src = str(src_path)
+        raw: list[dict] = []
+        if src.lower().endswith(".xlsx"):
+            from openpyxl import load_workbook
+            ws = load_workbook(src, read_only=True, data_only=True).active
+            rows_iter = ws.iter_rows(values_only=True)
+            header = [str(h or "").strip() for h in next(rows_iter, [])]
+            for values in rows_iter:
+                raw.append({header[i]: ("" if v is None else str(v))
+                            for i, v in enumerate(values) if i < len(header)})
+        else:
+            with open(src, newline="", encoding="utf-8-sig") as f:
+                raw = list(csv.DictReader(f))
+
+        problems: list[str] = []
+        if raw and not {"family_name", "prompt_text"} <= set(raw[0].keys()):
+            return [], [f"Missing required columns: file must have "
+                        f"'family_name' and 'prompt_text' headers "
+                        f"(found: {', '.join(raw[0].keys())})."]
+        clean, seen = [], set()
+        for i, r in enumerate(raw, start=2):        # +header row, 1-based
+            family = (r.get("family_name") or "").strip()
+            text = (r.get("prompt_text") or "").strip()
+            if not family and not text:
+                continue                            # fully blank line — ignore
+            if not text:
+                problems.append(f"Row {i}: blank prompt text (family "
+                                f"'{family}') — rejected.")
+                continue
+            if not family:
+                problems.append(f"Row {i}: blank family name — rejected.")
+                continue
+            if text.lower() in seen:
+                problems.append(f"Row {i}: duplicate prompt text — first "
+                                f"occurrence kept.")
+                continue
+            seen.add(text.lower())
+            clean.append({
+                "family_name": family,
+                "prompt_style": (r.get("prompt_style") or "").strip(),
+                "prompt_text": text,
+                "prompt_influence_score":
+                    (str(r.get("prompt_influence_score") or "").strip() or "5"),
+            })
+        if not clean:
+            problems.append("No valid prompt rows found in the file.")
+        return clean, problems
+
+    def import_prompt_library(self, rows: list[dict],
+                              replace: bool = False) -> tuple[int, int]:
+        """Apply validated rows. Merge (default): add rows whose prompt text
+        isn't already in the library — existing prompts are never modified.
+        Replace: the file becomes the whole library. Returns
+        (rows_added_or_written, distinct_families_in_import)."""
+        csv_path, fieldnames, existing = self._read_questions()
+        for k in self._QUESTION_FIELDS:
+            if k not in fieldnames:
+                fieldnames.append(k)
+        if replace:
+            self._write_questions(csv_path, fieldnames, rows)
+            added = len(rows)
+        else:
+            have = {(r.get("prompt_text") or "").strip().lower()
+                    for r in existing}
+            new_rows = [r for r in rows
+                        if r["prompt_text"].strip().lower() not in have]
+            self._write_questions(csv_path, fieldnames, existing + new_rows)
+            added = len(new_rows)
+        return added, len({r["family_name"] for r in rows})
