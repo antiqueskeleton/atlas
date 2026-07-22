@@ -162,14 +162,14 @@ class PriceComparisonPage(QWidget):
 
         # Title row
         title = QLabel("Price Comparison")
-        title.setStyleSheet("font-size: 28px; font-weight: 700; color: #111827;")
+        title.setStyleSheet("font-size: 28px; font-weight: 700; color: #2B323A;")
         subtitle = QLabel(
             "Independent of the workflow above, run any time — give Atlas a "
             "product model and it finds each competitor's closest comparable "
             "(matched on wattage, fuel type, start type, and generator type) "
             "with real prices and confirmed specs, Amazon-compare style."
         )
-        subtitle.setStyleSheet("font-size: 13px; color: #6B7280;")
+        subtitle.setStyleSheet("font-size: 13px; color: #69727E;")
         subtitle.setWordWrap(True)
         root.addWidget(title)
         root.addWidget(subtitle)
@@ -197,7 +197,7 @@ class PriceComparisonPage(QWidget):
         # 1.5/13.3 — "Price Comparison is the worst").
         frame = QFrame()
         frame.setStyleSheet(
-            "QFrame { background: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 8px; }"
+            "QFrame { background: #F9FAFB; border: 1px solid #E3E7ED; border-radius: 8px; }"
         )
         lay = QVBoxLayout()
         lay.setContentsMargins(16, 16, 16, 16)
@@ -257,7 +257,7 @@ class PriceComparisonPage(QWidget):
             "set any of these to steer which comparable models get matched."
         )
         attr_tip.setWordWrap(True)
-        attr_tip.setStyleSheet("font-size: 10px; color: #9CA3AF;")
+        attr_tip.setStyleSheet("font-size: 10px; color: #8C96A2;")
         lay.addWidget(attr_tip)
 
         lay.addWidget(QLabel("Search Keywords"))
@@ -270,7 +270,7 @@ class PriceComparisonPage(QWidget):
 
         tip = QLabel("Keywords refine comparison-brand searches when no model is specified.")
         tip.setWordWrap(True)
-        tip.setStyleSheet("font-size: 10px; color: #9CA3AF;")
+        tip.setStyleSheet("font-size: 10px; color: #8C96A2;")
         lay.addWidget(tip)
 
         lay.addWidget(QLabel("Retailer Product URLs"))
@@ -283,10 +283,10 @@ class PriceComparisonPage(QWidget):
         self._retailer_urls_edit.setMinimumHeight(70)
         self._retailer_urls_edit.setMaximumHeight(90)
         self._retailer_urls_edit.setStyleSheet(
-            "QTextEdit { background: white; border: 1px solid #D1D5DB; "
+            "QTextEdit { background: white; border: 1px solid #CBD2DB; "
             "border-radius: 5px; padding: 4px 8px; font-size: 10px; "
-            "color: #374151; }"
-            "QTextEdit:focus { border-color: #0B84FF; }"
+            "color: #2B323A; }"
+            "QTextEdit:focus { border-color: #3E7BC2; }"
         )
         lay.addWidget(self._retailer_urls_edit)
 
@@ -295,7 +295,7 @@ class PriceComparisonPage(QWidget):
             "Paste the exact product page URL from each retailer."
         )
         url_tip.setWordWrap(True)
-        url_tip.setStyleSheet("font-size: 10px; color: #9CA3AF;")
+        url_tip.setStyleSheet("font-size: 10px; color: #8C96A2;")
         lay.addWidget(url_tip)
 
         lay.addWidget(self._divider())
@@ -343,17 +343,17 @@ class PriceComparisonPage(QWidget):
         self._run_btn.setCursor(Qt.PointingHandCursor)
         self._run_btn.setStyleSheet(
             "QPushButton { font-size: 13px; font-weight: 700; color: white; "
-            "background: #0B84FF; border: none; border-radius: 6px; padding: 6px 16px; }"
-            "QPushButton:hover { background: #0056CC; }"
+            "background: #3E7BC2; border: none; border-radius: 6px; padding: 6px 16px; }"
+            "QPushButton:hover { background: #295A94; }"
             "QPushButton:pressed { background: #003D99; }"
-            "QPushButton:disabled { background: #9CA3AF; }"
+            "QPushButton:disabled { background: #8C96A2; }"
         )
         self._run_btn.clicked.connect(self._run_comparison)
         lay.addWidget(self._run_btn)
 
         self._status_lbl = QLabel("")
         self._status_lbl.setWordWrap(True)
-        self._status_lbl.setStyleSheet("font-size: 10px; color: #6B7280;")
+        self._status_lbl.setStyleSheet("font-size: 10px; color: #69727E;")
         lay.addWidget(self._status_lbl)
 
         frame.setLayout(lay)
@@ -377,7 +377,7 @@ class PriceComparisonPage(QWidget):
 
         # Toolbar row
         self._last_run_lbl = QLabel("No comparison run yet.")
-        self._last_run_lbl.setStyleSheet("font-size: 11px; color: #6B7280;")
+        self._last_run_lbl.setStyleSheet("font-size: 11px; color: #69727E;")
 
         # Shared export-button factory (#86) — same look as every other page.
         from desktop.widgets.export_buttons import export_button
@@ -392,7 +392,7 @@ class PriceComparisonPage(QWidget):
 
         # Progress bar (hidden until run starts)
         self._progress_lbl = QLabel("")
-        self._progress_lbl.setStyleSheet("font-size: 11px; color: #374151;")
+        self._progress_lbl.setStyleSheet("font-size: 11px; color: #2B323A;")
         self._progress_lbl.hide()
         lay.addWidget(self._progress_lbl)
 
@@ -400,8 +400,8 @@ class PriceComparisonPage(QWidget):
         self._tabs = QTabWidget()
         self._tabs.setStyleSheet(
             "QTabBar::tab { padding: 6px 16px; font-size: 12px; }"
-            "QTabBar::tab:selected { font-weight: 600; color: #0B84FF; "
-            "border-bottom: 2px solid #0B84FF; }"
+            "QTabBar::tab:selected { font-weight: 600; color: #3E7BC2; "
+            "border-bottom: 2px solid #3E7BC2; }"
         )
 
         self._price_table  = self._make_table([
@@ -427,7 +427,7 @@ class PriceComparisonPage(QWidget):
             "page exists).  — = data not found on any source.  No values are inferred "
             "or estimated."
         )
-        note.setStyleSheet("font-size: 10px; color: #9CA3AF;")
+        note.setStyleSheet("font-size: 10px; color: #8C96A2;")
         note.setWordWrap(True)
         lay.addWidget(note)
 
@@ -890,7 +890,7 @@ class PriceComparisonPage(QWidget):
         tbl.verticalHeader().hide()
         tbl.horizontalHeader().setStretchLastSection(True)
         tbl.setStyleSheet(
-            "QTableWidget { gridline-color: #E5E7EB; font-size: 12px; }"
+            "QTableWidget { gridline-color: #E3E7ED; font-size: 12px; }"
             "QHeaderView::section { background: #1E3A5F; color: white; "
             "font-weight: 600; font-size: 11px; padding: 6px 8px; "
             "border: none; border-right: 1px solid #2D5A8E; }"
@@ -909,34 +909,34 @@ class PriceComparisonPage(QWidget):
     def _section_label(self, text: str) -> QLabel:
         lbl = QLabel(text)
         lbl.setStyleSheet(
-            "font-size: 10px; font-weight: 700; color: #6B7280; letter-spacing: 0.5px;"
+            "font-size: 10px; font-weight: 700; color: #69727E; letter-spacing: 0.5px;"
         )
         return lbl
 
     def _divider(self) -> QFrame:
         line = QFrame()
         line.setFrameShape(QFrame.HLine)
-        line.setStyleSheet("color: #E5E7EB;")
+        line.setStyleSheet("color: #E3E7ED;")
         return line
 
     def _combo_style(self) -> str:
         return (
-            "QComboBox { background: white; border: 1px solid #D1D5DB; "
+            "QComboBox { background: white; border: 1px solid #CBD2DB; "
             "border-radius: 5px; padding: 4px 8px; font-size: 12px; }"
-            "QComboBox:focus { border-color: #0B84FF; }"
+            "QComboBox:focus { border-color: #3E7BC2; }"
         )
 
     def _input_style(self) -> str:
         return (
-            "QLineEdit { background: white; border: 1px solid #D1D5DB; "
+            "QLineEdit { background: white; border: 1px solid #CBD2DB; "
             "border-radius: 5px; padding: 4px 8px; font-size: 12px; }"
-            "QLineEdit:focus { border-color: #0B84FF; }"
+            "QLineEdit:focus { border-color: #3E7BC2; }"
         )
 
     def _secondary_btn_style(self) -> str:
         return (
-            "QPushButton { font-size: 11px; font-weight: 600; color: #374151; "
-            "background: white; border: 1px solid #D1D5DB; border-radius: 5px; "
+            "QPushButton { font-size: 11px; font-weight: 600; color: #2B323A; "
+            "background: white; border: 1px solid #CBD2DB; border-radius: 5px; "
             "padding: 4px 10px; }"
             "QPushButton:hover { background: #F3F4F6; }"
         )

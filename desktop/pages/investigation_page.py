@@ -81,7 +81,7 @@ class InvestigationPage(QWidget):
             "analyze whatever Visibility data is already stored. No separate "
             "collection or report needs to run first."
         )
-        subtitle.setStyleSheet("font-size:13px;color:#6B7280;")
+        subtitle.setStyleSheet("font-size:13px;color:#69727E;")
         subtitle.setWordWrap(True)
         subtitle.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
@@ -98,7 +98,7 @@ class InvestigationPage(QWidget):
         ctrl.setSpacing(10)
 
         prov_lbl = QLabel("Provider:")
-        prov_lbl.setStyleSheet("font-size:12px; color:#6B7280;")
+        prov_lbl.setStyleSheet("font-size:12px; color:#69727E;")
         prov_lbl.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
 
         self._provider_combo = QComboBox()
@@ -108,7 +108,7 @@ class InvestigationPage(QWidget):
         self._populate_providers()
 
         self._status_lbl = QLabel("Enter a question above to begin.")
-        self._status_lbl.setStyleSheet("font-size:12px; color:#6B7280;")
+        self._status_lbl.setStyleSheet("font-size:12px; color:#69727E;")
         self._status_lbl.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         ctrl.addWidget(prov_lbl)
@@ -149,7 +149,7 @@ class InvestigationPage(QWidget):
         self._ev_next_btn.clicked.connect(self._next_evidence)
         self._ev_next_btn.setToolTip("Next evidence source, ranked by relevance")
         self._ev_idx_lbl = QLabel("")
-        self._ev_idx_lbl.setStyleSheet("font-size:11px; color:#6B7280;")
+        self._ev_idx_lbl.setStyleSheet("font-size:11px; color:#69727E;")
         self._ev_idx_lbl.setAlignment(Qt.AlignCenter)
         ev_nav.addWidget(self._ev_prev_btn)
         ev_nav.addWidget(self._ev_idx_lbl, stretch=1)
@@ -239,9 +239,9 @@ class InvestigationPage(QWidget):
             "QTabWidget::pane { border: none; padding-top: 4px; }"
             "QTabBar::tab { padding: 7px 22px; font-size: 13px; font-weight: 500;"
             "  border: none; border-bottom: 2px solid transparent;"
-            "  background: transparent; color: #6B7280; margin-right: 4px; }"
-            "QTabBar::tab:hover { color: #111827; }"
-            "QTabBar::tab:selected { color: #0B84FF; border-bottom: 2px solid #0B84FF; }"
+            "  background: transparent; color: #69727E; margin-right: 4px; }"
+            "QTabBar::tab:hover { color: #2B323A; }"
+            "QTabBar::tab:selected { color: #3E7BC2; border-bottom: 2px solid #3E7BC2; }"
         )
         self._tabs.addTab(summary_tab, "Summary")
         self._tabs.addTab(agents_tab, "Agents")

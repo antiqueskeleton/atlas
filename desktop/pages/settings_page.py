@@ -58,29 +58,29 @@ _COMING_SOON_PROVIDERS = {
 _CARD_SS = """
 QFrame#SettingsCard {
     background: #FFFFFF;
-    border: 1px solid #E5E7EB;
+    border: 1px solid #E3E7ED;
     border-radius: 8px;
 }
 QFrame#SettingsCard QLabel { background: transparent; border: none; }
 QFrame#SettingsCard QLineEdit {
-    border: 1px solid #D1D5DB;
+    border: 1px solid #CBD2DB;
     border-radius: 4px;
     padding: 5px 9px;
     font-size: 13px;
     min-height: 28px;
     background: #FAFAFA;
 }
-QFrame#SettingsCard QLineEdit:focus { border-color: #2563EB; background: #FFF; }
+QFrame#SettingsCard QLineEdit:focus { border-color: #3E7BC2; background: #FFF; }
 QFrame#SettingsCard QPushButton {
-    border: 1px solid #D1D5DB;
+    border: 1px solid #CBD2DB;
     border-radius: 4px;
     padding: 5px 12px;
     font-size: 12px;
     background: #F9FAFB;
     min-height: 28px;
 }
-QFrame#SettingsCard QPushButton:hover { background: #F3F4F6; border-color: #9CA3AF; }
-QFrame#SettingsCard QPushButton:pressed { background: #E5E7EB; }
+QFrame#SettingsCard QPushButton:hover { background: #F3F4F6; border-color: #8C96A2; }
+QFrame#SettingsCard QPushButton:pressed { background: #E3E7ED; }
 """
 
 
@@ -152,7 +152,7 @@ class SettingsPage(QWidget):
             "Start here — set your target brand and API keys before running "
             "any collection or analysis."
         )
-        subtitle.setStyleSheet("font-size: 13px; color: #6B7280;")
+        subtitle.setStyleSheet("font-size: 13px; color: #69727E;")
 
         root.addWidget(title)
         root.addWidget(subtitle)
@@ -258,7 +258,7 @@ class SettingsPage(QWidget):
             ("", 70,         False),
         ]:
             lbl = QLabel(text)
-            lbl.setStyleSheet("font-size: 11px; font-weight: bold; color: #9CA3AF;")
+            lbl.setStyleSheet("font-size: 11px; font-weight: bold; color: #8C96A2;")
             if stretch:
                 lbl.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
             else:
@@ -276,8 +276,8 @@ class SettingsPage(QWidget):
             prov_col.setSpacing(2)
             prov_col.setContentsMargins(0, 0, 0, 0)
             name_lbl = QLabel(label)
-            name_lbl.setStyleSheet("font-size: 13px; font-weight: bold; color: #111827;")
-            link_lbl = QLabel(f'<a href="https://{console_url}" style="color:#2563EB;text-decoration:none;font-size:11px;">Get key →</a>')
+            name_lbl.setStyleSheet("font-size: 13px; font-weight: bold; color: #2B323A;")
+            link_lbl = QLabel(f'<a href="https://{console_url}" style="color:#3E7BC2;text-decoration:none;font-size:11px;">Get key →</a>')
             link_lbl.setOpenExternalLinks(True)
             prov_col.addWidget(name_lbl)
             prov_col.addWidget(link_lbl)
@@ -341,15 +341,15 @@ class SettingsPage(QWidget):
         save_btn = QPushButton("Save All Settings")
         save_btn.setFixedWidth(180)
         save_btn.setStyleSheet(
-            "QPushButton { background: #0B84FF; color: white; border: none; "
+            "QPushButton { background: #3E7BC2; color: white; border: none; "
             "border-radius: 5px; padding: 7px 16px; font-size: 13px; font-weight: bold; }"
-            "QPushButton:hover { background: #0056CC; }"
+            "QPushButton:hover { background: #295A94; }"
             "QPushButton:pressed { background: #004BB5; }"
         )
         save_btn.clicked.connect(self._save_all)
 
         self.status = QLabel("")
-        self.status.setStyleSheet("font-size: 12px; color: #6B7280;")
+        self.status.setStyleSheet("font-size: 12px; color: #69727E;")
         self.status.setWordWrap(True)
 
         save_row.addWidget(save_btn)
@@ -373,7 +373,7 @@ class SettingsPage(QWidget):
             row = QHBoxLayout()
             row.setSpacing(10)
             name_lbl = QLabel(label)
-            name_lbl.setStyleSheet("font-size: 13px; font-weight: bold; color: #9CA3AF;")
+            name_lbl.setStyleSheet("font-size: 13px; font-weight: bold; color: #8C96A2;")
             name_lbl.setFixedWidth(150)
             reason_lbl = self._note(reason)
             row.addWidget(name_lbl)
@@ -400,9 +400,9 @@ class SettingsPage(QWidget):
             name_col.setSpacing(2)
             name_col.setContentsMargins(0, 0, 0, 0)
             name_lbl = QLabel(label)
-            name_lbl.setStyleSheet("font-size: 13px; font-weight: bold; color: #111827;")
+            name_lbl.setStyleSheet("font-size: 13px; font-weight: bold; color: #2B323A;")
             link_lbl = QLabel(
-                f'<a href="https://{setup_url}" style="color:#2563EB;text-decoration:none;'
+                f'<a href="https://{setup_url}" style="color:#3E7BC2;text-decoration:none;'
                 f'font-size:11px;">Set up →</a>'
             )
             link_lbl.setOpenExternalLinks(True)
@@ -459,7 +459,7 @@ class SettingsPage(QWidget):
 
         lay.addSpacing(4)
         self.volume_status = QLabel("")
-        self.volume_status.setStyleSheet("font-size: 12px; color: #6B7280;")
+        self.volume_status.setStyleSheet("font-size: 12px; color: #69727E;")
         self.volume_status.setWordWrap(True)
         lay.addWidget(self.volume_status)
 
@@ -512,9 +512,9 @@ class SettingsPage(QWidget):
             name_col = QVBoxLayout()
             name_col.setSpacing(2)
             name_lbl = QLabel(label)
-            name_lbl.setStyleSheet("font-size: 13px; font-weight: bold; color: #111827;")
+            name_lbl.setStyleSheet("font-size: 13px; font-weight: bold; color: #2B323A;")
             link_lbl = QLabel(
-                f'<a href="https://{setup_url}" style="color:#2563EB;'
+                f'<a href="https://{setup_url}" style="color:#3E7BC2;'
                 f'text-decoration:none;font-size:11px;">Set up →</a>'
             )
             link_lbl.setOpenExternalLinks(True)
@@ -595,7 +595,7 @@ class SettingsPage(QWidget):
             lbl.setFixedWidth(width)
             lbl.setAlignment(align | Qt.AlignVCenter)
             lbl.setStyleSheet(
-                f"font-size: 12px; color: #111827; "
+                f"font-size: 12px; color: #2B323A; "
                 f"font-weight: {'700' if bold else '400'};")
             h.addWidget(lbl)
         h.addStretch()
@@ -614,7 +614,7 @@ class SettingsPage(QWidget):
             empty = QLabel("No API calls metered yet this month — usage appears "
                            "here after Atlas makes its next provider call.")
             empty.setWordWrap(True)
-            empty.setStyleSheet("font-size: 12px; color: #6B7280;")
+            empty.setStyleSheet("font-size: 12px; color: #69727E;")
             self._usage_rows_layout.addWidget(empty)
             return
 
@@ -643,7 +643,7 @@ class SettingsPage(QWidget):
             note = QLabel("* some calls used a model with no known rate and are "
                           "excluded from the estimate.")
             note.setWordWrap(True)
-            note.setStyleSheet("font-size: 11px; color: #6B7280;")
+            note.setStyleSheet("font-size: 11px; color: #69727E;")
             self._usage_rows_layout.addWidget(note)
 
     # ── Health card ───────────────────────────────────────────────────────────
@@ -857,7 +857,7 @@ class SettingsPage(QWidget):
             if item.widget():
                 item.widget().deleteLater()
 
-        _COLORS = {"green": "#16A34A", "amber": "#D97706", "red": "#DC2626"}
+        _COLORS = {"green": "#2E8B5E", "amber": "#D97706", "red": "#C24536"}
         _DOTS   = {"green": "●", "amber": "●", "red": "●"}
 
         for status, label, detail, action_label, action_key in checks:
@@ -872,11 +872,11 @@ class SettingsPage(QWidget):
 
             name = QLabel(label)
             name.setFixedWidth(180)
-            name.setStyleSheet("font-size: 12px; font-weight: bold; color: #111827;")
+            name.setStyleSheet("font-size: 12px; font-weight: bold; color: #2B323A;")
 
             desc = QLabel(detail)
             desc.setWordWrap(True)
-            desc.setStyleSheet("font-size: 12px; color: #374151;")
+            desc.setStyleSheet("font-size: 12px; color: #2B323A;")
             desc.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
 
             rl.addWidget(dot)
@@ -954,7 +954,7 @@ class SettingsPage(QWidget):
         lay.setSpacing(6)
 
         hdr = QLabel(heading)
-        hdr.setStyleSheet("font-size: 15px; font-weight: bold; color: #111827;")
+        hdr.setStyleSheet("font-size: 15px; font-weight: bold; color: #2B323A;")
         lay.addWidget(hdr)
 
         frame.setLayout(lay)
@@ -962,7 +962,7 @@ class SettingsPage(QWidget):
 
     def _note(self, text: str) -> QLabel:
         lbl = QLabel(text)
-        lbl.setStyleSheet("font-size: 12px; color: #6B7280;")
+        lbl.setStyleSheet("font-size: 12px; color: #69727E;")
         lbl.setWordWrap(True)
         return lbl
 

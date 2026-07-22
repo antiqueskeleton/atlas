@@ -43,44 +43,47 @@ def _fonts_dir() -> Path:
     return Path(__file__).resolve().parent / "assets" / "fonts"
 
 
-def _register_inter_font() -> bool:
-    """Bundled Inter (SIL OFL) replaces the Segoe UI system default — built
-    for small-size UI text (taller x-height, tighter apertures) rather than
-    Segoe's general-purpose print/body-text design, which is the better fit
-    for Atlas's dense KPI tables and small labels. Static weights only
-    (Regular/Medium/SemiBold/Bold), not the variable font: Qt's weight
-    selection for static families is far more reliably supported across
-    Qt/FreeType versions than variable-font axis selection. Registration
-    failure (missing file, bad font data) degrades silently to the
-    Segoe UI/Arial fallback already in styles.py's font-family list —
-    never a startup error over a cosmetic font swap.
+def _register_app_fonts() -> bool:
+    """2026-07 redesign: Barlow (body) + Barlow Condensed (headings) are the
+    app faces — condensed headings buy ~12% horizontal room on Atlas's dense
+    screens. Inter stays bundled/registered as the legacy face so anything
+    still referencing it (older exports, fallback chains) keeps resolving.
+    Static weights only, not variable fonts: Qt's weight selection for
+    static families is far more reliably supported across Qt/FreeType
+    versions than variable-font axis selection. Registration failure
+    (missing file, bad font data) degrades silently to the Segoe UI/Arial
+    fallback already in styles.py's font-family list — never a startup
+    error over a cosmetic font swap.
 
-    Returns True if at least one weight registered, so the caller can set
-    Inter as the app-wide default font (see _apply_inter_default)."""
+    Returns True if at least one Barlow weight registered, so the caller
+    can set Barlow as the app-wide default font (see _apply_font_default)."""
     fonts_dir = _fonts_dir()
-    loaded = False
+    barlow_loaded = False
+    for name in ("Barlow-Regular.ttf", "Barlow-Medium.ttf", "Barlow-Bold.ttf",
+                 "BarlowCondensed-Regular.ttf", "BarlowCondensed-SemiBold.ttf"):
+        if QFontDatabase.addApplicationFont(str(fonts_dir / name)) != -1:
+            barlow_loaded = barlow_loaded or name.startswith("Barlow-")
     for name in ("Inter-Regular.ttf", "Inter-Medium.ttf",
                  "Inter-SemiBold.ttf", "Inter-Bold.ttf"):
-        if QFontDatabase.addApplicationFont(str(fonts_dir / name)) != -1:
-            loaded = True
-    return loaded
+        QFontDatabase.addApplicationFont(str(fonts_dir / name))
+    return barlow_loaded
 
 
-def _apply_inter_default(app):
-    """Make Inter the application's ACTUAL default font, not just a
-    stylesheet font-family. The `QWidget { font-family: Inter }` rule in
+def _apply_font_default(app):
+    """Make Barlow the application's ACTUAL default font, not just a
+    stylesheet font-family. The `QWidget { font-family: ... }` rule in
     styles.py cascades to plain widgets, but on Windows it does NOT
     reliably reach item-view text (QTableWidget cells), combo-box popups,
-    and native-styled controls — those keep QApplication.font(), which was
-    still Segoe UI, so the app looked like two different fonts (user
-    report: title Inter, tables/checkboxes not). Setting the app default
-    closes that gap for every widget and delegate, regardless of QSS quirks.
-    The current default point size is preserved — only the family changes —
-    so nothing resizes."""
-    if not _register_inter_font():
+    and native-styled controls — those keep QApplication.font(), so the
+    app looked like two different fonts (original user report during the
+    Inter rollout). Setting the app default closes that gap for every
+    widget and delegate, regardless of QSS quirks. The current default
+    point size is preserved — only the family changes — so nothing
+    resizes."""
+    if not _register_app_fonts():
         return
     font = app.font()
-    font.setFamily("Inter")
+    font.setFamily("Barlow")
     app.setFont(font)
 
 
@@ -94,12 +97,12 @@ def _make_splash() -> QSplashScreen:
         pix.fill(QColor(NAVY))
         p = QPainter(pix)
         p.setRenderHint(QPainter.Antialiasing)
-        f = QFont("Inter", 54, QFont.Bold)
+        f = QFont("Barlow Condensed", 54, QFont.Bold)
         f.setLetterSpacing(QFont.AbsoluteSpacing, 10)
         p.setFont(f)
         p.setPen(QColor(PRIMARY))
         p.drawText(0, 60, W, 100, Qt.AlignHCenter | Qt.AlignVCenter, "ATLAS")
-        f2 = QFont("Inter", 10)
+        f2 = QFont("Barlow", 10)
         f2.setLetterSpacing(QFont.AbsoluteSpacing, 3)
         p.setFont(f2)
         p.setPen(QColor(ACCENT))
@@ -108,7 +111,7 @@ def _make_splash() -> QSplashScreen:
     else:
         pix = pix.scaledToWidth(700, Qt.SmoothTransformation)
         p = QPainter(pix)
-        f = QFont("Inter", 8)
+        f = QFont("Barlow", 8)
         p.setFont(f)
         p.setPen(QColor(STEEL))
         p.drawText(
@@ -123,7 +126,7 @@ def _make_splash() -> QSplashScreen:
 
 def main():
     app = QApplication(sys.argv)
-    _apply_inter_default(app)   # registers Inter AND sets it as the default font
+    _apply_font_default(app)   # registers Barlow/Inter AND sets Barlow as default
 
     icon = QIcon(str(_IMAGES_DIR / "atlas_icon.png"))
     app.setWindowIcon(icon)

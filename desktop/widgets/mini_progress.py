@@ -34,7 +34,7 @@ class MiniProgressWindow(QWidget):
         self._bar.setTextVisible(False)
         self._bar.setStyleSheet(
             "QProgressBar { background: #33455F; border: none; border-radius: 5px; }"
-            "QProgressBar::chunk { background: #0B84FF; border-radius: 5px; }")
+            "QProgressBar::chunk { background: #3E7BC2; border-radius: 5px; }")
         self._status = QLabel("")
         self._status.setStyleSheet(
             "color: #C6D2E1; font-size: 10px; background: transparent;")

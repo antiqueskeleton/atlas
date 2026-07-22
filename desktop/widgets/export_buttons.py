@@ -17,18 +17,18 @@ from PySide6.QtWidgets import QPushButton
 
 _PRIMARY_STYLE = (
     "QPushButton { font-size: 12px; font-weight: 600; color: white; "
-    "background: #0B84FF; border: none; border-radius: 5px; padding: 4px 14px; }"
-    "QPushButton:hover { background: #0056CC; }"
+    "background: #3E7BC2; border: none; border-radius: 5px; padding: 4px 14px; }"
+    "QPushButton:hover { background: #295A94; }"
     "QPushButton:pressed { background: #003D99; }"
-    "QPushButton:disabled { background: #9CA3AF; }"
+    "QPushButton:disabled { background: #8C96A2; }"
 )
 
 _SECONDARY_STYLE = (
-    "QPushButton { font-size: 12px; font-weight: 600; color: #0B84FF; "
-    "background: white; border: 1.5px solid #0B84FF; border-radius: 5px; padding: 4px 14px; }"
+    "QPushButton { font-size: 12px; font-weight: 600; color: #3E7BC2; "
+    "background: white; border: 1.5px solid #3E7BC2; border-radius: 5px; padding: 4px 14px; }"
     "QPushButton:hover { background: #EFF6FF; }"
     "QPushButton:pressed { background: #DBEAFE; }"
-    "QPushButton:disabled { color: #9CA3AF; border-color: #9CA3AF; }"
+    "QPushButton:disabled { color: #8C96A2; border-color: #8C96A2; }"
 )
 
 
@@ -50,7 +50,7 @@ def export_button(label: str, tooltip: str = "", primary: bool = False) -> QPush
 # buttons look identical rather than each page drawing its own.
 _ICON_SPEC = {
     "excel": ("#217346", "XLS"),
-    "pdf":   ("#DC2626", "PDF"),
+    "pdf":   ("#C24536", "PDF"),
     "word":  ("#2B579A", "DOC"),
 }
 
@@ -78,7 +78,7 @@ def icon_export_button(kind: str, tooltip: str = "") -> QPushButton:
     btn.setStyleSheet(
         "QPushButton { border: none; background: transparent; border-radius: 6px; }"
         "QPushButton:hover { background: #F3F4F6; }"
-        "QPushButton:pressed { background: #E5E7EB; }"
+        "QPushButton:pressed { background: #E3E7ED; }"
     )
     if tooltip:
         btn.setToolTip(tooltip)

@@ -400,14 +400,14 @@ class AtlasMainWindow(QMainWindow):
         bar.clearMessage()
 
         msg = QLabel(f"  Update available:  Atlas AI v{version}  —  {notes[:80] + '…' if len(notes) > 80 else notes}  ")
-        msg.setStyleSheet("color: #0B84FF; font-weight: bold;")
+        msg.setStyleSheet("color: #3E7BC2; font-weight: bold;")
 
         if url:
             btn = QPushButton(f"Download v{version}")
             btn.setStyleSheet(
-                "QPushButton { background: #0B84FF; color: white; border: none; "
+                "QPushButton { background: #3E7BC2; color: white; border: none; "
                 "border-radius: 4px; padding: 3px 10px; font-size: 11px; }"
-                "QPushButton:hover { background: #0056CC; }"
+                "QPushButton:hover { background: #295A94; }"
             )
             btn.clicked.connect(lambda: self._open_download(url))
             bar.addWidget(msg)
@@ -471,13 +471,13 @@ class AtlasMainWindow(QMainWindow):
 
         # App name + version badge row
         name_lbl = QLabel("Atlas AI")
-        name_lbl.setStyleSheet("font-size: 26px; font-weight: 700; color: #111827; letter-spacing: 1px;")
+        name_lbl.setStyleSheet("font-size: 26px; font-weight: 700; color: #2B323A; letter-spacing: 1px;")
         name_lbl.setAlignment(Qt.AlignCenter)
 
         ver_badge = QLabel(f"v{APP_VERSION}")
         ver_badge.setAlignment(Qt.AlignCenter)
         ver_badge.setStyleSheet(
-            "font-size: 11px; font-weight: 600; color: #0B84FF; "
+            "font-size: 11px; font-weight: 600; color: #3E7BC2; "
             "background: #EFF6FF; border: 1px solid #BFDBFE; "
             "border-radius: 10px; padding: 2px 10px;"
         )
@@ -488,13 +488,13 @@ class AtlasMainWindow(QMainWindow):
         badge_row.addWidget(ver_badge)
 
         tagline = QLabel("AI Intelligence Platform")
-        tagline.setStyleSheet("font-size: 14px; color: #6B7280; font-weight: 500;")
+        tagline.setStyleSheet("font-size: 14px; color: #69727E; font-weight: 500;")
         tagline.setAlignment(Qt.AlignCenter)
 
         def _sep():
             s = QLabel()
             s.setFixedHeight(1)
-            s.setStyleSheet("background: #E5E7EB; margin: 0px;")
+            s.setStyleSheet("background: #E3E7ED; margin: 0px;")
             return s
 
         # Description — no hard-coded line breaks; word wrap alone decides
@@ -507,7 +507,7 @@ class AtlasMainWindow(QMainWindow):
             "strategic intelligence briefing — so you always know how your "
             "brand appears, and why, everywhere AI is shaping buying decisions."
         )
-        desc.setStyleSheet("font-size: 13px; color: #374151; line-height: 1.5;")
+        desc.setStyleSheet("font-size: 13px; color: #2B323A; line-height: 1.5;")
         desc.setAlignment(Qt.AlignCenter)
         desc.setWordWrap(True)
 
@@ -516,20 +516,20 @@ class AtlasMainWindow(QMainWindow):
         # underline) so neither visually announces itself as clickable.
         # (c) opens the hidden easter egg; dweeb.co opens the real site.
         copy_lbl = QLabel(
-            '<a href="egg" style="color:#9CA3AF; text-decoration:none;">©</a>'
+            '<a href="egg" style="color:#8C96A2; text-decoration:none;">©</a>'
             ' 2026 '
-            '<a href="https://dweeb.co" style="color:#9CA3AF; text-decoration:none;">dweeb.co</a>'
+            '<a href="https://dweeb.co" style="color:#8C96A2; text-decoration:none;">dweeb.co</a>'
         )
-        copy_lbl.setStyleSheet("font-size: 12px; color: #9CA3AF;")
+        copy_lbl.setStyleSheet("font-size: 12px; color: #8C96A2;")
         copy_lbl.linkActivated.connect(self._on_copyright_link)
         copy_lbl.setAlignment(Qt.AlignCenter)
 
         close_btn = QPushButton("Close")
         close_btn.setFixedWidth(110)
         close_btn.setStyleSheet(
-            "QPushButton { background: #111827; color: white; border: none; "
+            "QPushButton { background: #2B323A; color: white; border: none; "
             "border-radius: 5px; padding: 6px 16px; font-size: 12px; font-weight: 600; }"
-            "QPushButton:hover { background: #374151; }"
+            "QPushButton:hover { background: #2B323A; }"
         )
         close_btn.clicked.connect(dlg.accept)
 
@@ -675,14 +675,14 @@ class AtlasMainWindow(QMainWindow):
         outer.setContentsMargins(0, 0, 0, 0)
 
         header = QWidget()
-        header.setStyleSheet("background: #111827;")
+        header.setStyleSheet("background: #2B323A;")
         h_lay = QVBoxLayout()
         h_lay.setContentsMargins(32, 22, 32, 18)
         h_lay.setSpacing(2)
         title_lbl = QLabel(title)
         title_lbl.setStyleSheet("font-size: 22px; font-weight: 700; color: white;")
         sub_lbl = QLabel(subtitle)
-        sub_lbl.setStyleSheet("font-size: 12px; color: #9CA3AF;")
+        sub_lbl.setStyleSheet("font-size: 12px; color: #8C96A2;")
         h_lay.addWidget(title_lbl)
         h_lay.addWidget(sub_lbl)
         header.setLayout(h_lay)
@@ -703,10 +703,10 @@ class AtlasMainWindow(QMainWindow):
             lay.setContentsMargins(0, 0, 0, 0)
             lay.setSpacing(3)
             t = QLabel(sec_title)
-            t.setStyleSheet("font-size: 13.5px; font-weight: 700; color: #111827;")
+            t.setStyleSheet("font-size: 13.5px; font-weight: 700; color: #2B323A;")
             d = QLabel(sec_text)
             d.setWordWrap(True)
-            d.setStyleSheet("font-size: 12px; color: #4B5563;")
+            d.setStyleSheet("font-size: 12px; color: #69727E;")
             lay.addWidget(t)
             lay.addWidget(d)
             w.setLayout(lay)
@@ -718,9 +718,9 @@ class AtlasMainWindow(QMainWindow):
         close_btn = QPushButton("Close")
         close_btn.setFixedHeight(38)
         close_btn.setStyleSheet(
-            "QPushButton { background: #0B84FF; color: white; border: none; "
+            "QPushButton { background: #3E7BC2; color: white; border: none; "
             "font-size: 13px; font-weight: 600; }"
-            "QPushButton:hover { background: #0056CC; }"
+            "QPushButton:hover { background: #295A94; }"
         )
         close_btn.clicked.connect(dlg.accept)
 
@@ -746,14 +746,14 @@ class AtlasMainWindow(QMainWindow):
 
         # ── Header ─────────────────────────────────────────────────────────────
         header = QWidget()
-        header.setStyleSheet("background: #111827;")
+        header.setStyleSheet("background: #2B323A;")
         h_lay = QVBoxLayout()
         h_lay.setContentsMargins(32, 22, 32, 18)
         h_lay.setSpacing(2)
         title_lbl = QLabel("Usage Guide")
         title_lbl.setStyleSheet("font-size: 22px; font-weight: 700; color: white;")
         sub_lbl = QLabel("What each page does and how they fit together.")
-        sub_lbl.setStyleSheet("font-size: 12px; color: #9CA3AF;")
+        sub_lbl.setStyleSheet("font-size: 12px; color: #8C96A2;")
         h_lay.addWidget(title_lbl)
         h_lay.addWidget(sub_lbl)
         header.setLayout(h_lay)
@@ -776,10 +776,10 @@ class AtlasMainWindow(QMainWindow):
             lay.setContentsMargins(0, 0, 0, 0)
             lay.setSpacing(3)
             t = QLabel(title)
-            t.setStyleSheet("font-size: 13.5px; font-weight: 700; color: #111827;")
+            t.setStyleSheet("font-size: 13.5px; font-weight: 700; color: #2B323A;")
             d = QLabel(body_text)
             d.setWordWrap(True)
-            d.setStyleSheet("font-size: 12px; color: #4B5563; line-height: 1.4;")
+            d.setStyleSheet("font-size: 12px; color: #69727E; line-height: 1.4;")
             lay.addWidget(t)
             lay.addWidget(d)
             w.setLayout(lay)
@@ -871,16 +871,16 @@ class AtlasMainWindow(QMainWindow):
 
         # ── Footer ─────────────────────────────────────────────────────────────
         footer = QWidget()
-        footer.setStyleSheet("background: #FAFAFA; border-top: 1px solid #E5E7EB;")
+        footer.setStyleSheet("background: #FAFAFA; border-top: 1px solid #E3E7ED;")
         f_lay = QHBoxLayout()
         f_lay.setContentsMargins(32, 12, 32, 12)
         f_lay.setAlignment(Qt.AlignCenter)
         close_btn = QPushButton("Close")
         close_btn.setFixedWidth(110)
         close_btn.setStyleSheet(
-            "QPushButton { background: #111827; color: white; border: none; "
+            "QPushButton { background: #2B323A; color: white; border: none; "
             "border-radius: 5px; padding: 6px 16px; font-size: 12px; font-weight: 600; }"
-            "QPushButton:hover { background: #374151; }"
+            "QPushButton:hover { background: #2B323A; }"
         )
         close_btn.clicked.connect(dlg.accept)
         f_lay.addWidget(close_btn)

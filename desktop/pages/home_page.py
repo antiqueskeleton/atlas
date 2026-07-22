@@ -53,7 +53,7 @@ class HomePage(QWidget):
         self._title.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         self._subtitle = QLabel(f"Here's what Atlas knows about {brand} today.")
-        self._subtitle.setStyleSheet("font-size: 14px; color: #6B7280;")
+        self._subtitle.setStyleSheet("font-size: 14px; color: #69727E;")
         self._subtitle.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         # KPI row
@@ -151,12 +151,12 @@ class HomePage(QWidget):
     def _status_row(state: str, text: str) -> QLabel:
         """state: ok | warn | todo — one glanceable line per source/step."""
         mark, color = {
-            "ok":   ("\u2713", "#16A34A"),
+            "ok":   ("\u2713", "#2E8B5E"),
             "warn": ("\u26a0", "#B45309"),
-            "todo": ("\u25cb", "#6B7280"),
+            "todo": ("\u25cb", "#69727E"),
         }[state]
         row = QLabel(f'<span style="color:{color}; font-weight:bold;">{mark}</span>'
-                     f'&nbsp;&nbsp;<span style="color:#374151;">{text}</span>')
+                     f'&nbsp;&nbsp;<span style="color:#2B323A;">{text}</span>')
         row.setStyleSheet("font-size: 12px;")
         row.setWordWrap(True)
         return row

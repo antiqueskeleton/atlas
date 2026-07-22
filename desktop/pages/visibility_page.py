@@ -152,10 +152,10 @@ def _compact_card(title, value):
     lay.setContentsMargins(10, 5, 10, 5)
 
     t = QLabel(title + ":")
-    t.setStyleSheet("font-size: 11px; color: #6B7280; font-weight: 600;")
+    t.setStyleSheet("font-size: 11px; color: #69727E; font-weight: 600;")
     t.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
     v = QLabel(value)
-    v.setStyleSheet("font-size: 13px; font-weight: bold; color: #111827;")
+    v.setStyleSheet("font-size: 13px; font-weight: bold; color: #2B323A;")
     lay.addWidget(t)
     lay.addWidget(v)
     lay.addStretch()
@@ -260,7 +260,7 @@ class VisibilityPage(QWidget):
             "how brands are mentioned. Run this first: Trends and Intelligence "
             "both depend on the responses collected here."
         )
-        subtitle.setStyleSheet("font-size: 13px; color: #6B7280;")
+        subtitle.setStyleSheet("font-size: 13px; color: #69727E;")
 
         # ── Control panel ─────────────────────────────────────────────────────
         ctrl_frame = QFrame()
@@ -278,7 +278,7 @@ class VisibilityPage(QWidget):
         self._ps_search.setToolTip("Filter the prompt family list below by name")
         self._ps_search.setFixedHeight(26)
         self._ps_search.setStyleSheet(
-            "QLineEdit { border: 1px solid #D1D5DB; border-radius: 4px; "
+            "QLineEdit { border: 1px solid #CBD2DB; border-radius: 4px; "
             "padding: 2px 8px; font-size: 12px; }"
         )
         self._ps_search.textChanged.connect(self._filter_family_list)
@@ -304,7 +304,7 @@ class VisibilityPage(QWidget):
         def _hdr_label(text=""):
             lbl = QLabel(text)
             lbl.setStyleSheet(
-                "font-size: 10px; font-weight: bold; color: #9CA3AF; "
+                "font-size: 10px; font-weight: bold; color: #8C96A2; "
                 "padding: 4px 0 1px 0; background: white;"
             )
             return lbl
@@ -365,7 +365,7 @@ class VisibilityPage(QWidget):
         ps_scroll.setFixedHeight(max(150, min(6 * row_h + 28, 176)))
         ps_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         ps_scroll.setStyleSheet(
-            "QScrollArea { border: 1px solid #D1D5DB; border-radius: 4px; background: white; }"
+            "QScrollArea { border: 1px solid #CBD2DB; border-radius: 4px; background: white; }"
         )
 
         ps_center = QVBoxLayout()
@@ -430,7 +430,7 @@ class VisibilityPage(QWidget):
             dot.setFixedWidth(16)
             dot.setAlignment(Qt.AlignCenter)
             dot.setStyleSheet(
-                f"color: {'#16A34A' if has_key else '#DC2626'}; font-size: 9px;"
+                f"color: {'#2E8B5E' if has_key else '#C24536'}; font-size: 9px;"
             )
             dot.setToolTip(dot_tip)
             cb.setToolTip(dot_tip)
@@ -461,7 +461,7 @@ class VisibilityPage(QWidget):
         prov_frame_lay.addWidget(prov_inner)
         prov_frame.setLayout(prov_frame_lay)
         prov_frame.setStyleSheet(
-            "QFrame { border: 1px solid #D1D5DB; border-radius: 4px; background: white; }"
+            "QFrame { border: 1px solid #CBD2DB; border-radius: 4px; background: white; }"
         )
 
         btn_prov_all = QPushButton("All")
@@ -521,18 +521,18 @@ class VisibilityPage(QWidget):
         self._progress.setTextVisible(True)
         self._progress.setVisible(False)
         self._progress.setStyleSheet(
-            "QProgressBar { border: 1px solid #D1D5DB; border-radius: 6px; text-align: center; font-size: 10px; }"
-            "QProgressBar::chunk { background: #0B84FF; border-radius: 5px; }"
+            "QProgressBar { border: 1px solid #CBD2DB; border-radius: 6px; text-align: center; font-size: 10px; }"
+            "QProgressBar::chunk { background: #3E7BC2; border-radius: 5px; }"
         )
 
         self._status_lbl = QLabel("")
-        self._status_lbl.setStyleSheet("color: #6B7280; font-size: 12px;")
+        self._status_lbl.setStyleSheet("color: #69727E; font-size: 12px;")
 
         self._count_lbl = QLabel("0 sets · 0 prompts")
-        self._count_lbl.setStyleSheet("color: #6B7280; font-size: 11px;")
+        self._count_lbl.setStyleSheet("color: #69727E; font-size: 11px;")
 
         self._prov_count_lbl = QLabel("")
-        self._prov_count_lbl.setStyleSheet("color: #6B7280; font-size: 11px;")
+        self._prov_count_lbl.setStyleSheet("color: #69727E; font-size: 11px;")
 
         # Providers and Prompt Sets are both independently collapsible panels
         # (see toolbar_row for the two toggle buttons).
@@ -751,10 +751,10 @@ class VisibilityPage(QWidget):
             QTabBar::tab {
                 padding: 7px 20px; font-size: 12px; font-weight: 500;
                 border: none; border-bottom: 2px solid transparent;
-                background: transparent; color: #6B7280; margin-right: 4px;
+                background: transparent; color: #69727E; margin-right: 4px;
             }
-            QTabBar::tab:hover { color: #111827; }
-            QTabBar::tab:selected { color: #0B84FF; border-bottom: 2px solid #0B84FF; }
+            QTabBar::tab:hover { color: #2B323A; }
+            QTabBar::tab:selected { color: #3E7BC2; border-bottom: 2px solid #3E7BC2; }
         """)
 
         # Tab 1 — Overview
@@ -857,7 +857,7 @@ class VisibilityPage(QWidget):
             "through everything flagged for a second look."
         )
         self._raw_count_lbl = QLabel("")
-        self._raw_count_lbl.setStyleSheet("color: #6B7280; font-size: 11px;")
+        self._raw_count_lbl.setStyleSheet("color: #69727E; font-size: 11px;")
         self._raw_count_lbl.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         filter_row.addWidget(filter_lbl)
         filter_row.addWidget(self._raw_search, 1)
@@ -946,7 +946,7 @@ class VisibilityPage(QWidget):
             "blue = higher rate. Built on demand from stored responses "
             "(single-family runs only — mixed-family runs can't honestly "
             "attribute a mention to one family).")
-        mx_note.setStyleSheet("color: #6B7280; font-size: 12px;")
+        mx_note.setStyleSheet("color: #69727E; font-size: 12px;")
         mx_note.setWordWrap(True)
         self._matrix_build_btn = QPushButton("Build Matrix")
         self._matrix_build_btn.setToolTip(
@@ -976,10 +976,10 @@ class VisibilityPage(QWidget):
         self._collapse_btn.setFixedHeight(28)
         self._collapse_btn.setStyleSheet(
             "QPushButton { text-align: left; font-size: 12px; font-weight: 600; "
-            "color: #374151; background: #F3F4F6; border: 1px solid #D1D5DB; "
+            "color: #2B323A; background: #F3F4F6; border: 1px solid #CBD2DB; "
             "border-radius: 5px; padding: 4px 12px; }"
-            "QPushButton:hover { background: #E5E7EB; color: #0B84FF; border-color: #0B84FF; }"
-            "QPushButton:pressed { background: #D1D5DB; }"
+            "QPushButton:hover { background: #E3E7ED; color: #3E7BC2; border-color: #3E7BC2; }"
+            "QPushButton:pressed { background: #CBD2DB; }"
         )
         self._collapse_btn.clicked.connect(self._toggle_ctrl_panel)
         self._collapse_btn.setToolTip("Show or hide the prompt family/scenario selection list")
@@ -989,10 +989,10 @@ class VisibilityPage(QWidget):
         self._prov_collapse_btn.setFixedHeight(28)
         self._prov_collapse_btn.setStyleSheet(
             "QPushButton { text-align: left; font-size: 12px; font-weight: 600; "
-            "color: #374151; background: #F3F4F6; border: 1px solid #D1D5DB; "
+            "color: #2B323A; background: #F3F4F6; border: 1px solid #CBD2DB; "
             "border-radius: 5px; padding: 4px 12px; }"
-            "QPushButton:hover { background: #E5E7EB; color: #0B84FF; border-color: #0B84FF; }"
-            "QPushButton:pressed { background: #D1D5DB; }"
+            "QPushButton:hover { background: #E3E7ED; color: #3E7BC2; border-color: #3E7BC2; }"
+            "QPushButton:pressed { background: #CBD2DB; }"
         )
         self._prov_collapse_btn.clicked.connect(self._toggle_provider_panel)
         self._prov_collapse_btn.setToolTip("Show or hide the provider selection list")
@@ -1535,7 +1535,14 @@ class VisibilityPage(QWidget):
             [f"{f}\n(n={m['totals'][f]})" for f in families])
         t.setVerticalHeaderLabels(brands)
         target = self.service.target_brand
+        # 2026-07 redesign: intensity maps onto the steel light-blue -> navy
+        # ramp (opaque steps, not alpha blends — alpha over white muddied
+        # mid-tones), text flips to white past the ramp midpoint, and the
+        # target brand's row is tinted so the analyst's own brand reads at
+        # a glance.
+        from desktop.theme.colors import HEAT_RAMP, HEAT_TEXT_FLIP, PRIMARY_TINT
         for r, brand in enumerate(brands):
+            is_target = brand.lower() == (target or "").lower()
             for c, family in enumerate(families):
                 n = m["totals"][family]
                 k = m["counts"].get((brand, family), 0)
@@ -1544,13 +1551,14 @@ class VisibilityPage(QWidget):
                 item.setToolTip(f"{brand} mentioned in {k} of {n} "
                                 f"'{family}' responses ({rate:.0%})")
                 if k:
-                    # 0% -> white, 100% -> Atlas blue; text flips at 50%.
-                    alpha = int(40 + 215 * rate)
-                    item.setBackground(QColor(11, 132, 255, alpha))
-                    if rate > 0.5:
+                    step = min(int(rate * len(HEAT_RAMP)), len(HEAT_RAMP) - 1)
+                    item.setBackground(QColor(HEAT_RAMP[step]))
+                    if step >= HEAT_TEXT_FLIP:
                         item.setForeground(QColor("white"))
+                elif is_target:
+                    item.setBackground(QColor(PRIMARY_TINT))
                 t.setItem(r, c, item)
-            if brand.lower() == (target or "").lower():
+            if is_target:
                 hdr = t.verticalHeaderItem(r)
                 font = hdr.font(); font.setBold(True); hdr.setFont(font)
         t.resizeColumnsToContents()
@@ -1571,7 +1579,7 @@ class VisibilityPage(QWidget):
                 "No API key set — add one in Settings before running this provider"
             )
             dot.setStyleSheet(
-                f"color: {'#16A34A' if has_key else '#DC2626'}; font-size: 14px; padding: 0 1px;"
+                f"color: {'#2E8B5E' if has_key else '#C24536'}; font-size: 14px; padding: 0 1px;"
             )
             dot.setToolTip(dot_tip)
             cb = self._provider_checks.get(key)

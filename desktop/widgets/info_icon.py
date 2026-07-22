@@ -16,8 +16,8 @@ def info_icon(tooltip_text: str) -> QLabel:
     icon = QLabel("ⓘ")
     icon.setFixedWidth(14)
     icon.setStyleSheet(
-        "QLabel { color: #9CA3AF; font-size: 12px; font-weight: bold; background: transparent; }"
-        "QLabel:hover { color: #0B84FF; }"
+        "QLabel { color: #8C96A2; font-size: 12px; font-weight: bold; background: transparent; }"
+        "QLabel:hover { color: #3E7BC2; }"
     )
     icon.setCursor(Qt.PointingHandCursor)
     icon.setToolTip(tooltip_text)

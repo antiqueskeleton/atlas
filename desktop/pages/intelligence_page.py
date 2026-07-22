@@ -137,7 +137,7 @@ class IntelligencePage(QWidget):
             "Targeted Review data into brand positioning, consumer insights, "
             "and strategic opportunities."
         )
-        subtitle.setStyleSheet("font-size:13px; color:#6B7280;")
+        subtitle.setStyleSheet("font-size:13px; color:#69727E;")
         subtitle.setWordWrap(True)
         subtitle.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
@@ -161,7 +161,7 @@ class IntelligencePage(QWidget):
         # Run" KPI tile below. Hidden except while running or on error, so it
         # no longer sits there permanently duplicating that tile's info.
         self.last_run_lbl = QLabel("")
-        self.last_run_lbl.setStyleSheet("color:#6B7280; font-size:12px;")
+        self.last_run_lbl.setStyleSheet("color:#69727E; font-size:12px;")
         self.last_run_lbl.setVisible(False)
 
         self._mode_lbl = QLabel()
@@ -365,7 +365,7 @@ class IntelligencePage(QWidget):
 
     def _start_run(self):
         self.run_btn.setEnabled(False)
-        self.last_run_lbl.setStyleSheet("color:#0B84FF; font-size:12px;")
+        self.last_run_lbl.setStyleSheet("color:#3E7BC2; font-size:12px;")
         self.last_run_lbl.setText(
             "Running analysis — classifying stored responses and generating briefing…"
         )
@@ -389,7 +389,7 @@ class IntelligencePage(QWidget):
         total = counts.get("total", 0)
         if total == 0:
             self._mode_lbl.setText("Live Mode")
-            self._mode_lbl.setStyleSheet("font-size:12px; color:#F59E0B; font-weight:bold;")
+            self._mode_lbl.setStyleSheet("font-size:12px; color:#B8791E; font-weight:bold;")
         else:
             from backend.intelligence.intelligence_service import _MIN_PER_BUCKET
             buckets_ok = all(
@@ -398,10 +398,10 @@ class IntelligencePage(QWidget):
             )
             if buckets_ok:
                 self._mode_lbl.setText("DB Mode")
-                self._mode_lbl.setStyleSheet("font-size:12px; color:#16A34A; font-weight:bold;")
+                self._mode_lbl.setStyleSheet("font-size:12px; color:#2E8B5E; font-weight:bold;")
             else:
                 self._mode_lbl.setText("Live Mode")
-                self._mode_lbl.setStyleSheet("font-size:12px; color:#F59E0B; font-weight:bold;")
+                self._mode_lbl.setStyleSheet("font-size:12px; color:#B8791E; font-weight:bold;")
 
     def _on_run_finished(self, result: dict):
         self.run_btn.setEnabled(True)
@@ -419,7 +419,7 @@ class IntelligencePage(QWidget):
 
     def _on_run_error(self, message: str):
         self.run_btn.setEnabled(True)
-        self.last_run_lbl.setStyleSheet("color:#DC2626; font-size:12px;")
+        self.last_run_lbl.setStyleSheet("color:#C24536; font-size:12px;")
         self.last_run_lbl.setText(f"Error: {message}")
         self.last_run_lbl.setVisible(True)
 
@@ -876,7 +876,7 @@ class IntelligencePage(QWidget):
             self._verify_badge.setText(
                 f"✓  All {total} cited counts verified against source data")
             self._verify_badge.setStyleSheet(
-                "color: #16A34A; font-size: 11px; font-weight: 600;")
+                "color: #2E8B5E; font-size: 11px; font-weight: 600;")
             self._verify_badge.setToolTip(
                 "Every \"X of Y\" number in this briefing appears verbatim in "
                 "the data that was supplied to the model.")
@@ -894,7 +894,7 @@ class IntelligencePage(QWidget):
 
     _STATUS_CYCLE = ["new", "in_progress", "done"]
     _STATUS_LABELS = {"new": "New", "in_progress": "In Progress", "done": "Done"}
-    _STATUS_COLORS = {"new": "#6B7280", "in_progress": "#F59E0B", "done": "#16A34A"}
+    _STATUS_COLORS = {"new": "#69727E", "in_progress": "#B8791E", "done": "#2E8B5E"}
 
     @staticmethod
     def _format_briefing(text: str) -> str:
@@ -929,7 +929,7 @@ class IntelligencePage(QWidget):
         if not opp_rows:
             msg = placeholder or "No opportunities yet. Run Intelligence Analysis to generate."
             lbl = QLabel(msg)
-            lbl.setStyleSheet("color:#6B7280; padding:16px;")
+            lbl.setStyleSheet("color:#69727E; padding:16px;")
             lbl.setWordWrap(True)
             self._opp_cards_layout.insertWidget(0, lbl)
             return
@@ -957,7 +957,7 @@ class IntelligencePage(QWidget):
             title_lbl.setWordWrap(True)
             title_lbl.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
 
-            color = self._STATUS_COLORS.get(status, "#6B7280")
+            color = self._STATUS_COLORS.get(status, "#69727E")
             status_btn = QPushButton(self._STATUS_LABELS.get(status, "New"))
             status_btn.setFixedSize(96, 24)
             status_btn.setStyleSheet(
@@ -983,24 +983,24 @@ class IntelligencePage(QWidget):
 
             if created_date:
                 date_lbl = QLabel(f"From run: {created_date[:10]}")
-                date_lbl.setStyleSheet("font-size:10px; color:#9CA3AF;")
+                date_lbl.setStyleSheet("font-size:10px; color:#8C96A2;")
                 card_lay.addWidget(date_lbl)
 
             if evidence:
                 ev_hdr = QLabel("Evidence")
-                ev_hdr.setStyleSheet("font-size:11px; color:#6B7280; font-weight:bold;")
+                ev_hdr.setStyleSheet("font-size:11px; color:#69727E; font-weight:bold;")
                 ev_body = QLabel(evidence)
                 ev_body.setWordWrap(True)
-                ev_body.setStyleSheet("font-size:12px; color:#374151;")
+                ev_body.setStyleSheet("font-size:12px; color:#2B323A;")
                 card_lay.addWidget(ev_hdr)
                 card_lay.addWidget(ev_body)
 
             if description:
                 ac_hdr = QLabel("Action")
-                ac_hdr.setStyleSheet("font-size:11px; color:#6B7280; font-weight:bold;")
+                ac_hdr.setStyleSheet("font-size:11px; color:#69727E; font-weight:bold;")
                 ac_body = QLabel(description)
                 ac_body.setWordWrap(True)
-                ac_body.setStyleSheet("font-size:12px; color:#374151;")
+                ac_body.setStyleSheet("font-size:12px; color:#2B323A;")
                 card_lay.addWidget(ac_hdr)
                 card_lay.addWidget(ac_body)
 

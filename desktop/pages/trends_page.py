@@ -7,14 +7,15 @@ from matplotlib.figure import Figure
 import matplotlib.ticker as mticker
 
 
-def _register_inter_with_matplotlib():
+def _register_app_font_with_matplotlib():
     """Charts are matplotlib, which has its OWN font stack — the app-wide
-    Qt Inter default (the v1.1.0 font fix) never reaches them, so chart
-    text still rendered in DejaVu Sans while the rest of the screen was
-    Inter (user report 2026-07-21: "Inter only applies in some areas").
-    Registers the bundled TTFs with matplotlib's font manager; any failure
-    degrades to matplotlib's default rather than breaking the page.
-    Frozen-aware, same path logic as desktop/main._fonts_dir."""
+    Qt default font never reaches them, so chart text rendered in DejaVu
+    Sans while the rest of the screen didn't (user report 2026-07-21,
+    during the Inter era). Registers the bundled TTFs with matplotlib's
+    font manager; any failure degrades to matplotlib's default rather than
+    breaking the page. Frozen-aware, same path logic as
+    desktop/main._fonts_dir. 2026-07 redesign: Barlow replaced Inter as
+    the app face."""
     import sys
     from pathlib import Path
     from matplotlib import font_manager
@@ -23,8 +24,8 @@ def _register_inter_with_matplotlib():
     else:
         fonts_dir = Path(__file__).resolve().parents[1] / "assets" / "fonts"
     registered = False
-    for name in ("Inter-Regular.ttf", "Inter-Medium.ttf",
-                 "Inter-SemiBold.ttf", "Inter-Bold.ttf"):
+    for name in ("Barlow-Regular.ttf", "Barlow-Medium.ttf", "Barlow-Bold.ttf",
+                 "BarlowCondensed-Regular.ttf", "BarlowCondensed-SemiBold.ttf"):
         path = fonts_dir / name
         if path.exists():
             try:
@@ -33,10 +34,10 @@ def _register_inter_with_matplotlib():
             except Exception:
                 pass
     if registered:
-        matplotlib.rcParams["font.family"] = "Inter"
+        matplotlib.rcParams["font.family"] = "Barlow"
 
 
-_register_inter_with_matplotlib()
+_register_app_font_with_matplotlib()
 
 from PySide6.QtWidgets import (
     QFrame,
@@ -65,23 +66,23 @@ _PROVIDER_COLORS = {
     "gemini":     "#4285F4",
     "Perplexity": "#20C997",
     "perplexity": "#20C997",
-    "Grok":       "#111827",
-    "grok":       "#111827",
+    "Grok":       "#2B323A",
+    "grok":       "#2B323A",
     "Mistral":    "#FF7000",
     "mistral":    "#FF7000",
     "DeepSeek":   "#4D6BFE",
     "deepseek":   "#4D6BFE",
     "Cohere":     "#39594D",
     "cohere":     "#39594D",
-    "Mock":       "#6B7280",
-    "mock":       "#6B7280",
+    "Mock":       "#69727E",
+    "mock":       "#69727E",
 }
 _FEAT_PALETTE = [
-    "#6366F1", "#F43F5E", "#14B8A6", "#F59E0B",
+    "#6366F1", "#F43F5E", "#14B8A6", "#B8791E",
     "#8B5CF6", "#EC4899",
 ]
 # Muted tones for "everyone but the target brand" on multi-line trend charts —
-# keeps blue (#2563EB) exclusively meaning "target brand" across every chart on this page.
+# keeps blue (#3E7BC2) exclusively meaning "target brand" across every chart on this page.
 _COMPETITOR_MUTED = ["#94A3B8", "#64748B", "#CBD5E1"]
 
 
@@ -98,11 +99,11 @@ class _MplCanvas(FigureCanvas):
 
     def _style_axes(self):
         self.ax.set_facecolor("#F9FAFB")
-        self.ax.grid(color="#E5E7EB", linewidth=0.8, linestyle="--")
+        self.ax.grid(color="#E3E7ED", linewidth=0.8, linestyle="--")
         self.ax.spines["top"].set_visible(False)
         self.ax.spines["right"].set_visible(False)
         for spine in ("left", "bottom"):
-            self.ax.spines[spine].set_color("#D1D5DB")
+            self.ax.spines[spine].set_color("#CBD2DB")
 
     def reset(self):
         self.ax.clear()
@@ -114,7 +115,7 @@ class _MplCanvas(FigureCanvas):
             0.5, 0.5, msg,
             transform=self.ax.transAxes,
             ha="center", va="center",
-            fontsize=11, color="#6B7280",
+            fontsize=11, color="#69727E",
             linespacing=1.8,
         )
         self.ax.set_xticks([])
@@ -158,7 +159,7 @@ class TrendsPage(QWidget):
         title.setStyleSheet("font-size:30px;font-weight:bold;")
 
         self.status_lbl = QLabel("Loading…")
-        self.status_lbl.setStyleSheet("color:#6B7280;font-size:13px;")
+        self.status_lbl.setStyleSheet("color:#69727E;font-size:13px;")
         refresh_btn = QPushButton("Refresh")
         refresh_btn.setFixedWidth(90)
         refresh_btn.clicked.connect(self._refresh)
@@ -179,7 +180,7 @@ class TrendsPage(QWidget):
             "Visibility runs. Nothing to run here; just Refresh after a new "
             "collection finishes."
         )
-        subtitle.setStyleSheet("font-size:15px;color:#6B7280;")
+        subtitle.setStyleSheet("font-size:15px;color:#69727E;")
         subtitle.setWordWrap(True)
 
         # #59: visibility-drop banner — hidden by default, shown only when
@@ -362,7 +363,7 @@ class TrendsPage(QWidget):
                 continue
             drawn_x.add(x)
             ax.axvline(
-                x, color="#9CA3AF", linewidth=1, linestyle=":", alpha=0.8, zorder=1,
+                x, color="#8C96A2", linewidth=1, linestyle=":", alpha=0.8, zorder=1,
                 label="Data/config change" if first else None,
             )
             first = False
@@ -402,10 +403,10 @@ class TrendsPage(QWidget):
 
         # Shaded band only where multiple runs exist on the same day
         if any(len(daily[d]) > 1 for d in dates):
-            ax.fill_between(xs, lo, hi, alpha=0.15, color="#2563EB", label="Daily range")
+            ax.fill_between(xs, lo, hi, alpha=0.15, color="#3E7BC2", label="Daily range")
 
         # Daily average line
-        ax.plot(xs, means, color="#2563EB", linewidth=2.5, zorder=4, label="Daily avg")
+        ax.plot(xs, means, color="#3E7BC2", linewidth=2.5, zorder=4, label="Daily avg")
 
         # Trend line (linear regression on daily averages)
         z = np.polyfit(xs, means, 1)
@@ -448,7 +449,7 @@ class TrendsPage(QWidget):
         sorted_brands = sorted(snapshot, key=lambda b: snapshot[b])
         names  = sorted_brands
         values = [snapshot[b] for b in names]
-        colors = ["#2563EB" if n == brand else "#94A3B8" for n in names]
+        colors = ["#3E7BC2" if n == brand else "#94A3B8" for n in names]
 
         bars = ax.barh(names, values, color=colors, height=0.5, zorder=3)
         x_max = max(values) * 1.35 if values else 10
@@ -458,7 +459,7 @@ class TrendsPage(QWidget):
             ax.text(
                 label_x, bar.get_y() + bar.get_height() / 2,
                 f"{val:.1f}%", va="center", fontsize=9,
-                color="#1D4ED8" if name == brand else "#374151",
+                color="#295A94" if name == brand else "#2B323A",
                 fontweight=weight,
             )
 
@@ -493,14 +494,14 @@ class TrendsPage(QWidget):
 
         sorted_provs = sorted(prov_avgs, key=lambda p: prov_avgs[p])
         avgs = [prov_avgs[p] for p in sorted_provs]
-        colors = [_PROVIDER_COLORS.get(p, "#6B7280") for p in sorted_provs]
+        colors = [_PROVIDER_COLORS.get(p, "#69727E") for p in sorted_provs]
 
         bars = ax.barh(sorted_provs, avgs, color=colors, height=0.55, zorder=3)
         for bar, val, prov in zip(bars, avgs, sorted_provs):
             n = prov_counts.get(prov, 0)
             ax.text(bar.get_width() + 0.3, bar.get_y() + bar.get_height() / 2,
                     f"{val:.1f}%  ({n} run{'s' if n != 1 else ''})",
-                    va="center", fontsize=9, color="#374151")
+                    va="center", fontsize=9, color="#2B323A")
 
         ax.set_xlabel("Avg Visibility Score (%)", fontsize=9)
         ax.set_xlim(0, max(avgs) * 1.35 if avgs else 10)
@@ -632,7 +633,7 @@ class TrendsPage(QWidget):
             sum(daily_pos[d][brand]) / len(daily_pos[d][brand]) if brand in daily_pos[d] else 0
             for d in dates
         ]
-        ax.plot(xs, target_means, color="#2563EB", linewidth=2.5,
+        ax.plot(xs, target_means, color="#3E7BC2", linewidth=2.5,
                 label=f"{brand} ★", zorder=5,
                 marker="o" if len(dates) <= 15 else None, markersize=5)
 
@@ -682,7 +683,7 @@ class TrendsPage(QWidget):
             n = ps_counts.get(ps, 0)
             ax.text(bar.get_width() + 0.3, bar.get_y() + bar.get_height() / 2,
                     f"{val:.1f}%  ({n} run{'s' if n != 1 else ''})",
-                    va="center", fontsize=9, color="#374151")
+                    va="center", fontsize=9, color="#2B323A")
 
         ax.set_xlabel("Avg Target Brand Visibility Score (%)", fontsize=9)
         ax.set_xlim(0, max(avgs) * 1.35 if avgs else 10)

@@ -34,18 +34,18 @@ from backend.visibility.brand_matcher import resolve_target_brand
 from desktop.widgets.info_icon import info_icon
 
 _COLLECT_BTN_STYLE = (
-    "QPushButton { background: #0B84FF; color: white; border: none; "
+    "QPushButton { background: #3E7BC2; color: white; border: none; "
     "border-radius: 5px; padding: 6px 14px; font-size: 12px; font-weight: bold; }"
-    "QPushButton:hover { background: #0056CC; }"
-    "QPushButton:disabled { background: #9CA3AF; }"
+    "QPushButton:hover { background: #295A94; }"
+    "QPushButton:disabled { background: #8C96A2; }"
 )
 
 _GAP_BADGE = (
-    "background: #DC2626; color: white; border-radius: 4px; "
+    "background: #C24536; color: white; border-radius: 4px; "
     "font-size: 10px; font-weight: bold; padding: 2px 8px;"
 )
 _STRENGTH_BADGE = (
-    "background: #16A34A; color: white; border-radius: 4px; "
+    "background: #2E8B5E; color: white; border-radius: 4px; "
     "font-size: 10px; font-weight: bold; padding: 2px 8px;"
 )
 
@@ -342,7 +342,7 @@ class TargetedReviewPage(QWidget):
             "Overview numbers that explain WHY AI models see some brands more "
             "than others. Feeds directly into the Intelligence briefing."
         )
-        subtitle.setStyleSheet("font-size:13px; color:#6B7280;")
+        subtitle.setStyleSheet("font-size:13px; color:#69727E;")
         subtitle.setWordWrap(True)
 
         root.addWidget(title)
@@ -355,10 +355,10 @@ class TargetedReviewPage(QWidget):
             QTabBar::tab {
                 padding: 7px 20px; font-size: 12px; font-weight: 500;
                 border: none; border-bottom: 2px solid transparent;
-                background: transparent; color: #6B7280; margin-right: 4px;
+                background: transparent; color: #69727E; margin-right: 4px;
             }
-            QTabBar::tab:hover { color: #111827; }
-            QTabBar::tab:selected { color: #0B84FF; border-bottom: 2px solid #0B84FF; }
+            QTabBar::tab:hover { color: #2B323A; }
+            QTabBar::tab:selected { color: #3E7BC2; border-bottom: 2px solid #3E7BC2; }
         """)
         self.tabs.addTab(self._build_platform_tab("youtube"), "YouTube")
         self.tabs.addTab(self._build_platform_tab("reddit"), "Reddit")
@@ -388,7 +388,7 @@ class TargetedReviewPage(QWidget):
             cb.setStyleSheet("font-size: 12px;")
             if name == resolved_target:
                 cb.setChecked(True)
-                cb.setStyleSheet("font-size: 12px; font-weight: bold; color: #0B84FF;")
+                cb.setStyleSheet("font-size: 12px; font-weight: bold; color: #3E7BC2;")
             self._brand_checks[name] = cb
             self._brand_grid.addWidget(cb, i // 5, i % 5)
 
@@ -441,7 +441,7 @@ class TargetedReviewPage(QWidget):
         scroll.setFixedHeight(96)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         scroll.setStyleSheet(
-            "QScrollArea { border: 1px solid #D1D5DB; border-radius: 4px; background: white; }"
+            "QScrollArea { border: 1px solid #CBD2DB; border-radius: 4px; background: white; }"
         )
 
         btn_top = QPushButton("Top AI-Mentioned")
@@ -484,13 +484,13 @@ class TargetedReviewPage(QWidget):
         # YouTube tab's status label, so its "done" message was invisible
         # whenever a different tab was selected — real user report 2026-07-07).
         self._socials_status = QLabel("")
-        self._socials_status.setStyleSheet("color: #6B7280; font-size: 12px;")
+        self._socials_status.setStyleSheet("color: #69727E; font-size: 12px;")
         self._socials_status.setWordWrap(True)
 
         hdr_row = QHBoxLayout()
         hdr_row.setSpacing(4)
         hdr = QLabel("Brands to research:")
-        hdr.setStyleSheet("font-size: 12px; font-weight: 600; color: #374151;")
+        hdr.setStyleSheet("font-size: 12px; font-weight: 600; color: #2B323A;")
         hdr_row.addWidget(hdr)
         hdr_row.addWidget(info_icon(
             "Each checked brand costs one set of platform requests per "
@@ -533,7 +533,7 @@ class TargetedReviewPage(QWidget):
         self._collect_btns[key] = collect_btn
 
         status = QLabel("")
-        status.setStyleSheet("color: #6B7280; font-size: 12px;")
+        status.setStyleSheet("color: #69727E; font-size: 12px;")
         self._status_lbls[key] = status
 
         toolbar.addWidget(collect_btn)
@@ -706,7 +706,7 @@ class TargetedReviewPage(QWidget):
 
         self._socials_btn.setEnabled(False)
         status = self._socials_status
-        status.setStyleSheet("color: #0B84FF; font-size: 12px;")
+        status.setStyleSheet("color: #3E7BC2; font-size: 12px;")
         status.setText("Finding social links…")
 
         class _SocialWorker(QThread):
@@ -747,7 +747,7 @@ class TargetedReviewPage(QWidget):
                 if links.get("youtube"):
                     with_yt += 1
         status = self._socials_status
-        status.setStyleSheet("color: #16A34A; font-size: 12px;")
+        status.setStyleSheet("color: #2E8B5E; font-size: 12px;")
         status.setText(
             f"Done — social links saved for {saved} of {len(results)} brand(s) — "
             f"{with_yt} with a YouTube channel. Channel metrics appear on the "
@@ -874,7 +874,7 @@ class TargetedReviewPage(QWidget):
         self._creator_collect_btn = QPushButton("Collect Creator Data")
         self._creator_collect_btn.clicked.connect(self._start_creator_collect)
         self._creator_status_lbl = QLabel("")
-        self._creator_status_lbl.setStyleSheet("color: #6B7280; font-size: 12px;")
+        self._creator_status_lbl.setStyleSheet("color: #69727E; font-size: 12px;")
         collect_row.addWidget(self._creator_collect_btn)
         collect_row.addWidget(self._creator_status_lbl)
         collect_row.addStretch()
@@ -960,11 +960,11 @@ class TargetedReviewPage(QWidget):
     def _start_creator_collect(self):
         if not self.service.list_tracked_creators():
             self._creator_status_lbl.setText("Add at least one creator first.")
-            self._creator_status_lbl.setStyleSheet("color: #DC2626; font-size: 12px;")
+            self._creator_status_lbl.setStyleSheet("color: #C24536; font-size: 12px;")
             return
 
         self._creator_collect_btn.setEnabled(False)
-        self._creator_status_lbl.setStyleSheet("color: #0B84FF; font-size: 12px;")
+        self._creator_status_lbl.setStyleSheet("color: #3E7BC2; font-size: 12px;")
         self._creator_status_lbl.setText("Collecting…")
 
         worker = _CreatorCollectWorker(self.service)
@@ -985,18 +985,18 @@ class TargetedReviewPage(QWidget):
         self._reload_creators()
         if failed:
             first_error = failed[0].get("error", "")
-            self._creator_status_lbl.setStyleSheet("color: #DC2626; font-size: 12px;")
+            self._creator_status_lbl.setStyleSheet("color: #C24536; font-size: 12px;")
             self._creator_status_lbl.setText(
                 f"Done — {ok} collected, {len(failed)} failed. First error: {first_error}")
             self._creator_status_lbl.setToolTip(first_error)
         else:
-            self._creator_status_lbl.setStyleSheet("color: #6B7280; font-size: 12px;")
+            self._creator_status_lbl.setStyleSheet("color: #69727E; font-size: 12px;")
             self._creator_status_lbl.setText(f"Done — {ok} creator(s) collected")
             self._creator_status_lbl.setToolTip("")
 
     def _on_creator_collect_fail(self, message: str):
         self._creator_collect_btn.setEnabled(True)
-        self._creator_status_lbl.setStyleSheet("color: #DC2626; font-size: 12px;")
+        self._creator_status_lbl.setStyleSheet("color: #C24536; font-size: 12px;")
         self._creator_status_lbl.setText(f"Error: {message}")
 
     def _show_creator_detail(self, row: int):
@@ -1037,17 +1037,17 @@ class TargetedReviewPage(QWidget):
         ready, reason = self.service.platform_ready(key)
         if not ready:
             self._status_lbls[key].setText(reason)
-            self._status_lbls[key].setStyleSheet("color: #DC2626; font-size: 12px;")
+            self._status_lbls[key].setStyleSheet("color: #C24536; font-size: 12px;")
             return
 
         brands = self._checked_brands()
         if key != "retail" and not brands:
             self._status_lbls[key].setText("Check at least one brand above.")
-            self._status_lbls[key].setStyleSheet("color: #DC2626; font-size: 12px;")
+            self._status_lbls[key].setStyleSheet("color: #C24536; font-size: 12px;")
             return
 
         self._collect_btns[key].setEnabled(False)
-        self._status_lbls[key].setStyleSheet("color: #0B84FF; font-size: 12px;")
+        self._status_lbls[key].setStyleSheet("color: #3E7BC2; font-size: 12px;")
         self._status_lbls[key].setText("Collecting…")
 
         # Retail scope is the saved-URL list itself (already curated per
@@ -1080,19 +1080,19 @@ class TargetedReviewPage(QWidget):
             # column truncates, which made a simple "API not enabled" failure
             # undiagnosable from the screen (found in real-credential testing).
             first_error = failed[0].get("error", "")
-            self._status_lbls[key].setStyleSheet("color: #DC2626; font-size: 12px;")
+            self._status_lbls[key].setStyleSheet("color: #C24536; font-size: 12px;")
             self._status_lbls[key].setText(
                 f"Done — {ok} collected, {len(failed)} failed. First error: {first_error}"
             )
             self._status_lbls[key].setToolTip(first_error)
         else:
-            self._status_lbls[key].setStyleSheet("color: #6B7280; font-size: 12px;")
+            self._status_lbls[key].setStyleSheet("color: #69727E; font-size: 12px;")
             self._status_lbls[key].setText(f"Done — {ok} brand(s) collected")
             self._status_lbls[key].setToolTip("")
 
     def _on_collect_fail(self, key: str, message: str):
         self._collect_btns[key].setEnabled(True)
-        self._status_lbls[key].setStyleSheet("color: #DC2626; font-size: 12px;")
+        self._status_lbls[key].setStyleSheet("color: #C24536; font-size: 12px;")
         self._status_lbls[key].setText(f"Error: {message}")
 
     def _show_brand_detail(self, key: str, row: int):
@@ -1127,7 +1127,7 @@ class TargetedReviewPage(QWidget):
         for rows, title, columns in sections:
             if len(sections) > 1:
                 hdr = QLabel(title)
-                hdr.setStyleSheet("font-weight: bold; font-size: 12px; color: #374151;")
+                hdr.setStyleSheet("font-weight: bold; font-size: 12px; color: #2B323A;")
                 lay.addWidget(hdr)
             detail = QTableWidget(0, len(columns))
             detail.setHorizontalHeaderLabels([c[0] for c in columns])
@@ -1194,7 +1194,7 @@ class TargetedReviewPage(QWidget):
                 "No comparison yet — check the target brand plus competitors "
                 "above and run a collection to see gap analysis here."
             )
-            msg.setStyleSheet("color: #6B7280; padding: 12px;")
+            msg.setStyleSheet("color: #69727E; padding: 12px;")
             msg.setWordWrap(True)
             layout.insertWidget(0, msg)
             return
@@ -1229,44 +1229,44 @@ class TargetedReviewPage(QWidget):
             rank_lbl = QLabel(
                 f"{f['target_brand']} ranks #{rank} of {field} tracked brands")
             rank_lbl.setStyleSheet(
-                "font-size: 12px; color: #111827; font-weight: 700;")
+                "font-size: 12px; color: #2B323A; font-weight: 700;")
             lay.addWidget(rank_lbl)
         if board:
             for entry in _standings_rows(board):
                 if entry is None:
                     dots = QLabel("        · · ·")   # middle dots render in Inter; ⋯/▸ do not
-                    dots.setStyleSheet("font-size: 11px; color: #9CA3AF;")
+                    dots.setStyleSheet("font-size: 11px; color: #8C96A2;")
                     lay.addWidget(dots)
                     continue
                 row = QLabel(
                     f"#{entry['rank']}   {entry['brand']} — {entry['display']}")
                 if entry["is_target"]:
                     row.setStyleSheet(
-                        "font-size: 12px; color: #1D4ED8; font-weight: 700; "
+                        "font-size: 12px; color: #295A94; font-weight: 700; "
                         "background: #EFF6FF; border-radius: 4px; padding: 2px 6px;")
                 else:
-                    row.setStyleSheet("font-size: 12px; color: #4B5563; padding: 2px 6px;")
+                    row.setStyleSheet("font-size: 12px; color: #69727E; padding: 2px 6px;")
                 lay.addWidget(row)
         elif f.get("leader_brand"):   # pre-R3 snapshots without a leaderboard
             versus = QLabel(
                 f"{f['target_brand']}: {f['target_display']}   vs   "
                 f"{f['leader_brand']}: {f['leader_display']}")
-            versus.setStyleSheet("font-size: 12px; color: #111827; font-weight: 600;")
+            versus.setStyleSheet("font-size: 12px; color: #2B323A; font-weight: 600;")
             lay.addWidget(versus)
 
         why = QLabel(f["why"])
         why.setWordWrap(True)
-        why.setStyleSheet("font-size: 12px; color: #374151;")
+        why.setStyleSheet("font-size: 12px; color: #2B323A;")
         lay.addWidget(why)
 
         if f.get("tactics"):
             tactics_hdr = QLabel("Tactics")
             tactics_hdr.setStyleSheet(
-                "font-size: 11px; color: #6B7280; font-weight: bold;")
+                "font-size: 11px; color: #69727E; font-weight: bold;")
             lay.addWidget(tactics_hdr)
             for tactic in f["tactics"]:
                 t = QLabel(f"•  {tactic}")
                 t.setWordWrap(True)
-                t.setStyleSheet("font-size: 12px; color: #374151; padding-left: 6px;")
+                t.setStyleSheet("font-size: 12px; color: #2B323A; padding-left: 6px;")
                 lay.addWidget(t)
         return card

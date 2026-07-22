@@ -151,7 +151,7 @@ class _BrandDiscoveryDialog(QDialog):
 
         summary = QLabel(
             f"<b>{len(new_brands)}</b> brand(s) not currently in your library.<br>"
-            f"<span style='color:#6B7280;font-size:11px;'>"
+            f"<span style='color:#69727E;font-size:11px;'>"
             f"Queried: {', '.join(providers_queried) if providers_queried else 'none'}</span>"
         )
         summary.setWordWrap(True)
@@ -350,7 +350,7 @@ class KnowledgePage(QWidget):
             "Start here — define the brands, features, personas, and prompt "
             "sets Atlas tracks before running a Visibility collection."
         )
-        subtitle.setStyleSheet("font-size: 13px; color: #6B7280;")
+        subtitle.setStyleSheet("font-size: 13px; color: #69727E;")
 
         self._tabs = QTabWidget()
         self._tabs.addTab(self._brands_tab(),   "Brands")
@@ -398,7 +398,7 @@ class KnowledgePage(QWidget):
         )
 
         self._disc_lbl = QLabel("")
-        self._disc_lbl.setStyleSheet("color:#6B7280; font-size:11px;")
+        self._disc_lbl.setStyleSheet("color:#69727E; font-size:11px;")
         self._disc_worker = None
 
         bar = _action_bar(btn_add, btn_edit, btn_del, btn_discover, "stretch", self._disc_lbl, self._brands_count)
@@ -946,7 +946,7 @@ class KnowledgePage(QWidget):
         cat_row = QHBoxLayout()
         cat_row.setContentsMargins(0, 0, 0, 0)
         cat_lbl = QLabel("Category:")
-        cat_lbl.setStyleSheet("font-size: 12px; color: #6B7280;")
+        cat_lbl.setStyleSheet("font-size: 12px; color: #69727E;")
         self._category_combo = QComboBox()
         self._category_combo.currentIndexChanged.connect(self._on_category_combo_changed)
         # A readable label, not the bare "+" the user couldn't parse
@@ -1330,7 +1330,7 @@ class KnowledgePage(QWidget):
             "deciding which families deserve the Visibility page's \"Top 20\" treatment. "
             "Configure a provider in Settings first, then Run Comparison."
         )
-        note.setStyleSheet("color: #6B7280; font-size: 12px;")
+        note.setStyleSheet("color: #69727E; font-size: 12px;")
         note.setWordWrap(True)
 
         self._volume_table = _make_table(
@@ -1346,7 +1346,7 @@ class KnowledgePage(QWidget):
         self._volume_run_btn = QPushButton("Run Comparison")
         self._volume_run_btn.clicked.connect(self._run_volume_comparison)
         self._volume_status_lbl = QLabel("")
-        self._volume_status_lbl.setStyleSheet("color:#6B7280; font-size:11px;")
+        self._volume_status_lbl.setStyleSheet("color:#69727E; font-size:11px;")
 
         bar = _action_bar(self._volume_run_btn, "stretch", self._volume_status_lbl)
 
@@ -1396,7 +1396,7 @@ class KnowledgePage(QWidget):
             t.setItem(r, 0, _cell(res["family_name"]))
             t.setItem(r, 1, _cell(res["prompt_influence_score"]))
             backed_item = _cell("✓ Backed" if res["has_real_backing"] else "No real queries found")
-            backed_item.setForeground(QColor("#16a34a") if res["has_real_backing"] else QColor("#dc2626"))
+            backed_item.setForeground(QColor("#2E8B5E") if res["has_real_backing"] else QColor("#C24536"))
             t.setItem(r, 2, backed_item)
             t.setItem(r, 3, _cell(res["matched_query_count"]))
             t.setItem(r, 4, _cell(f"{res['real_search_impressions']:,}"))
@@ -1428,7 +1428,7 @@ class KnowledgePage(QWidget):
             "non-inverter model an inverter), the briefing flags the contradiction "
             "as a correction opportunity instead of repeating it as fact."
         )
-        note.setStyleSheet("color: #6B7280; font-size: 12px;")
+        note.setStyleSheet("color: #69727E; font-size: 12px;")
         note.setWordWrap(True)
 
         self._catalog_table = _make_table(
@@ -1456,7 +1456,7 @@ class KnowledgePage(QWidget):
             "no API calls.")
         self._catalog_scan_btn.clicked.connect(self._scan_model_mentions)
         self._catalog_status_lbl = QLabel("")
-        self._catalog_status_lbl.setStyleSheet("color:#6B7280; font-size:11px;")
+        self._catalog_status_lbl.setStyleSheet("color:#69727E; font-size:11px;")
 
         bar = _action_bar(self._catalog_sync_btn, self._catalog_scan_btn,
                           "stretch", self._catalog_status_lbl)
@@ -1532,7 +1532,7 @@ class KnowledgePage(QWidget):
             total_contra += len(contra)
             cell = _cell(f"{len(contra):,}" if contra else "—")
             if contra:
-                cell.setForeground(QColor("#DC2626"))
+                cell.setForeground(QColor("#C24536"))
                 cell.setToolTip("\n\n".join(
                     f"[{c['provider']}] claims \"{c['claim']}\" — verified: "
                     f"{c['truth']}\n“{c['excerpt']}”"
@@ -1559,7 +1559,7 @@ class KnowledgePage(QWidget):
             "AI crawler. (Off-page metrics like Domain Authority or backlink counts require a paid "
             "SEO tool subscription and aren't scraped here.)"
         )
-        note.setStyleSheet("color: #6B7280; font-size: 12px;")
+        note.setStyleSheet("color: #69727E; font-size: 12px;")
         note.setWordWrap(True)
 
         self._web_table = _make_table(
@@ -1580,7 +1580,7 @@ class KnowledgePage(QWidget):
 
         self._web_count = QLabel()
         self._web_scrape_lbl = QLabel("")
-        self._web_scrape_lbl.setStyleSheet("color:#6B7280; font-size:11px;")
+        self._web_scrape_lbl.setStyleSheet("color:#69727E; font-size:11px;")
 
         btn_add       = QPushButton("+ Add Entry")
         btn_brands    = QPushButton("Add Brands")
@@ -1680,10 +1680,10 @@ class KnowledgePage(QWidget):
                 crawler_item = _cell("—")
             elif blocks_ai_crawlers:
                 crawler_item = _cell(f"Blocked: {_trunc(blocked_names or '', 22)}")
-                crawler_item.setForeground(QColor("#dc2626"))
+                crawler_item.setForeground(QColor("#C24536"))
             elif has_robots_txt:
                 crawler_item = _cell("OK")
-                crawler_item.setForeground(QColor("#16a34a"))
+                crawler_item.setForeground(QColor("#2E8B5E"))
             else:
                 crawler_item = _cell("No robots.txt")
             t.setItem(r, 10, crawler_item)
@@ -1865,7 +1865,7 @@ class KnowledgePage(QWidget):
 
         note = QLabel("Provider API keys and model overrides are configured in ⚙ Settings. "
                        "This view shows current status.")
-        note.setStyleSheet("color: #6B7280; font-size: 12px;")
+        note.setStyleSheet("color: #69727E; font-size: 12px;")
         note.setWordWrap(True)
 
         t = _make_table(
@@ -1892,7 +1892,7 @@ class KnowledgePage(QWidget):
             t.setItem(r, 2, _cell(active_model))
 
             status_item = _cell("Configured" if has_key else "No key set")
-            status_item.setForeground(QColor("#16a34a") if has_key else QColor("#dc2626"))
+            status_item.setForeground(QColor("#2E8B5E") if has_key else QColor("#C24536"))
             t.setItem(r, 3, status_item)
 
         lay.addWidget(note)
