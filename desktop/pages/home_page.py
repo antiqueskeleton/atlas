@@ -128,22 +128,29 @@ class HomePage(QWidget):
 
     @staticmethod
     def _status_card(title: str):
+        # 2026-07 redesign: sections are Panels — condensed header with a
+        # hairline divider under it, then structured rows (per the spec's
+        # System Health mockup).
         from PySide6.QtWidgets import QFrame
         frame = QFrame()
-        frame.setObjectName("StatCard")
+        frame.setObjectName("Panel")
         lay = QVBoxLayout()
-        lay.setSpacing(3)
-        lay.setContentsMargins(14, 10, 14, 12)
+        lay.setSpacing(6)
+        lay.setContentsMargins(16, 12, 16, 14)
         header = QLabel(title)
-        header.setObjectName("CardTitle")
+        header.setObjectName("PanelTitle")
+        divider = QFrame()
+        divider.setObjectName("PanelDivider")
+        divider.setFixedHeight(1)
         lay.addWidget(header)
+        lay.addWidget(divider)
         frame.setLayout(lay)
         return frame, lay
 
     @staticmethod
     def _clear_rows(lay):
-        while lay.count() > 1:  # keep the title
-            item = lay.takeAt(1)
+        while lay.count() > 2:  # keep the title + divider
+            item = lay.takeAt(2)
             if item.widget():
                 item.widget().deleteLater()
 

@@ -36,16 +36,19 @@ from desktop.updater import UpdateChecker, APP_VERSION
 # matplotlib), so it's paid on first visit, not at startup.
 
 
+# (glyph name, label) — glyphs are painted line icons (desktop/widgets/
+# nav_icons.py). The old emoji rendered full-color via Segoe UI Emoji,
+# which fought the navy rail; the redesign uses one monochrome family.
 _NAV_ITEMS = [
-    ("🏠", "Home",         "nav_home.png"),
-    ("👁",  "Visibility",  "nav_visibility.png"),
-    ("🎯", "Targeted Review", "nav_target.png"),
-    ("📈", "Trends",       "nav_trends.png"),
-    ("💡", "Intelligence", "nav_intelligence.png"),
-    ("🔍", "Investigate",  "nav_investigate.png"),
-    ("🧠", "Knowledge",    "nav_knowledge.png"),
-    ("🛒", "Price Comparison", "nav_comp.png"),
-    ("⚙",  "Settings",    "nav_settings.png"),
+    ("home",   "Home"),
+    ("eye",    "Visibility"),
+    ("target", "Targeted Review"),
+    ("trend",  "Trends"),
+    ("bulb",   "Intelligence"),
+    ("search", "Investigate"),
+    ("book",   "Knowledge"),
+    ("tag",    "Price Comparison"),
+    ("gear",   "Settings"),
 ]
 
 # Name -> row lookup, not hardcoded numbers — reordering _NAV_ITEMS has
@@ -53,7 +56,7 @@ _NAV_ITEMS = [
 # index shifted when Targeted Review was inserted, then again here when the
 # whole nav was reordered to match the workflow sequence). Every row check
 # in this file should go through this instead.
-_NAV_ROW = {label: i for i, (_, label, _) in enumerate(_NAV_ITEMS)}
+_NAV_ROW = {label: i for i, (_, label) in enumerate(_NAV_ITEMS)}
 
 
 class AtlasMainWindow(QMainWindow):
@@ -120,6 +123,36 @@ class AtlasMainWindow(QMainWindow):
         root_widget.setLayout(root_layout)
         self.setCentralWidget(root_widget)
 
+    @staticmethod
+    def _paint_wordmark(mark_only: bool = False) -> QPixmap:
+        """The rail's brand row: a small primary-blue square mark plus a
+        letter-spaced ATLAS wordmark in the heading face, painted on a
+        transparent ground so it sits directly on the navy."""
+        from PySide6.QtGui import QColor, QFont, QPainter, QPixmap
+        from desktop.theme.colors import LIGHT, PRIMARY
+        w, h = (44, 46) if mark_only else (194, 46)
+        pm = QPixmap(w, h)
+        pm.fill(Qt.transparent)
+        p = QPainter(pm)
+        p.setRenderHint(QPainter.Antialiasing)
+        x = (w - 24) // 2 if mark_only else 14
+        p.setBrush(QColor(PRIMARY))
+        p.setPen(Qt.NoPen)
+        p.drawRoundedRect(x, 11, 24, 24, 5, 5)
+        f = QFont("Barlow Condensed", 12, QFont.DemiBold)
+        p.setFont(f)
+        p.setPen(QColor("white"))
+        p.drawText(x, 11, 24, 24, Qt.AlignCenter, "A")
+        if not mark_only:
+            f2 = QFont("Barlow Condensed", 15, QFont.DemiBold)
+            f2.setLetterSpacing(QFont.AbsoluteSpacing, 3)
+            p.setFont(f2)
+            p.setPen(QColor(LIGHT))
+            p.drawText(x + 34, 0, w - x - 34, h,
+                       Qt.AlignVCenter | Qt.AlignLeft, "ATLAS")
+        p.end()
+        return pm
+
     def _build_nav(self) -> QWidget:
         self._nav_collapsed = False
         self._nav_panel = QWidget()
@@ -139,37 +172,22 @@ class AtlasMainWindow(QMainWindow):
         h_lay.setContentsMargins(8, 8, 8, 8)
         h_lay.setSpacing(0)
 
-        # Full sidebar logo (expanded mode)
+        # Full sidebar brand mark (expanded mode) — painted, not the old
+        # atlas_sidebar.png: that image bakes in a pure-black background,
+        # which read as a heavy black box against the redesign's #16324D
+        # navy rail (2026-07 spec: slim square mark + wordmark).
         self._logo_full = QLabel()
         self._logo_full.setStyleSheet("border: none; background: transparent;")
-        self._logo_full.setAlignment(Qt.AlignCenter)
-        logo_pix = QPixmap(str(_IMAGES_DIR / "atlas_sidebar.png"))
-        if not logo_pix.isNull():
-            scaled = logo_pix.scaledToWidth(194, Qt.SmoothTransformation)
-            self._logo_full.setPixmap(scaled)
-            self._nav_header_height = scaled.height() + 16
-        else:
-            self._logo_full.setText("ATLAS")
-            self._logo_full.setStyleSheet(
-                f"font-size: 22px; font-weight: bold; color: {PRIMARY}; "
-                "letter-spacing: 4px; border: none; background: transparent;"
-            )
-            self._nav_header_height = 76
+        self._logo_full.setAlignment(Qt.AlignVCenter | Qt.AlignLeft)
+        self._logo_full.setPixmap(self._paint_wordmark())
+        self._nav_header_height = 62
         self._nav_header.setFixedHeight(self._nav_header_height)
 
-        # Small icon logo (collapsed mode)
+        # Small icon logo (collapsed mode) — the same painted mark, sans text.
         self._logo_icon = QLabel()
         self._logo_icon.setAlignment(Qt.AlignCenter)
         self._logo_icon.setStyleSheet("border: none; background: transparent;")
-        icon_pix = QPixmap(str(_IMAGES_DIR / "atlas_icon.png"))
-        if not icon_pix.isNull():
-            self._logo_icon.setPixmap(icon_pix.scaledToWidth(38, Qt.SmoothTransformation))
-        else:
-            self._logo_icon.setText("A")
-            self._logo_icon.setStyleSheet(
-                f"font-size: 22px; font-weight: bold; color: {PRIMARY}; "
-                "border: none; background: transparent;"
-            )
+        self._logo_icon.setPixmap(self._paint_wordmark(mark_only=True))
         self._logo_icon.setVisible(False)
 
         h_lay.addWidget(self._logo_full)
@@ -179,15 +197,11 @@ class AtlasMainWindow(QMainWindow):
         # ── Navigation list ───────────────────────────────────────────────────
         self.nav = QListWidget()
         self.nav.setObjectName("AtlasNav")
-        self.nav.setIconSize(QSize(20, 20))
+        self.nav.setIconSize(QSize(18, 18))
         self.nav.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        for emoji, label, icon_file in _NAV_ITEMS:
-            icon_path = _IMAGES_DIR / icon_file
-            if icon_path.exists():
-                item = QListWidgetItem(QIcon(str(icon_path)), f"  {label}")
-            else:
-                item = QListWidgetItem(f"  {emoji}  {label}")
-            self.nav.addItem(item)
+        from desktop.widgets.nav_icons import nav_icon
+        for glyph, label in _NAV_ITEMS:
+            self.nav.addItem(QListWidgetItem(nav_icon(glyph), f"  {label}"))
         self.nav.setCurrentRow(0)
         self.nav.currentRowChanged.connect(self._on_nav_changed)
 
@@ -224,12 +238,9 @@ class AtlasMainWindow(QMainWindow):
         self._nav_header.setFixedHeight(56 if c else self._nav_header_height)
 
         if c:
-            for i, (emoji, _, icon_file) in enumerate(_NAV_ITEMS):
+            for i in range(len(_NAV_ITEMS)):   # icon-only rows when collapsed
                 item = self.nav.item(i)
-                if (_IMAGES_DIR / icon_file).exists():
-                    item.setText("")
-                else:
-                    item.setText(emoji)
+                item.setText("")
                 item.setTextAlignment(Qt.AlignCenter)
             self.nav.setIconSize(QSize(30, 30))
             self.nav.setStyleSheet(f"""
@@ -264,12 +275,9 @@ class AtlasMainWindow(QMainWindow):
                 f"QPushButton:hover {{ color: white; background: #2D3F55; }}"
             )
         else:
-            for i, (emoji, label, icon_file) in enumerate(_NAV_ITEMS):
+            for i, (_, label) in enumerate(_NAV_ITEMS):
                 item = self.nav.item(i)
-                if (_IMAGES_DIR / icon_file).exists():
-                    item.setText(f"  {label}")
-                else:
-                    item.setText(f"  {emoji}  {label}")
+                item.setText(f"  {label}")
                 item.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
             self.nav.setIconSize(QSize(20, 20))
             self.nav.setStyleSheet("")
@@ -344,7 +352,7 @@ class AtlasMainWindow(QMainWindow):
 
         # One empty container per nav row (order matches _NAV_ITEMS); the
         # real page is inserted into its container on first visit.
-        for _, label, _ in _NAV_ITEMS:
+        for _, label in _NAV_ITEMS:
             container = QWidget()
             c_lay = QVBoxLayout(container)
             c_lay.setContentsMargins(0, 0, 0, 0)

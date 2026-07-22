@@ -177,6 +177,21 @@ QFrame#Panel, QFrame#Card {{
     border-radius: {R_LG}px;
 }}
 
+QLabel#PanelTitle {{
+    font-family: {FONT_HEADING};
+    font-size: 17px;
+    font-weight: 600;
+    color: {HEADING};
+    border: none;
+    background: transparent;
+}}
+
+QFrame#PanelDivider {{
+    background: {BORDER};
+    border: none;
+    max-height: 1px;
+}}
+
 /* ── Buttons ─────────────────────────────────────────────────────────────── */
 /* Base look for any QPushButton that doesn't opt into a named/inline style —
    covers dialog OK/Cancel (QDialogButtonBox), Knowledge's tab action bars,

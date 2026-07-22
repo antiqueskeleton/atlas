@@ -55,8 +55,14 @@ class StatCard(QFrame):
         title_row.setContentsMargins(0, 0, 0, 0)
         title_row.setSpacing(4)
 
-        self.title = QLabel(title)
+        # Spec: KPI labels are small, uppercase and letter-spaced — the
+        # label whispers, the number shouts. (QSS has no text-transform /
+        # letter-spacing, so both are applied here.)
+        self.title = QLabel(str(title).upper())
         self.title.setObjectName("CardTitle")
+        _f = self.title.font()
+        _f.setLetterSpacing(_f.AbsoluteSpacing, 0.8)
+        self.title.setFont(_f)
         title_row.addWidget(self.title)
         if info:
             title_row.addWidget(info_icon(info))
