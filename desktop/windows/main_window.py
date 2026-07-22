@@ -271,7 +271,7 @@ class AtlasMainWindow(QMainWindow):
             self._nav_toggle_btn.setStyleSheet(
                 f"QPushButton {{ background: {SLATE}; color: {SILVER}; "
                 f"border: none; border-top: 1px solid {STEEL}; "
-                "font-size: 16px; font-weight: bold; padding: 4px 0px; text-align: center; }}"
+                "font-size: 16px; font-weight: bold; padding: 4px 0px; text-align: center; }"
                 f"QPushButton:hover {{ color: white; background: #2D3F55; }}"
             )
         else:
@@ -286,7 +286,7 @@ class AtlasMainWindow(QMainWindow):
             self._nav_toggle_btn.setStyleSheet(
                 f"QPushButton {{ background: {SLATE}; color: {SILVER}; "
                 f"border: none; border-top: 1px solid {STEEL}; "
-                "font-size: 12px; font-weight: 600; padding: 4px 16px; text-align: left; }}"
+                "font-size: 12px; font-weight: 600; padding: 4px 16px; text-align: left; }"
                 f"QPushButton:hover {{ color: white; background: #2D3F55; }}"
             )
 

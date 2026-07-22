@@ -60,8 +60,9 @@ class StatCard(QFrame):
         # letter-spacing, so both are applied here.)
         self.title = QLabel(str(title).upper())
         self.title.setObjectName("CardTitle")
+        from PySide6.QtGui import QFont
         _f = self.title.font()
-        _f.setLetterSpacing(_f.AbsoluteSpacing, 0.8)
+        _f.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 0.8)
         self.title.setFont(_f)
         title_row.addWidget(self.title)
         if info:

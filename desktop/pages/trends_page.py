@@ -34,7 +34,12 @@ def _register_app_font_with_matplotlib():
             except Exception:
                 pass
     if registered:
-        matplotlib.rcParams["font.family"] = "Barlow"
+        # Fallback list, not bare "Barlow": Barlow lacks arrow glyphs
+        # (↓ U+2193 etc., used in chart annotations), and matplotlib does
+        # per-glyph fallback down the sans-serif list — Barlow first,
+        # DejaVu fills any missing symbol instead of warning.
+        matplotlib.rcParams["font.family"] = "sans-serif"
+        matplotlib.rcParams["font.sans-serif"] = ["Barlow", "DejaVu Sans"]
 
 
 _register_app_font_with_matplotlib()
