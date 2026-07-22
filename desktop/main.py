@@ -70,7 +70,7 @@ def _register_app_fonts() -> bool:
 
 
 def _apply_font_default(app):
-    """Make Barlow the application's ACTUAL default font, not just a
+    """Make Inter the application's ACTUAL default font, not just a
     stylesheet font-family. The `QWidget { font-family: ... }` rule in
     styles.py cascades to plain widgets, but on Windows it does NOT
     reliably reach item-view text (QTableWidget cells), combo-box popups,
@@ -79,11 +79,13 @@ def _apply_font_default(app):
     Inter rollout). Setting the app default closes that gap for every
     widget and delegate, regardless of QSS quirks. The current default
     point size is preserved — only the family changes — so nothing
-    resizes."""
+    resizes. Body/UI text is Inter (legible at small sizes); Barlow
+    Condensed is applied explicitly only where a display face is wanted
+    (KPI numbers, page titles, the wordmark)."""
     if not _register_app_fonts():
         return
     font = app.font()
-    font.setFamily("Barlow")
+    font.setFamily("Inter")
     app.setFont(font)
 
 

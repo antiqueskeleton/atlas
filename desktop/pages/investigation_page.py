@@ -73,7 +73,7 @@ class InvestigationPage(QWidget):
         root.setSpacing(6)
 
         title = QLabel("Investigation Workspace")
-        title.setStyleSheet("font-size:24px;font-weight:bold;")
+        title.setObjectName("PageTitle")
         title.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         subtitle = QLabel(

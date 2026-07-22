@@ -162,7 +162,7 @@ class PriceComparisonPage(QWidget):
 
         # Title row
         title = QLabel("Price Comparison")
-        title.setStyleSheet("font-size: 28px; font-weight: 700; color: #2B323A;")
+        title.setObjectName("PageTitle")
         subtitle = QLabel(
             "Independent of the workflow above, run any time — give Atlas a "
             "product model and it finds each competitor's closest comparable "

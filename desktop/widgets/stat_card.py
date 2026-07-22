@@ -92,6 +92,13 @@ class StatCard(QFrame):
 
         self.setLayout(layout)
 
+    def set_title(self, title):
+        """Update the label with the same uppercase treatment __init__ gives
+        it — call this instead of poking `.title.setText()`, which bypasses
+        the casing and left dynamically-retitled cards (Visibility's
+        per-brand rank/score tiles) in mixed case next to the static ones."""
+        self.title.setText(str(title).upper())
+
     def set_value(self, value):
         self.value.setText(str(value))
 

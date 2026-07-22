@@ -49,7 +49,7 @@ class HomePage(QWidget):
         )
 
         self._title = QLabel(greeting)
-        self._title.setStyleSheet("font-size: 28px; font-weight: bold;")
+        self._title.setObjectName("PageTitle")
         self._title.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         self._subtitle = QLabel(f"Here's what Atlas knows about {brand} today.")

@@ -129,7 +129,7 @@ class IntelligencePage(QWidget):
 
         # ── Header ────────────────────────────────────────────────────────────
         title = QLabel("Intelligence Engine")
-        title.setStyleSheet("font-size:24px; font-weight:bold;")
+        title.setObjectName("PageTitle")
         title.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         subtitle = QLabel(

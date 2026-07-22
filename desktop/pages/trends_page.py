@@ -24,8 +24,9 @@ def _register_app_font_with_matplotlib():
     else:
         fonts_dir = Path(__file__).resolve().parents[1] / "assets" / "fonts"
     registered = False
-    for name in ("Barlow-Regular.ttf", "Barlow-Medium.ttf", "Barlow-Bold.ttf",
-                 "BarlowCondensed-Regular.ttf", "BarlowCondensed-SemiBold.ttf"):
+    for name in ("Inter-Regular.ttf", "Inter-Medium.ttf", "Inter-SemiBold.ttf",
+                 "Inter-Bold.ttf", "Barlow-Regular.ttf",
+                 "BarlowCondensed-SemiBold.ttf"):
         path = fonts_dir / name
         if path.exists():
             try:
@@ -34,12 +35,12 @@ def _register_app_font_with_matplotlib():
             except Exception:
                 pass
     if registered:
-        # Fallback list, not bare "Barlow": Barlow lacks arrow glyphs
-        # (↓ U+2193 etc., used in chart annotations), and matplotlib does
-        # per-glyph fallback down the sans-serif list — Barlow first,
-        # DejaVu fills any missing symbol instead of warning.
+        # Charts are dense small labels, so Inter first (matches the app's
+        # body face). Fallback list, not a bare family: matplotlib does
+        # per-glyph fallback down font.sans-serif, so DejaVu fills any
+        # missing symbol (↓ U+2193 etc.) instead of warning.
         matplotlib.rcParams["font.family"] = "sans-serif"
-        matplotlib.rcParams["font.sans-serif"] = ["Barlow", "DejaVu Sans"]
+        matplotlib.rcParams["font.sans-serif"] = ["Inter", "DejaVu Sans"]
 
 
 _register_app_font_with_matplotlib()
@@ -161,7 +162,7 @@ class TrendsPage(QWidget):
         # Visibility or Intelligence, so a dedicated row for just these two
         # small elements left a wide dead gap across the full page width.
         title = QLabel("Trends")
-        title.setStyleSheet("font-size:30px;font-weight:bold;")
+        title.setObjectName("PageTitle")
 
         self.status_lbl = QLabel("Loading…")
         self.status_lbl.setStyleSheet("color:#69727E;font-size:13px;")

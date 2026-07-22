@@ -131,7 +131,7 @@ QListWidget#AtlasNav::item {{
     padding: 10px 16px;
     border-radius: {R_MD}px;
     margin: 2px 8px;
-    font-size: 14px;
+    font-size: 15px;
 }}
 QListWidget#AtlasNav::item:hover {{
     background: {SLATE};
@@ -175,6 +175,18 @@ QFrame#Panel, QFrame#Card {{
     background: {CARD};
     border: 1px solid {BORDER};
     border-radius: {R_LG}px;
+}}
+
+/* Page titles — one rule so every page's H1 matches (they had drifted to
+   22/24/28/30px). Barlow Condensed keeps the display character the big KPI
+   numbers have; the body text around them is Inter for legibility. */
+QLabel#PageTitle {{
+    font-family: {FONT_HEADING};
+    font-size: 27px;
+    font-weight: 600;
+    color: {HEADING};
+    border: none;
+    background: transparent;
 }}
 
 QLabel#PanelTitle {{

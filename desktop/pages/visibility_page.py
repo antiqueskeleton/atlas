@@ -254,7 +254,7 @@ class VisibilityPage(QWidget):
 
         # ── Header ────────────────────────────────────────────────────────────
         title = QLabel("Visibility Collection")
-        title.setStyleSheet("font-size: 22px; font-weight: bold;")
+        title.setObjectName("PageTitle")
         subtitle = QLabel(
             "Step 1 of the workflow — send prompt sets to AI providers and log "
             "how brands are mentioned. Run this first: Trends and Intelligence "
@@ -560,7 +560,6 @@ class VisibilityPage(QWidget):
             ),
             expanding=True, spacing=2, margins=(14, 12, 14, 12), always_show_subtitle=False,
         )
-        self._score_title = self._score_card.title
         self._score_val = self._score_card.value
         self._total_card = StatCard(
             "Responses Analyzed", "—", "across all collected runs",
@@ -578,7 +577,6 @@ class VisibilityPage(QWidget):
             ),
             expanding=True, spacing=2, margins=(14, 12, 14, 12), always_show_subtitle=False,
         )
-        self._top_title = self._top_card.title
         self._top_val = self._top_card.value
         self._last_card = StatCard(
             "Last Collection", "—", "most recent visibility run",
@@ -1608,7 +1606,7 @@ class VisibilityPage(QWidget):
         brand_counts = summary.get("brand_counts", {})
 
         # Score tile
-        self._score_title.setText(f"{brand_label} Visibility Score")
+        self._score_card.set_title(f"{brand_label} Visibility Score")
         self._score_val.setText(f"{score}%")
 
         # Responses analyzed
@@ -1627,10 +1625,10 @@ class VisibilityPage(QWidget):
                      if b == resolved_target), None)
         total_tracked = summary.get("total_tracked_brands", len(sorted_brands))
         if rank:
-            self._top_title.setText(f"Visibility Mention Rank  —  {brand_label}")
+            self._top_card.set_title(f"Visibility Mention Rank  —  {brand_label}")
             self._top_val.setText(f"#{rank} of {total_tracked}")
         else:
-            self._top_title.setText("Visibility Mention Rank")
+            self._top_card.set_title("Visibility Mention Rank")
             self._top_val.setText("Unranked")
 
         # Last Collection

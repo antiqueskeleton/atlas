@@ -345,7 +345,7 @@ class KnowledgePage(QWidget):
         root.setSpacing(8)
 
         title = QLabel("Knowledge Library")
-        title.setStyleSheet("font-size: 22px; font-weight: bold;")
+        title.setObjectName("PageTitle")
         subtitle = QLabel(
             "Start here — define the brands, features, personas, and prompt "
             "sets Atlas tracks before running a Visibility collection."

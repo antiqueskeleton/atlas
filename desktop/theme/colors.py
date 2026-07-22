@@ -45,7 +45,12 @@ INFO_INK      = PRIMARY_ACTIVE
 TEXT       = "#2B323A"
 TEXT_MUTED = "#69727E"
 HEADING    = "#141A21"
-FONT_BODY    = '"Barlow", "Inter", "Segoe UI", Arial, sans-serif'
+# Hybrid pairing (2026-07): Barlow Condensed is a display face — great for
+# big KPI numbers and page titles, but Barlow regular reads poorly as dense
+# 13px UI text (narrow, low x-height, worse in Qt than in a browser). Inter
+# is purpose-built for small screen UI, so body/table/label text uses it
+# while headings keep the condensed character.
+FONT_BODY    = '"Inter", "Segoe UI", Arial, sans-serif'
 FONT_HEADING = '"Barlow Condensed", "Barlow", "Segoe UI", Arial, sans-serif'
 
 # ── Shape ────────────────────────────────────────────────────────────────

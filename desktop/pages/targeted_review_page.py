@@ -334,7 +334,7 @@ class TargetedReviewPage(QWidget):
         root.setContentsMargins(24, 14, 24, 12)
 
         title = QLabel("Targeted Review")
-        title.setStyleSheet("font-size:24px; font-weight:bold;")
+        title.setObjectName("PageTitle")
 
         subtitle = QLabel(
             "Web Intelligence — optional but recommended, any time after "

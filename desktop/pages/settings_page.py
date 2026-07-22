@@ -146,7 +146,7 @@ class SettingsPage(QWidget):
         root.setSpacing(14)
 
         title = QLabel("Settings")
-        title.setStyleSheet("font-size: 22px; font-weight: bold;")
+        title.setObjectName("PageTitle")
 
         subtitle = QLabel(
             "Start here — set your target brand and API keys before running "
