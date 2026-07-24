@@ -1,5 +1,5 @@
 {
-  "version": "1.2.1",
-  "download_url": "https://github.com/antiqueskeleton/atlas/releases/download/v1.2.1/AtlasAI-v1.2.1-Setup.exe",
-  "release_notes": "v1.2.1 — Polish from real-world v1.2.0 use. FIXED: aggregate run labels ('Custom (N sets)', 'All Prompts') no longer appear as prompt families in the Trends chart or the Visibility Matrix; the FIRMAN Channel Gaps pane now populates (it had been silently empty); charts render in Inter like the rest of the app. NEW: every table is sortable (click a header for A-Z, again for Z-A) and columns are resizable, with numbers sorting by value (1, 2, 3... never 1, 100, 101, 2); the Brands tab shows each brand's website; and a one-click 'Add Brands' button on Web Intelligence imports every brand website from the Brands tab with duplicates skipped automatically."
+  "version": "1.3.0",
+  "download_url": "https://github.com/antiqueskeleton/atlas/releases/download/v1.3.0/AtlasAI-v1.3.0-Setup.exe",
+  "release_notes": "v1.3.0 — the redesign. A full visual refresh: one design system behind every screen (deep navy chrome, steel-blue accent, hairline-bordered panels), a cleaner navigation rail with a single family of monochrome icons in place of mixed colour emoji, and typography chosen for the job — Barlow Condensed for big KPI numbers and page titles, Inter for body and table text where it reads better at small sizes. KPI cards gain uppercase labels and a movement chip; sections get proper headings over hairline dividers; the competitive heatmap moves to a solid steel ramp so mid-range cells no longer wash out, with your own brand's row highlighted. Charts now match the app instead of rendering in a mismatched default."
 }
